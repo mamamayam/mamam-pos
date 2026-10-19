@@ -32,6 +32,8 @@ import { Select } from '../../components/ui/Input';
 const FEE_PRESETS = [0, 3000, 4000, 5000];
 // Custom: slider kelipatan Rp1.000 sampai Rp25.000; nominal lain tetap bisa diketik.
 const FEE_SLIDER_MAX = 25000;
+// Tombol ikon header keranjang (Tersimpan, Kosongkan, Tutup): satu gaya supaya seragam.
+const ICON_BTN = 'relative p-2 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-500 dark:text-slate-400 transition-colors';
 
 export default function CartDrawer({ menus, customers, saveCustomer, vouchers, employees, triggerAlert, triggerConfirm, formatRupiah }) {
   const cart = usePosStore((s) => s.cart);
@@ -175,24 +177,22 @@ export default function CartDrawer({ menus, customers, saveCustomer, vouchers, e
       <>
 
         <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900">
-          <h2 className="font-heading text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-            <ShoppingCart className="w-5 h-5 text-slate-800 dark:text-slate-100" /> Keranjang Pesanan
-          </h2>
+          <ShoppingCart className="w-5 h-5 text-slate-800 dark:text-slate-100" aria-label="Keranjang Pesanan" />
+          {/* Tiga tombol ikon dengan bentuk, ukuran, dan warna SAMA (ICON_BTN). */}
           <div className="flex gap-2">
-            <button type="button" onClick={() => setIsSavedOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs font-bold text-slate-600 dark:text-slate-300 hover:border-accent-300 dark:hover:border-accent-500/50 transition-colors">
-              <Clock className="w-3.5 h-3.5" /> Tersimpan
-              {saved.orders.length > 0 && <span data-testid="saved-count" className="min-w-4 h-4 px-1 rounded-full bg-accent-600 dark:bg-accent-500 text-white text-[10px] leading-4 text-center">{saved.orders.length}</span>}
+            <button type="button" onClick={() => setIsSavedOpen(true)} title="Pesanan Tersimpan" aria-label="Pesanan Tersimpan" className={ICON_BTN}>
+              <Clock className="w-5 h-5" />
+              {saved.orders.length > 0 && <span data-testid="saved-count" className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-accent-600 dark:bg-accent-500 text-white text-[10px] leading-4 text-center">{saved.orders.length}</span>}
             </button>
             {cart.length > 0 && (
-              <button onClick={() => triggerConfirm(savedOrderId
+              <button type="button" onClick={() => triggerConfirm(savedOrderId
                 ? 'Kosongkan keranjang? Pesanan ini tetap tersimpan di daftar Tersimpan.'
                 : 'Hapus semua isi keranjang? Data pelanggan & pesanan ikut direset.', resetDraft)}
-                className="p-2 text-accent-500 dark:text-accent-400 hover:bg-accent-50 dark:hover:bg-accent-500/10 rounded-full transition-colors" title="Kosongkan Keranjang">
+                className={ICON_BTN} title="Kosongkan Keranjang" aria-label="Kosongkan Keranjang">
                 <Trash2 className="w-5 h-5" />
               </button>
             )}
-            <button onClick={() => setIsCartOpen(false)} className="p-2 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-500 dark:text-slate-400 transition-colors">
+            <button type="button" onClick={() => setIsCartOpen(false)} title="Tutup" aria-label="Tutup" className={ICON_BTN}>
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -385,9 +385,6 @@ export default function CartDrawer({ menus, customers, saveCustomer, vouchers, e
                 Bayar
               </Button>
             </div>
-            <p className="mt-2 text-center text-xs text-slate-400 dark:text-slate-500">
-              Simpan untuk dibayar nanti. Belum dihitung sebagai penjualan sebelum dibayar.
-            </p>
           </div>
         )}
 

@@ -29,7 +29,7 @@ export const WIDTHS = [
   334, 260, 334, 584,
 ];
 
-const clean = (s) => String(s ?? '')
+export const clean = (s) => String(s ?? '')
   .replace(/\u00a0/g, ' ').replace(/→/g, '>').replace(/[–—]/g, '-').replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
   .replace(/[^\x20-\xff]/g, '?');
 
@@ -50,8 +50,8 @@ const fit = (s, size, max, bold) => {
   return `${t.trimEnd()}...`;
 };
 
-const esc = (s) => clean(s).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
-const num = (n) => (Math.round(n * 100) / 100).toString();
+export const esc = (s) => clean(s).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+export const num = (n) => (Math.round(n * 100) / 100).toString();
 const rgb = (c) => `${c.map(num).join(' ')} rg`;
 
 const cap = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);

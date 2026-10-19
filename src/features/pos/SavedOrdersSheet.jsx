@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, Trash2, Clock } from 'lucide-react';
+import { ChevronDown, Trash2, Clock, Share2 } from 'lucide-react';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -8,8 +8,8 @@ import OrderBreakdown from './OrderBreakdown';
 
 /**
  * SavedOrdersSheet — daftar Pesanan Tersimpan (belum dibayar), dibuka dari pil "Tersimpan" di keranjang.
- * Tiap pesanan: nomor, pelanggan, tipe, waktu simpan, ringkasan item, rincian yang bisa dibuka, dan tiga aksi:
- *   Hapus (danger, ikon saja) · Lanjutkan (muat ke keranjang untuk diubah) · Bayar (muat ke keranjang + buka pembayaran).
+ * Tiap pesanan: nomor, pelanggan, tipe, waktu simpan, ringkasan item, rincian yang bisa dibuka, dan aksi:
+ *   Hapus (danger, ikon saja) · Bagikan (ikon saja; tagihan PDF lewat menu share) · Lanjutkan (muat ke keranjang untuk diubah) · Bayar (muat ke keranjang + buka pembayaran).
  * Komponen ini hanya tampilan; aksinya dijalankan CartDrawer (yang memegang store keranjang).
  */
 
@@ -17,7 +17,7 @@ const savedAt = (iso) => (iso
   ? new Date(iso).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
   : '');
 
-export function SavedOrdersList({ orders, loading, error, activeId, formatRupiah, onResume, onPay, onDelete }) {
+export function SavedOrdersList({ orders, loading, error, activeId, formatRupiah, onResume, onPay, onDelete, onShare }) {
   const [openId, setOpenId] = useState(null);
 
   if (loading && orders.length === 0) {
@@ -69,8 +69,9 @@ export function SavedOrdersList({ orders, loading, error, activeId, formatRupiah
               </div>
             )}
 
-            <div className="grid grid-cols-[auto_1fr_1.3fr] gap-2">
+            <div className={`grid ${onShare ? 'grid-cols-[auto_auto_1fr_1.3fr]' : 'grid-cols-[auto_1fr_1.3fr]'} gap-2`}>
               <Button variant="danger" size="sm" aria-label={`Hapus pesanan ${o.number}`} onClick={() => onDelete(o)} icon={<Trash2 className="w-4 h-4" />} />
+              {onShare && <Button variant="secondary" size="sm" aria-label={`Bagikan tagihan ${o.number}`} onClick={() => onShare(o)} icon={<Share2 className="w-4 h-4" />} />}
               <Button variant="secondary" size="sm" onClick={() => onResume(o)}>{activeId === o.id ? 'Di keranjang' : 'Lanjutkan'}</Button>
               <Button size="sm" onClick={() => onPay(o)}>Bayar {formatRupiah(o.total)}</Button>
             </div>

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { RefreshCw, Trash2, Receipt, ShoppingBag, Utensils, Truck, Bike, Send } from 'lucide-react';
+import { RefreshCw, Trash2, Receipt, ShoppingBag, Utensils, Truck, Bike, Send, Share2 } from 'lucide-react';
 import { Card, EmptyState, DetailModal, Button, Badge, BulkSelectBar, FilterBar, SummaryPills } from '../../components/ui';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../auth/AuthContext';
@@ -10,6 +10,8 @@ import { dayHeading, groupByDay, sumByDay } from '../../utils/listFilters';
 import { deviceOptionsFromRows } from '../../hook/deviceLogic';
 import { useDeleteRequestIndex } from '../../hook/useDeleteRequests';
 import DeleteRequestSheet from './DeleteRequestSheet';
+import { receiptFromSale } from '../pos/receiptModel';
+import { shareReceiptWithAlert } from '../pos/shareReceipt';
 import { filterSales, paymentStats, sortSales, methodOf, isTimeSort, SORT_OPTIONS, DEFAULT_SORT } from './riwayatFilter';
 
 /**
@@ -19,7 +21,7 @@ import { filterSales, paymentStats, sortSales, methodOf, isTimeSort, SORT_OPTION
  * per hari. Ketuk satu transaksi = Detail (di sana ada Hapus).
  *
  * BEDA dari A (sengaja):
- *  - Tombol "Struk" belum ada: ReceiptModal belum di-port ke C.
+ *  - Struk: tombol Bagikan di Detail membuat struk PDF (pos/receiptPdf.js) dan membukanya di menu share HP. Belum ada cetak ke printer.
  *  - Hapus = permanen dan hanya Owner (izin laporan.hapusTransaksi). Staf yang membuka Riwayat hanya bisa
  *    MENGAJUKAN hapus per transaksi (alasan + nama wajib); owner memutuskan di sheet Persetujuan.
  *    Transaksi yang sedang diajukan diberi badge "Menunggu hapus"; yang ditolak menampilkan alasan penolakan di Detail.
@@ -245,8 +247,11 @@ export default function RiwayatView() {
           { label: 'Ongkir', value: detail?.delivery_fee, type: 'currency' },
         ]}
         highlight={{ label: 'Total Tagihan', value: detail?.total }}
-        actions={detail && canDelete ? [{ label: 'Hapus Transaksi', icon: <Trash2 className="w-4 h-4" />, variant: 'danger', onClick: () => handleDelete(detail) }]
-          : detail && canRequest && detailRequest?.status !== 'menunggu' ? [{ label: 'Ajukan Hapus', icon: <Send className="w-4 h-4" />, variant: 'danger', onClick: () => { setRequestFor(detail); setDetail(null); } }] : []}
+        actions={detail ? [
+          { label: 'Bagikan', icon: <Share2 className="w-4 h-4" />, onClick: () => shareReceiptWithAlert(receiptFromSale(detail), { formatRupiah, triggerAlert }) },
+          ...(canDelete ? [{ label: 'Hapus Transaksi', icon: <Trash2 className="w-4 h-4" />, variant: 'danger', onClick: () => handleDelete(detail) }]
+            : canRequest && detailRequest?.status !== 'menunggu' ? [{ label: 'Ajukan Hapus', icon: <Send className="w-4 h-4" />, variant: 'danger', onClick: () => { setRequestFor(detail); setDetail(null); } }] : []),
+        ] : []}
       />
 
       <DeleteRequestSheet isOpen={!!requestFor} onClose={() => setRequestFor(null)} sale={requestFor} onSubmitted={reloadRequests} />

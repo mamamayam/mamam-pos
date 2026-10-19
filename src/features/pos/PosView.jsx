@@ -274,7 +274,7 @@ export default function PosView() {
       <PaymentModal menus={menus} customers={customers} vouchers={vouchers} employees={employees}
         triggerAlert={triggerAlert} formatRupiah={formatRupiah} onSuccess={setReceiptResult} />
       <VariantSelectionModal variantGroups={variantGroups} formatRupiah={formatRupiah} />
-      <ReceiptModal result={receiptResult} onClose={() => setReceiptResult(null)} formatRupiah={formatRupiah} />
+      <ReceiptModal result={receiptResult} onClose={() => setReceiptResult(null)} formatRupiah={formatRupiah} triggerAlert={triggerAlert} />
     </div>
   );
 }

@@ -1,6 +1,8 @@
-import { Receipt } from 'lucide-react';
+import { Receipt, Share2 } from 'lucide-react';
 import DetailModal from '../../components/ui/DetailModal';
-import { formatRupiah } from '../../utils/formatters';
+import { formatRupiah as defaultRupiah } from '../../utils/formatters';
+import { receiptFromCheckout } from './receiptModel';
+import { shareReceiptWithAlert } from './shareReceipt';
 
 // Pecahan uang kertas/koin yang umum — dipakai untuk label "pecahan" kalau uang diterima pas satu lembar.
 const DENOMS = [1000, 2000, 5000, 10000, 20000, 50000, 100000];
@@ -10,9 +12,10 @@ const DENOMS = [1000, 2000, 5000, 10000, 20000, 50000, 100000];
  * Memakai DetailModal supaya tampilannya sama dengan detail di Riwayat:
  * nomor + waktu, badge metode & tipe order, pelanggan, daftar item (varian, qty x harga),
  * subtotal / diskon / ongkir, rincian pembayaran, dan Total Tagihan.
- * Belum ada fitur cetak struk, jadi tidak ada tombol Cetak.
+ * Tombol Bagikan membuat struk PDF di perangkat lalu membukanya di menu share HP (shareReceipt.js).
+ * Belum ada cetak ke printer, jadi tidak ada tombol Cetak.
  */
-export default function ReceiptModal({ result, onClose }) {
+export default function ReceiptModal({ result, onClose, triggerAlert, formatRupiah = defaultRupiah }) {
   const r = result || {};
   const splits = Array.isArray(r.splitPayments) ? r.splitPayments : [];
   // Info tambahan (bukan pembukuan): uang tunai yang diterima kasir, untuk jaga-jaga kalau ada selisih.
@@ -61,16 +64,17 @@ export default function ReceiptModal({ result, onClose }) {
         <div data-testid="receipt-cash" className="mt-3 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 py-3 space-y-1.5 text-xs">
           <div className="flex justify-between gap-3">
             <span className="text-slate-500 dark:text-slate-400">{isSingleBill ? 'Dibayar tunai, uang pecahan' : 'Dibayar tunai, uang diterima'}</span>
-            <span className="font-bold text-slate-700 dark:text-slate-200">{formatRupiah(r.amount_paid)}</span>
+            <span className="font-bold text-slate-700 dark:text-slate-200">{defaultRupiah(r.amount_paid)}</span>
           </div>
           {r.change_amount > 0 && (
             <div className="flex justify-between gap-3">
               <span className="text-slate-500 dark:text-slate-400">Kembalian</span>
-              <span className="font-bold text-slate-700 dark:text-slate-200">{formatRupiah(r.change_amount)}</span>
+              <span className="font-bold text-slate-700 dark:text-slate-200">{defaultRupiah(r.change_amount)}</span>
             </div>
           )}
         </div>
       )}
+      actions={[{ label: 'Bagikan', icon: <Share2 className="w-4 h-4" />, onClick: () => shareReceiptWithAlert(receiptFromCheckout(r), { formatRupiah, triggerAlert }) }]}
       closeLabel="Tutup"
     />
   );

@@ -63,6 +63,13 @@ describe('SavedOrdersList', () => {
     expect(html).toContain('aria-label="Hapus pesanan A1B2C3D4"');
   });
 
+  it('tombol Bagikan hanya ada kalau onShare diberikan', () => {
+    expect(renderToString(<SavedOrdersList {...props} />)).not.toContain('Bagikan tagihan');
+    const html = renderToString(<SavedOrdersList {...props} onShare={() => {}} />);
+    expect(html).toContain('aria-label="Bagikan tagihan A1B2C3D4"');
+    expect(html).toContain('grid-cols-[auto_auto_1fr_1.3fr]');
+  });
+
   it('pesanan yang sedang ada di keranjang ditandai', () => {
     const html = renderToString(<SavedOrdersList {...props} activeId="tx-1" />);
     expect(html).toContain('Di keranjang');

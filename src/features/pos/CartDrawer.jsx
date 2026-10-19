@@ -11,6 +11,8 @@ import Overlay from '../../components/ui/Overlay';
 import CustomerPickerModal from './CustomerPicker';
 import OrderBreakdown from './OrderBreakdown';
 import SavedOrdersSheet from './SavedOrdersSheet';
+import { receiptFromSaved } from './receiptModel';
+import { shareReceiptWithAlert } from './shareReceipt';
 import NominalInput from '../../components/ui/NominalInput';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -392,6 +394,7 @@ export default function CartDrawer({ menus, customers, saveCustomer, vouchers, e
           isOpen={isSavedOpen} onClose={() => setIsSavedOpen(false)}
           orders={saved.orders} loading={saved.loading} error={saved.error} activeId={savedOrderId} formatRupiah={formatRupiah}
           onResume={(o) => resumeOrder(o)} onPay={(o) => resumeOrder(o, { pay: true })} onDelete={deleteSaved}
+          onShare={(o) => shareReceiptWithAlert(receiptFromSaved(o), { formatRupiah, triggerAlert })}
         />
       </>
     </Overlay>

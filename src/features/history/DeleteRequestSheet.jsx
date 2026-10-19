@@ -4,6 +4,8 @@ import { Modal, Button, Select, Textarea } from '../../components/ui';
 import { useAppContext } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
 import { ajukanHapusTransaksi } from '../../hook/useDeleteRequests';
+import useDirty from '../../hook/useDirty';
+import { showToast } from '../../lib/toast';
 
 /**
  * DeleteRequestSheet — staf mengajukan hapus satu transaksi (bottom sheet dari Detail di Riwayat).
@@ -18,6 +20,7 @@ export default function DeleteRequestSheet({ isOpen, onClose, sale, onSubmitted 
   const [requestedBy, setRequestedBy] = useState('');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const { dirty } = useDirty(isOpen, [requestedBy, reason]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -37,14 +40,14 @@ export default function DeleteRequestSheet({ isOpen, onClose, sale, onSubmitted 
       lastRequester = requestedBy;
       onClose();
       onSubmitted?.();
-      triggerAlert('Terkirim ke owner. Transaksi baru dihapus setelah owner menyetujui.');
+      showToast('Terkirim ke owner. Transaksi baru dihapus setelah owner menyetujui.', { duration: 4500 });
     } catch (e) {
       triggerAlert(e.message || 'Gagal mengajukan hapus.');
     } finally { setBusy(false); }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} sheet size="lg" maxHeight title="Ajukan Hapus Transaksi">
+    <Modal isOpen={isOpen} onClose={onClose} dirty={dirty} sheet size="lg" maxHeight title="Ajukan Hapus Transaksi">
       <div className="p-5 pt-2 space-y-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]" data-testid="sheet-ajukan-hapus">
         {sale && (
           <div className="bg-slate-50 dark:bg-slate-950 rounded-xl px-3 py-2.5 text-sm">

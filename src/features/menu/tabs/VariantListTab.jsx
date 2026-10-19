@@ -4,6 +4,8 @@ import { Plus, Edit3, Trash2, Settings2, Trash, GripVertical, ChevronDown, Chevr
 import CategoryModal from "../../../components/CategoryModal";
 import { Button, IconButton, Input, NominalInput, Select, EmptyState, Badge, Modal } from "../../../components/ui";
 import { useDragReorder, getDragRowClass } from "../../../hook/useDragReorder";
+import useDirty from "../../../hook/useDirty";
+import { showToast } from "../../../lib/toast";
 
 // ─── Komponen Kelompok Kategori Varian ───
 const VariantCategorySection = ({ category, groups, onReorder, onEdit, onDelete, categoryDrag }) => {
@@ -121,6 +123,8 @@ const VariantListTab = ({ data }) => {
   });
   const [newOption, setNewOption] = useState({ name: '', extraPrice: '' });
   const [editingOptionId, setEditingOptionId] = useState(null);
+  // Menutup form yang sudah terisi = konfirmasi buang isian (Modal `dirty`). Baris opsi yang sedang diketik ikut dihitung.
+  const { dirty, rebase } = useDirty(isEditing, [formData, newOption]);
 
   const handleSave = () => {
     if ((formData.options ?? []).length === 0) {
@@ -131,9 +135,19 @@ const VariantListTab = ({ data }) => {
       triggerAlert("Nama grup varian harus diisi.");
       return;
     }
+    const isNew = !formData.id;
     run(async () => {
       await saveVariantGroup(formData);
-      setIsEditing(false);
+      if (isNew) {
+        // Grup baru: form tidak menutup sendiri, dikosongkan (kategori dipertahankan) untuk grup berikutnya.
+        showToast('Grup varian ditambahkan');
+        setFormData({ id: '', name: '', category: formData.category, isRequired: false, maxSelection: 1, options: [] });
+        setNewOption({ name: '', extraPrice: '' }); setEditingOptionId(null);
+        rebase();
+      } else {
+        showToast('Grup varian diperbarui');
+        setIsEditing(false);
+      }
     });
   };
 
@@ -256,7 +270,7 @@ const VariantListTab = ({ data }) => {
         )}
       </div>
 
-      <Modal isOpen={isEditing} onClose={() => setIsEditing(false)} sheet size="lg" maxHeight title={formData.id ? 'Edit Grup Varian' : 'Tambah Grup Varian Baru'}>
+      <Modal isOpen={isEditing} onClose={() => setIsEditing(false)} dirty={dirty} sheet size="lg" maxHeight title={formData.id ? 'Edit Grup Varian' : 'Tambah Grup Varian Baru'}>
         <div className="p-5 pt-2 space-y-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <div className="space-y-4">
             <Input id="vgName" label="Nama Grup Varian" type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Misal: Level Pedas, Topping" />

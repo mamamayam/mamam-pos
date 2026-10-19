@@ -5,6 +5,8 @@ import CategorySelect from '../../components/CategorySelect';
 import { storeExpenseCategories } from './expenseCategories';
 import { useAppContext } from '../../context/AppContext';
 import { toLocalDateString } from '../../utils/formatters';
+import { showToast } from '../../lib/toast';
+import useDirty from '../../hook/useDirty';
 
 /**
  * ExpenseFormSheet — form Tambah/Edit Pengeluaran (bottom sheet) + Kelola Kategori.
@@ -18,6 +20,10 @@ import { toLocalDateString } from '../../utils/formatters';
  *   onSaved  — dipanggil setelah berhasil menyimpan (mis. memuat ulang daftar di belakangnya)
  *
  * Tanggal diperlakukan sebagai string "YYYY-MM-DD" apa adanya (jangan di-parse sebagai UTC).
+ *
+ * Setelah simpan: toast "tersimpan". Catatan BARU tidak menutup form, melainkan mengosongkannya untuk catatan
+ * berikutnya (pemilik biasa mencatat banyak sekaligus). Mode ubah menutup form setelah simpan.
+ * Menutup form yang sudah terisi (X, Back, tarik ke bawah, ketuk latar) memunculkan konfirmasi (Modal `dirty`).
  */
 
 const dayOf = (v) => String(v).slice(0, 10);
@@ -56,6 +62,14 @@ export default function ExpenseFormSheet({ isOpen, onClose, editing = null, data
     }
   }, [isOpen, editing]);
 
+  const { dirty, rebase } = useDirty(isOpen, [amount, category, supplier, detailItems, dateInput, paymentMethod, cashHolderId]);
+
+  const resetForm = () => {
+    setAmount(''); setCategory(''); setSupplier(''); setDetailItems(['']);
+    setDateInput(toLocalDateString()); setPaymentMethod('Tunai'); setCashHolderId('kasir');
+    rebase();
+  };
+
   const run = async (fn) => {
     if (busy) return;
     setBusy(true);
@@ -76,12 +90,18 @@ export default function ExpenseFormSheet({ isOpen, onClose, editing = null, data
       cashHolderEmployeeId: holder?.id || null, cashHolderName: holder?.name || null,
     });
     onSaved?.();
-    onClose();
+    if (editing) {
+      showToast('Pengeluaran diperbarui');
+      onClose();
+    } else {
+      showToast('Pengeluaran tersimpan');
+      resetForm();
+    }
   });
 
   return (
     <>
-      <Modal isOpen={isOpen} onClose={onClose} sheet size="lg" maxHeight title={editing ? 'Edit Pengeluaran' : 'Tambah Pengeluaran'}>
+      <Modal isOpen={isOpen} onClose={onClose} dirty={dirty} sheet size="lg" maxHeight title={editing ? 'Edit Pengeluaran' : 'Tambah Pengeluaran'}>
         <div className="p-5 pt-2 space-y-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <div className="grid grid-cols-2 gap-4 items-start">
             <CategorySelect value={category} onChange={setCategory} options={storeExpenseCategories(categories)} onManage={() => setIsCategoryModalOpen(true)} />

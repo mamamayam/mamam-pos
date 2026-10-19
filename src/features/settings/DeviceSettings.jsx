@@ -5,6 +5,8 @@ import { useAppContext } from '../../context/AppContext';
 import { useDevices } from '../../hook/useDevices';
 import { getDeviceId } from '../../lib/deviceId';
 import { lastSeenLabel } from '../../hook/deviceLogic';
+import useDirty from '../../hook/useDirty';
+import { showToast } from '../../lib/toast';
 
 /**
  * Pengaturan > Perangkat (khusus owner). HP yang baru membuka app masuk daftar "menunggu" dengan kode pendek;
@@ -85,7 +87,7 @@ export default function DeviceSettings({ settings, saveSetting }) {
         <NameSheet
           key={editing.id} device={editing} isMine={editing.id === myId}
           onClose={() => setEditing(null)}
-          onSave={async (name) => { await saveName(editing.id, name); setEditing(null); }}
+          onSave={async (name) => { await saveName(editing.id, name); setEditing(null); showToast('Nama perangkat disimpan'); }}
           onRevoke={() => triggerConfirm(`Cabut akses ${editing.name || editing.code}? HP ini terkunci lagi sampai didaftarkan ulang.`, async () => {
             try { await revoke(editing.id); setEditing(null); } catch (e) { triggerAlert(e.message); }
           })}
@@ -103,6 +105,7 @@ function NameSheet({ device, isMine, onClose, onSave, onRevoke, onRemove }) {
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const isNew = device.status !== 'terdaftar';
+  const { dirty } = useDirty(true, [name]);   // nama diubah lalu sheet ditutup = konfirmasi buang isian
 
   const submit = async () => {
     setBusy(true); setMessage('');
@@ -110,7 +113,7 @@ function NameSheet({ device, isMine, onClose, onSave, onRevoke, onRemove }) {
   };
 
   return (
-    <Modal isOpen onClose={onClose} sheet size="md" maxHeight title={isNew ? 'Beri nama perangkat' : 'Ubah nama perangkat'}>
+    <Modal isOpen onClose={onClose} dirty={dirty} sheet size="md" maxHeight title={isNew ? 'Beri nama perangkat' : 'Ubah nama perangkat'}>
       <div className="p-5 pt-2 space-y-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]" data-testid="device-name-sheet">
         <p className="text-xs text-slate-500 dark:text-slate-400">
           Kode <span className="font-mono font-bold">{device.code}</span>{isMine ? '. Ini HP yang sedang kamu pakai.' : '. Cocokkan dengan kode di layar HP tersebut.'}

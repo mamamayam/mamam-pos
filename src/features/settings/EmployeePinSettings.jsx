@@ -5,6 +5,8 @@ import { useAppContext } from '../../context/AppContext';
 import { useEmployeePins } from '../../hook/useEmployeePins';
 import { VIEW_MINUTES_CHOICES } from '../../hook/useAppSettings';
 import { generatePin } from '../../auth/pinHash';
+import useDirty from '../../hook/useDirty';
+import { showToast } from '../../lib/toast';
 
 /**
  * Pengaturan PIN karyawan: staf yang membuka Penggajian memilih nama karyawan lalu
@@ -53,7 +55,7 @@ export default function EmployeePinSettings({ settings, saveSetting }) {
 
       {editing && (
         <PinEditSheet person={editing} onClose={() => setEditing(null)}
-          onSave={(pin) => guard(async () => { await setPin(editing.id, pin); setEditing(null); triggerAlert(`PIN ${editing.name} disimpan. Beri tahu karyawannya.`); })}
+          onSave={(pin) => guard(async () => { await setPin(editing.id, pin); setEditing(null); showToast(`PIN ${editing.name} disimpan. Beri tahu karyawannya.`, { duration: 4000 }); })}
           onClear={() => triggerConfirm(`Hapus PIN ${editing.name}? Dia tidak bisa lagi melihat gajinya di mode staf sampai PIN baru dibuat.`,
             () => guard(async () => { await clearPin(editing.id); setEditing(null); }))} />
       )}
@@ -65,9 +67,10 @@ function PinEditSheet({ person, onClose, onSave, onClear }) {
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
   const ok = /^\d{4}$/.test(pin);
+  const { dirty } = useDirty(true, [pin]);   // PIN sudah diketik lalu sheet ditutup = konfirmasi buang isian
   const save = async () => { setBusy(true); try { await onSave(pin); } finally { setBusy(false); } };
   return (
-    <Modal isOpen onClose={onClose} sheet size="md" maxHeight title={`PIN ${person.name}`}>
+    <Modal isOpen onClose={onClose} dirty={dirty} sheet size="md" maxHeight title={`PIN ${person.name}`}>
       <div className="p-5 pt-2 space-y-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]" data-testid="pin-edit-sheet">
         <Input label="PIN baru (4 angka)" inputMode="numeric" maxLength={4} autoComplete="off" placeholder="0000" value={pin} data-testid="pin-input"
           onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}

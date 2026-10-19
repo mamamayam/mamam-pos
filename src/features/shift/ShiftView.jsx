@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Clock, FileText, AlertTriangle, Users } from 'lucide-react';
 import { Button, Card, Input, NominalInput, Select, PillTabs, EmptyState, Badge, Modal } from '../../components/ui';
+import useDirty from '../../hook/useDirty';
+import { showToast } from '../../lib/toast';
 import { useAppContext } from '../../context/AppContext';
 import { useShiftData } from '../../hook/useShiftData';
 import { toLocalDateString } from '../../utils/formatters';
@@ -96,6 +98,9 @@ const ShiftView = () => {
   const [actualCashInput, setActualCashInput] = useState('');
   const [report, setReport] = useState(null);       // laporan yang sedang dilihat
   const [busy, setBusy] = useState(false);         // cegah dobel-klik
+  // Menutup sheet yang sudah terisi = konfirmasi buang isian (Modal `dirty`).
+  const openDirty = useDirty(isOpenSheet, [initialCashInput, openedBy]).dirty;
+  const closeDirty = useDirty(isCloseSheet, [actualCashInput]).dirty;
   const [filterMode, setFilterMode] = useState('hari-ini');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -117,7 +122,7 @@ const ShiftView = () => {
     await openShift({ initialCash: initialCashInput, openedByEmployeeId: openedBy });
     setInitialCashInput(''); setOpenedBy('');
     setIsOpenSheet(false);
-    triggerAlert('Dompet berhasil dibuka!');
+    showToast('Dompet berhasil dibuka');
   });
 
   const handleClose = () => {
@@ -351,7 +356,7 @@ const ShiftView = () => {
         </div>
       )}
 
-      <Modal isOpen={isOpenSheet} onClose={() => setIsOpenSheet(false)} sheet size="lg" maxHeight title="Buka Dompet">
+      <Modal isOpen={isOpenSheet} onClose={() => setIsOpenSheet(false)} dirty={openDirty} sheet size="lg" maxHeight title="Buka Dompet">
         <div className="p-5 pt-2 space-y-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <p className="text-sm text-slate-500 dark:text-slate-400">Masukkan jumlah uang tunai yang ada di dalam dompet saat ini sebagai modal harian.</p>
           <NominalInput label="Saldo Awal" value={initialCashInput}
@@ -367,7 +372,7 @@ const ShiftView = () => {
         </div>
       </Modal>
 
-      <Modal isOpen={isCloseSheet} onClose={() => setIsCloseSheet(false)} sheet size="lg" maxHeight title="Saldo Aktual">
+      <Modal isOpen={isCloseSheet} onClose={() => setIsCloseSheet(false)} dirty={closeDirty} sheet size="lg" maxHeight title="Saldo Aktual">
         <div className="p-5 pt-2 space-y-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <NominalInput title="Saldo Aktual"
             value={actualCashInput} onChange={e => setActualCashInput(e.target.value)} placeholder="0"

@@ -159,6 +159,67 @@ describe('backStack — lapisan ditutup lewat tombol di layar', () => {
   });
 });
 
+describe('backStack — lapisan yang menolak ditutup (form belum disimpan, lihat useBackLayer `rearm`)', () => {
+  /** Meniru useBackLayer({ rearm: true }): close() menampilkan konfirmasi lalu mendaftarkan lapisan lagi. */
+  function guardedLayer(bs, { onAsk, onDiscard }) {
+    let alive = true;
+    const attach = () => bs.register(() => {
+      if (!alive) return;
+      onAsk();
+      queueMicrotask(() => { if (alive) attach(); });   // effect React yang memasang ulang lapisan
+    });
+    attach();
+    return { discard: () => { alive = false; onDiscard(); } };
+  }
+
+  it('Back pertama hanya memunculkan konfirmasi (form tetap terbuka); Back berikutnya muncul lagi, TIDAK keluar aplikasi', async () => {
+    const { b, bs } = make(); let asked = 0;
+    guardedLayer(bs, { onAsk: () => { asked += 1; }, onDiscard: () => {} }); await tick();
+    expect(bs.snapshot()).toMatchObject({ layers: 1, depth: 1 });
+    b.userBack(); await tick();
+    expect(asked).toBe(1);
+    expect(b.left).toBe(false);
+    expect(bs.snapshot()).toMatchObject({ layers: 1, depth: 1, exitArmed: false });   // lapisan terpasang lagi, riwayat tidak bocor
+    b.userBack(); await tick();
+    expect(asked).toBe(2);
+    expect(b.left).toBe(false);
+    expect(bs.snapshot()).toMatchObject({ layers: 1, depth: 1 });
+  });
+
+  it('konfirmasi di atas form: Back menutup konfirmasi dulu (Lanjut Isi), form tetap ada; riwayat tetap sinkron', async () => {
+    const { b, bs } = make(); const log = [];
+    // form (menolak ditutup) + konfirmasi yang muncul sesudahnya (lapisan di atasnya)
+    let confirmClosed = false;
+    const form = guardedLayer(bs, {
+      onAsk: () => { log.push('ask'); },
+      onDiscard: () => {},
+    }); await tick();
+    // tombol X di layar memunculkan konfirmasi: lapisan konfirmasi ditambah di atas form
+    const confirmId = bs.register(() => { confirmClosed = true; log.push('keep'); }); await tick();
+    expect(bs.snapshot()).toMatchObject({ layers: 2, depth: 2 });
+    b.userBack(); await tick();
+    expect(confirmClosed).toBe(true);                           // konfirmasi tertutup = Lanjut Isi
+    expect(log).toEqual(['keep']);                              // form TIDAK bertanya lagi
+    expect(bs.snapshot()).toMatchObject({ layers: 1, depth: 1 });
+    expect(bs.has(confirmId)).toBe(false);
+    expect(b.left).toBe(false);
+    form.discard();
+  });
+
+  it('Buang: lapisan dilepas, riwayat dirapikan, Back berikutnya memunculkan notif keluar seperti biasa', async () => {
+    const { b, bs } = make(); let asked = 0;
+    const form = guardedLayer(bs, { onAsk: () => { asked += 1; }, onDiscard: () => {} }); await tick();
+    b.userBack(); await tick();                                 // konfirmasi tampil, lapisan terpasang ulang
+    expect(asked).toBe(1);
+    expect(bs.snapshot().layers).toBe(1);
+    form.discard();                                             // "Buang": induk menutup form
+    b.userBack(); await tick();                                 // close() tidak lagi bertanya karena form sudah ditutup
+    expect(asked).toBe(1);
+    expect(bs.snapshot()).toMatchObject({ layers: 0, depth: 0 });
+    await doubleBackExits(b, bs);
+  });
+});
+
 describe('backStack — urutan operasi asinkron', () => {
   it('lapisan baru yang datang saat go() masih berjalan ditunda, lalu didorong sesudah popstate', async () => {
     const { b, bs } = make(); const order = [];

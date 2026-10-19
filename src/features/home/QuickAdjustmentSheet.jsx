@@ -7,6 +7,8 @@ import { useAppContext } from '../../context/AppContext';
 import { toLocalDateString } from '../../utils/formatters';
 import { PAYMENT_METHODS } from './quickEntryMath';
 import { detailLabel } from '../payroll/additionDetail';
+import { showToast } from '../../lib/toast';
+import useDirty from '../../hook/useDirty';
 
 /**
  * QuickAdjustmentSheet — form Tambah / Potongan karyawan dari Beranda (bottom sheet).
@@ -25,7 +27,11 @@ import { detailLabel } from '../payroll/additionDetail';
  * `paymentMethod` null = potongan lama tanpa pengeluaran terhubung (Sumber Dana disembunyikan).
  * `detail` = rincian Tambah (Ongkir / Potong Ayam), kalau ada.
  *
- * Sheet memakai Modal bersama: tombol Back HP menutupnya dan bisa di-swipe turun.
+ * Sheet memakai Modal bersama: tombol Back HP menutupnya dan bisa di-swipe turun. Kalau isiannya sudah diubah,
+ * menutup lewat cara apa pun memunculkan konfirmasi buang isian (Modal `dirty`).
+ *
+ * Setelah simpan: toast, dan catatan BARU tidak menutup sheet melainkan mengosongkan form (jenis yang sama,
+ * "Dicatat oleh" tetap) untuk catatan berikutnya. Mode ubah menutup sheet setelah simpan.
  */
 const emptyForm = (type) => ({ type, label: '', amount: '', date: toLocalDateString(), category: '' });   // category '' = pilihan pertama
 
@@ -56,6 +62,13 @@ export default function QuickAdjustmentSheet({ isOpen, kind, onClose, quick, can
     setRequestedBy(quick.lastRequester.current || '');
   }, [isOpen, kind, editing?.item.id]); // eslint-disable-line react-hooks/exhaustive-deps -- reset hanya saat dibuka
 
+  const { dirty, rebase } = useDirty(isOpen, [form, employeeId, paymentMethod, requestedBy]);
+
+  const resetForm = () => {
+    setForm(emptyForm(form.type)); setEmployeeId(''); setPaymentMethod('Tunai');
+    rebase();
+  };
+
   const run = async (fn) => {
     if (busy) return;
     setBusy(true);
@@ -73,17 +86,19 @@ export default function QuickAdjustmentSheet({ isOpen, kind, onClose, quick, can
     const f = { employeeId, category, label: form.label, amount: form.amount, date: form.date, requestedBy, paymentMethod, detail: isAddition ? form.detail : null };
     if (editing) {
       await editing.onSave(editing.item.id, f);
+      showToast('Perubahan tersimpan');
       onClose();
       return;
     }
     if (isAddition) {
       const status = await quick.submitAddition(f);
-      onClose();
-      if (status === 'menunggu') triggerAlert('Terkirim ke owner. Tambahan baru dihitung di gaji setelah disetujui.');
+      if (status === 'menunggu') showToast('Terkirim ke owner. Tambahan baru dihitung di gaji setelah disetujui.', { duration: 4500 });
+      else showToast('Tambahan tersimpan');
     } else {
       await quick.submitDeduction(f);
-      onClose();
+      showToast('Potongan tersimpan');
     }
+    resetForm();
   });
 
   // Dua slot ditumpuk di satu sel grid (yang tidak aktif disembunyikan), jadi tinggi formulir
@@ -92,7 +107,7 @@ export default function QuickAdjustmentSheet({ isOpen, kind, onClose, quick, can
 
   return (
     <>
-      <Modal isOpen={isOpen} onClose={onClose} sheet size="lg" maxHeight title={editing ? (isAddition ? 'Ubah Tambahan' : 'Ubah Potongan') : isAddition ? 'Catat Tambahan' : 'Catat Potongan'}>
+      <Modal isOpen={isOpen} onClose={onClose} dirty={dirty} sheet size="lg" maxHeight title={editing ? (isAddition ? 'Ubah Tambahan' : 'Ubah Potongan') : isAddition ? 'Catat Tambahan' : 'Catat Potongan'}>
         <div className="p-5 pt-2 space-y-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <Select label="Karyawan" value={employeeId} onChange={e => setEmployeeId(e.target.value)} disabled={!!editing}>
             {editing

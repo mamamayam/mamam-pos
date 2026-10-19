@@ -4,6 +4,7 @@ import App from './app/App.jsx'
 import { backStack } from './lib/backStack'
 import { AuthProvider } from './auth/AuthContext.jsx'
 import ExitToast from './components/ui/ExitToast.jsx'
+import Toaster from './components/ui/Toaster.jsx'
 import { registerServiceWorker } from './lib/registerServiceWorker'
 import { isHppPath, shouldReloadOnReturn } from './lib/appMode'
 import './index.css'
@@ -35,6 +36,7 @@ if (isHpp) {
       <AuthProvider>
         <App />
         <ExitToast />
+        <Toaster />
       </AuthProvider>
     </React.StrictMode>,
   )

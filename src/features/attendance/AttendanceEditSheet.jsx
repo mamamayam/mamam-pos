@@ -3,6 +3,8 @@ import { Plus, X } from 'lucide-react';
 import { Modal, Button, Input } from '../../components/ui';
 import { saveOverride, deleteOverride } from '../../hook/attendanceOverrides';
 import { validateEdit } from './dayRules';
+import useDirty from '../../hook/useDirty';
+import { showToast } from '../../lib/toast';
 
 /**
  * AttendanceEditSheet — owner mengoreksi jam absen satu karyawan pada satu hari.
@@ -10,6 +12,9 @@ import { validateEdit } from './dayRules';
  * dihitung; sistem absensi tidak diubah. "Kembalikan" menghapus koreksi.
  *
  * initial: { masuk, pulang, bolongs:[{from,to}], libur } — nilai yang sedang tampil.
+ *
+ * Setelah simpan: toast lalu sheet menutup (koreksi satu hari = satu kali jalan). Menutup sheet yang isiannya
+ * sudah diubah memunculkan konfirmasi buang isian (Modal `dirty`).
  */
 export default function AttendanceEditSheet({ isOpen, onClose, employee, date, initial, hasOverride, onSaved }) {
   const [libur, setLibur] = useState(false);
@@ -18,6 +23,7 @@ export default function AttendanceEditSheet({ isOpen, onClose, employee, date, i
   const [bolongs, setBolongs] = useState([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const { dirty } = useDirty(isOpen, [libur, masuk, pulang, bolongs]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -28,26 +34,26 @@ export default function AttendanceEditSheet({ isOpen, onClose, employee, date, i
 
   const setBolong = (i, patch) => setBolongs(prev => prev.map((b, idx) => (idx === i ? { ...b, ...patch } : b)));
 
-  const run = async (fn) => {
+  const run = async (fn, okMessage) => {
     setBusy(true); setError('');
-    try { await fn(); await onSaved?.(); onClose(); } catch (e) { setError(e.message || 'Terjadi kesalahan.'); setBusy(false); }
+    try { await fn(); await onSaved?.(); showToast(okMessage); onClose(); } catch (e) { setError(e.message || 'Terjadi kesalahan.'); setBusy(false); }
   };
 
   const handleSave = () => {
     const err = validateEdit({ libur, masuk, pulang, bolongs });
     if (err) { setError(err); return; }
-    run(() => saveOverride({ employeeId: employee.id, date, libur, masuk, pulang, bolongs }));
+    run(() => saveOverride({ employeeId: employee.id, date, libur, masuk, pulang, bolongs }), 'Koreksi absen tersimpan');
   };
   const stuckIdx = libur ? -1 : bolongs.findIndex(b => b.from && !b.to);
   const stuck = stuckIdx >= 0 ? bolongs[stuckIdx] : null;
   const makeStuckThePulang = () => { setPulang(stuck.from); setBolongs(prev => prev.filter((_, i) => i !== stuckIdx)); setError(''); };
 
-  const handleRestore = () => run(() => deleteOverride(employee.id, date));
+  const handleRestore = () => run(() => deleteOverride(employee.id, date), 'Koreksi absen dikembalikan');
 
   const label = date ? new Date(`${date}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} sheet size="md" maxHeight title="Edit Absen">
+    <Modal isOpen={isOpen} onClose={onClose} dirty={dirty} sheet size="md" maxHeight title="Edit Absen">
       <div className="p-5 pt-2 space-y-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]" data-testid="att-edit-sheet">
         <div>
           <p className="font-heading font-bold text-slate-800 dark:text-slate-100">{employee?.name}</p>

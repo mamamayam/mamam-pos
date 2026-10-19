@@ -4,6 +4,8 @@ import { Card, Input, Button, EmptyState, BulkSelectBar, Modal } from '../../com
 import { useAppContext } from '../../context/AppContext';
 import { useCustomerData } from '../../hook/useCustomerData';
 import { useBulkSelect } from '../../hook/useBulkSelect';
+import useDirty from '../../hook/useDirty';
+import { showToast } from '../../lib/toast';
 
 /**
  * CustomerView — Pelanggan, gelombang 1. Kolom "Kelola Pelanggan" di-port
@@ -15,7 +17,11 @@ import { useBulkSelect } from '../../hook/useBulkSelect';
  *     "track harian" gelombang 1.
  *   - HARD DELETE (tanpa RecycleBin): tombol hapus = hilang permanen dari
  *     Supabase saat itu juga, bukan soft-delete yang bisa dipulihkan.
+ *   - Form Tambah tidak menutup sendiri setelah simpan: toast "ditambahkan" + form dikosongkan untuk pelanggan
+ *     berikutnya. Form Edit menutup setelah simpan. Menutup form yang sudah terisi = konfirmasi buang isian.
  */
+const EMPTY_CUSTOMER = { id: '', name: '', phone: '' };
+
 const CustomerView = () => {
   const { triggerAlert, triggerConfirm } = useAppContext();
   const { customers, loading, error, reload, saveCustomer, deleteCustomer, bulkDeleteCustomers } = useCustomerData();
@@ -24,6 +30,7 @@ const CustomerView = () => {
   const [isSelecting, setIsSelecting] = useState(false);
   const [editing, setEditing] = useState(null); // form tambah/edit: { id ('' = baru), name, phone } | null
   const [busy, setBusy] = useState(false);
+  const { dirty, rebase } = useDirty(Boolean(editing), editing);
 
   const run = async (fn) => {
     if (busy) return;
@@ -41,8 +48,16 @@ const CustomerView = () => {
   const { selectedIds, allSelected, toggleOne, toggleAll, reset, count } = useBulkSelect(filtered);
 
   const handleSave = () => run(async () => {
+    const isNew = !editing.id;
     await saveCustomer({ id: editing.id || undefined, name: editing.name, phone: editing.phone });
-    setEditing(null);
+    if (isNew) {
+      showToast('Pelanggan ditambahkan');
+      setEditing({ ...EMPTY_CUSTOMER });   // form tetap terbuka, kosong untuk pelanggan berikutnya
+      rebase();
+    } else {
+      showToast('Data pelanggan diperbarui');
+      setEditing(null);
+    }
   });
 
   const handleDelete = (c) => {
@@ -81,7 +96,7 @@ const CustomerView = () => {
           <Button variant="secondary" onClick={() => { if (isSelecting) reset(); setIsSelecting(v => !v); }} className="shrink-0">
             {isSelecting ? 'Batal' : 'Pilih'}
           </Button>
-          <Button onClick={() => setEditing({ id: '', name: '', phone: '' })} title="Tambah Pelanggan" icon={<Plus className="w-4 h-4" />} className="shrink-0">
+          <Button onClick={() => setEditing({ ...EMPTY_CUSTOMER })} title="Tambah Pelanggan" icon={<Plus className="w-4 h-4" />} className="shrink-0">
             Tambah
           </Button>
         </div>
@@ -119,7 +134,7 @@ const CustomerView = () => {
         </div>
       </Card>
 
-      <Modal isOpen={Boolean(editing)} onClose={() => setEditing(null)} sheet size="lg" maxHeight title={editing?.id ? 'Edit Data Pelanggan' : 'Tambah Pelanggan'}>
+      <Modal isOpen={Boolean(editing)} onClose={() => setEditing(null)} dirty={dirty} sheet size="lg" maxHeight title={editing?.id ? 'Edit Data Pelanggan' : 'Tambah Pelanggan'}>
         {editing && (
           <div className="p-5 pt-2 space-y-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
             <Input label="Nama Pelanggan" variant="muted" type="text" placeholder="Nama Pelanggan" value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} />

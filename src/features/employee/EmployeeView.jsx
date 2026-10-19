@@ -6,6 +6,8 @@ import { useAuth } from '../../auth/AuthContext';
 import { useEmployeeData } from '../../hook/useEmployeeData';
 import { applySort } from '../../utils/sortUtils';
 import { toLocalDateString } from '../../utils/formatters';
+import useDirty from '../../hook/useDirty';
+import { showToast } from '../../lib/toast';
 import {
   EMPLOYEE_STATUS_OPTIONS, EMPLOYEE_ROLE_OPTIONS, OVERTIME_RATE_PER_30MIN, statusInfo, roleInfo,
 } from './employeeOptions';
@@ -20,6 +22,8 @@ import {
  *  - Hapus = permanen (histori transaksi/pengeluaran/dompet tetap utuh)
  *  - Tombol/kartu "Impor dari mamam-global" sudah dihapus dari layar ini (logika
  *    impor masih ada di backupImport.js + useEmployeeData kalau suatu saat dibutuhkan).
+ *  - Form Tambah tidak menutup sendiri setelah simpan: toast + form dikosongkan untuk karyawan berikutnya.
+ *    Form Edit menutup setelah simpan. Menutup form yang sudah terisi = konfirmasi buang isian.
  */
 const emptyForm = () => ({
   id: '', externalId: '', name: '', phone: '', address: '',
@@ -43,6 +47,7 @@ export default function EmployeeView() {
   const [statusFilter, setStatusFilter] = useState('semua');
   const [roleFilter, setRoleFilter] = useState('semua');
   const [busy, setBusy] = useState(false);
+  const { dirty, rebase } = useDirty(isEditing, form);
 
   const run = async (fn) => {
     if (busy) return;
@@ -54,8 +59,14 @@ export default function EmployeeView() {
   const handleSave = () => run(async () => {
     const wasEdit = !!form.id;
     await saveEmployee(form);
-    setIsEditing(false); setForm(emptyForm());
-    triggerAlert(wasEdit ? 'Data karyawan berhasil diupdate.' : 'Karyawan baru berhasil ditambahkan.');
+    setForm(emptyForm());
+    if (wasEdit) {
+      setIsEditing(false);
+      showToast('Data karyawan diperbarui');
+    } else {
+      showToast('Karyawan baru ditambahkan');   // form tetap terbuka, kosong untuk karyawan berikutnya
+      rebase();
+    }
   });
 
   const handleDelete = (emp) => {
@@ -150,7 +161,7 @@ export default function EmployeeView() {
           <SortModal isOpen={isSortOpen} onClose={() => setIsSortOpen(false)} value={sortKey} onChange={setSortKey} options={sortOptions.filter(o => o.key !== 'rate-desc' || canWage)} />
         </div>
 
-      <Modal isOpen={isEditing} onClose={() => setIsEditing(false)} sheet size="lg" maxHeight title={form.id ? 'Edit Data Karyawan' : 'Tambah Karyawan Baru'}>
+      <Modal isOpen={isEditing} onClose={() => setIsEditing(false)} dirty={dirty} sheet size="lg" maxHeight title={form.id ? 'Edit Data Karyawan' : 'Tambah Karyawan Baru'}>
         <div className="p-5 pt-2 space-y-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <div className="grid grid-cols-1 gap-4">
             <Input label="Nama Lengkap" variant="muted" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />

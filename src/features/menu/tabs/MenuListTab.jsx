@@ -4,6 +4,8 @@ import { Plus, Edit3, Trash2, Settings2, Search, X, GripVertical, ChevronDown, C
 import CategoryModal from "../../../components/CategoryModal";
 import { Button, IconButton, Input, NominalInput, Select, EmptyState, Badge, Modal } from "../../../components/ui";
 import { useDragReorder, getDragRowClass } from "../../../hook/useDragReorder";
+import useDirty from "../../../hook/useDirty";
+import { showToast } from "../../../lib/toast";
 
 // ─── Komponen Kelompok Kategori Menu ───
 const MenuCategorySection = ({
@@ -147,15 +149,27 @@ const MenuListTab = ({ data }) => {
     id: '', name: '', price: '', hpp: '', category: categories[0] || 'Lainnya', variantGroupIds: []
   });
 
+  // Menutup form yang sudah terisi = konfirmasi buang isian (Modal `dirty`).
+  const { dirty, rebase } = useDirty(isEditing, formData);
+
   const handleSave = () => {
     if (!formData.name || formData.price === '' || formData.price < 0) {
       triggerAlert("Nama dan harga menu harus diisi dengan benar.");
       return;
     }
     const dataToSave = { ...formData, price: Number(formData.price), hpp: Number(formData.hpp || 0) };
+    const isNew = !formData.id;
     run(async () => {
       await saveMenu(dataToSave);
-      setIsEditing(false);
+      if (isNew) {
+        // Menu baru: form tidak menutup sendiri, dikosongkan (kategori dipertahankan) untuk menu berikutnya.
+        showToast('Menu ditambahkan');
+        setFormData({ id: '', name: '', price: '', hpp: '', category: formData.category, variantGroupIds: [] });
+        rebase();
+      } else {
+        showToast('Menu diperbarui');
+        setIsEditing(false);
+      }
     });
   };
 
@@ -262,7 +276,7 @@ const MenuListTab = ({ data }) => {
         )}
       </div>
 
-      <Modal isOpen={isEditing} onClose={() => setIsEditing(false)} sheet size="lg" maxHeight title={formData.id ? 'Edit Menu' : 'Tambah Menu Baru'}>
+      <Modal isOpen={isEditing} onClose={() => setIsEditing(false)} dirty={dirty} sheet size="lg" maxHeight title={formData.id ? 'Edit Menu' : 'Tambah Menu Baru'}>
         <div className="p-5 pt-2 space-y-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <div className="space-y-4">
             <Input id="menuName" label="Nama Menu" type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Misal: Lumpia Semarang" />

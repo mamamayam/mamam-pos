@@ -30,6 +30,9 @@ import { useEffect, useRef, useState } from 'react';
  *   swipe          boolean — izinkan swipe-turun (default: true untuk sheet & responsive)
  *   closeOnBackdrop boolean (default true)
  *   ignoreKeyboard boolean — jangan ikut memendek saat keypad nominal terpasang (mis. kalkulator)
+ *   guardClose     boolean — penutupan perlu konfirmasi (form yang isiannya belum disimpan, lihat Modal `dirty`):
+ *                  swipe-turun TIDAK menurunkan panel, panel membal kembali dan `onClose` tetap dipanggil
+ *                  sehingga induk bisa menampilkan konfirmasi (dialog muncul tanpa panel sempat meluncur turun)
  *
  * KEYBOARD HP: saat keyboard terbuka, lapisan dipendekkan setinggi keyboard (tepi bawahnya naik ke atas
  * keyboard) dan tinggi panel dibatasi area yang terlihat, supaya sheet yang berisi kolom cari/isian
@@ -102,9 +105,11 @@ function swipeBlocked(target, panel) {
   return panel.scrollTop > 0;
 }
 
-function useSwipeDown(panelRef, backdropRef, { enabled, responsive, onClose }) {
+function useSwipeDown(panelRef, backdropRef, { enabled, responsive, onClose, guardClose = false }) {
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  const guardRef = useRef(guardClose);
+  guardRef.current = guardClose;
 
   useEffect(() => {
     const el = panelRef.current;
@@ -141,7 +146,14 @@ function useSwipeDown(panelRef, backdropRef, { enabled, responsive, onClose }) {
       const velocity = s.dy / Math.max(1, performance.now() - s.t); // px/ms
       el.style.transition = '';
       if (backdrop()) backdrop().style.transition = '';
-      if (s.dy > 110 || (s.dy > 30 && velocity > 0.5)) {
+      const pastThreshold = s.dy > 110 || (s.dy > 30 && velocity > 0.5);
+      if (pastThreshold && guardRef.current) {
+        // Perlu konfirmasi: panel kembali ke tempatnya, lalu induk diminta menutup (ia yang menampilkan konfirmasi).
+        el.style.translate = '0 0';
+        if (backdrop()) backdrop().style.opacity = '';
+        setTimeout(() => { if (el.isConnected) el.style.translate = ''; }, 320);
+        closeRef.current?.();
+      } else if (pastThreshold) {
         el.style.translate = '0 100%';
         if (backdrop()) backdrop().style.opacity = '0';
         closeRef.current?.();
@@ -179,7 +191,7 @@ export default function Overlay(props) {
   const p = open ? props : frozen.current;
   const {
     variant = 'center', z = 'z-[60]', backdropClass = DEFAULT_BACKDROP, containerClass, panelClass = '',
-    onClose, closeOnBackdrop = true, ignoreKeyboard = false, children,
+    onClose, closeOnBackdrop = true, ignoreKeyboard = false, guardClose = false, children,
   } = p;
   const motion = MOTION[variant] ?? MOTION.center;
   const swipe = p.swipe ?? (variant === 'sheet' || variant === 'responsive');
@@ -206,6 +218,7 @@ export default function Overlay(props) {
     enabled: swipe && open && Boolean(onClose),
     responsive: variant === 'responsive',
     onClose,
+    guardClose,
   });
 
   if (!open && !mounted) return null;

@@ -9,7 +9,7 @@ import OrderBreakdown from './OrderBreakdown';
 /**
  * SavedOrdersSheet — daftar Pesanan Tersimpan (belum dibayar), dibuka dari pil "Tersimpan" di keranjang.
  * Tiap pesanan: nomor, pelanggan, tipe, waktu simpan, ringkasan item, rincian yang bisa dibuka, dan aksi:
- *   Hapus (danger, ikon saja) · Bagikan (ikon saja; tagihan PDF lewat menu share) · Lanjutkan (muat ke keranjang untuk diubah) · Bayar (muat ke keranjang + buka pembayaran).
+ *   Hapus (danger, ikon saja) · Bagikan (ikon saja; tagihan gambar lewat menu share) · Lanjutkan (muat ke keranjang untuk diubah) · Bayar (muat ke keranjang + buka pembayaran).
  * Komponen ini hanya tampilan; aksinya dijalankan CartDrawer (yang memegang store keranjang).
  */
 

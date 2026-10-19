@@ -14,7 +14,7 @@ import { dayStartISO, nextDayStartISO } from '../features/reports/reportsMath';
  */
 const fail = (error, aksi) => { throw new Error(`${aksi}: ${error.message}`); };
 
-const SALE_COLUMNS = 'id, display_number, order_type, customer_name, status, subtotal, voucher_discount, manual_discount_amount, tax_amount, service_amount, delivery_fee, total, payment_method, ojol_platform, ojol_order_number, split_payments_json, paid_at, created_at, device_id, device_name';
+const SALE_COLUMNS = 'id, display_number, order_type, customer_name, status, subtotal, voucher_discount, manual_discount_amount, tax_amount, service_amount, delivery_fee, total, payment_method, amount_paid, change_amount, ojol_platform, ojol_order_number, split_payments_json, paid_at, created_at, device_id, device_name';
 const ITEM_COLUMNS = 'menu_item_id, name, variant_name, note, qty, price, hpp';
 
 export function useReportData({ fromDate, toDate, withSales = true, withExpenses = true }) {

@@ -21,7 +21,7 @@ import { filterSales, paymentStats, sortSales, methodOf, isTimeSort, SORT_OPTION
  * per hari. Ketuk satu transaksi = Detail (di sana ada Hapus).
  *
  * BEDA dari A (sengaja):
- *  - Struk: tombol Bagikan di Detail membuat struk PDF (pos/receiptPdf.js) dan membukanya di menu share HP. Belum ada cetak ke printer.
+ *  - Struk: tombol Bagikan di Detail membuat struk GAMBAR (pos/receiptImage.js) dan membukanya di menu share HP. Belum ada cetak ke printer.
  *  - Hapus = permanen dan hanya Owner (izin laporan.hapusTransaksi). Staf yang membuka Riwayat hanya bisa
  *    MENGAJUKAN hapus per transaksi (alasan + nama wajib); owner memutuskan di sheet Persetujuan.
  *    Transaksi yang sedang diajukan diberi badge "Menunggu hapus"; yang ditolak menampilkan alasan penolakan di Detail.
@@ -247,6 +247,20 @@ export default function RiwayatView() {
           { label: 'Ongkir', value: detail?.delivery_fee, type: 'currency' },
         ]}
         highlight={{ label: 'Total Tagihan', value: detail?.total }}
+        afterHighlight={detail?.amount_paid != null && (
+          <div data-testid="riwayat-cash" className="mt-3 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 py-3 space-y-1.5 text-xs">
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500 dark:text-slate-400">{detail.payment_method === 'Tunai' ? 'Uang diterima' : 'Dibayar'}</span>
+              <span className="font-bold text-slate-700 dark:text-slate-200">{formatRupiah(detail.amount_paid)}</span>
+            </div>
+            {detail.change_amount != null && (
+              <div className="flex justify-between gap-3">
+                <span className="text-slate-500 dark:text-slate-400">Kembalian</span>
+                <span className="font-bold text-slate-700 dark:text-slate-200">{formatRupiah(detail.change_amount)}</span>
+              </div>
+            )}
+          </div>
+        )}
         actions={detail ? [
           { label: 'Bagikan', icon: <Share2 className="w-4 h-4" />, onClick: () => shareReceiptWithAlert(receiptFromSale(detail), { formatRupiah, triggerAlert }) },
           ...(canDelete ? [{ label: 'Hapus Transaksi', icon: <Trash2 className="w-4 h-4" />, variant: 'danger', onClick: () => handleDelete(detail) }]

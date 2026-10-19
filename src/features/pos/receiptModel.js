@@ -1,5 +1,5 @@
 /**
- * receiptModel — bentuk struk yang SAMA untuk tiga sumber, supaya satu pembuat PDF cukup:
+ * receiptModel — bentuk struk yang SAMA untuk tiga sumber, supaya satu pembuat gambar cukup:
  *   - transaksi yang baru selesai (hasil checkout(), popup ReceiptModal)   -> receiptFromCheckout
  *   - transaksi lunas di Riwayat (baris transactions + items)               -> receiptFromSale
  *   - pesanan tersimpan / belum dibayar (orderFromRow di savedOrders.js)    -> receiptFromSaved
@@ -59,6 +59,8 @@ export function receiptFromSale(s) {
     ojolPlatform: x.payment_method === 'Ojol' ? (x.ojol_platform || '') : '',
     ojolOrderNumber: x.payment_method === 'Ojol' ? (x.ojol_order_number || '') : '',
     splits: Array.isArray(x.split_payments_json) ? x.split_payments_json.map((p) => ({ method: p.method, amount: n(p.amount) })) : [],
+    amountPaid: x.amount_paid == null ? null : n(x.amount_paid),
+    change: x.change_amount == null ? null : n(x.change_amount),
     items: (x.items || []).map((i) => ({ name: i.name, note: itemNote(i.variant_name, i.note), qty: n(i.qty), price: n(i.price) })),
     subtotal: n(x.subtotal), voucherDiscount: n(x.voucher_discount), manualDiscountAmount: n(x.manual_discount_amount),
     deliveryFee: n(x.delivery_fee), total: n(x.total),
@@ -80,10 +82,10 @@ export function receiptFromSaved(o) {
   });
 }
 
-/** Nama berkas aman untuk dibagikan: Struk-<nomor>.pdf, atau Tagihan-<nomor>.pdf kalau belum dibayar. */
+/** Nama berkas aman untuk dibagikan: Struk-<nomor>.png, atau Tagihan-<nomor>.png kalau belum dibayar. */
 export function receiptFilename(r) {
   const num = String(r?.number || '').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '') || 'pesanan';
-  return `${r?.status === 'belum' ? 'Tagihan' : 'Struk'}-${num}.pdf`;
+  return `${r?.status === 'belum' ? 'Tagihan' : 'Struk'}-${num}.png`;
 }
 
 /** Judul pada menu share (mis. nama berkas di WhatsApp). */

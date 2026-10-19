@@ -47,6 +47,12 @@ describe('receiptFromSale (baris Riwayat)', () => {
     expect(receiptFromSale({ ...s, paid_at: null }).when).toBe('2026-10-18T10:00:00Z');
     expect(receiptFromSale({ ...s, payment_method: 'QRIS' })).toMatchObject({ ojolPlatform: '', ojolOrderNumber: '' });
   });
+  it('uang dibayarkan dan kembalian dibawa dari kolom amount_paid / change_amount (null tetap null)', () => {
+    const x = receiptFromSale({ ...s, payment_method: 'Tunai', amount_paid: '50000', change_amount: 21000 });
+    expect(x).toMatchObject({ amountPaid: 50000, change: 21000 });
+    expect(receiptFromSale({ ...s, amount_paid: null, change_amount: null })).toMatchObject({ amountPaid: null, change: null });
+    expect(receiptFromSale({ ...s, payment_method: 'Tunai', amount_paid: 29000, change_amount: 0 }).change).toBe(0);
+  });
   it('split payment dari split_payments_json', () => {
     const x = receiptFromSale({ ...s, payment_method: 'Split Payment', split_payments_json: [{ method: 'Tunai', amount: 10000 }, { method: 'QRIS', amount: 19000 }] });
     expect(x.splits).toHaveLength(2);
@@ -68,10 +74,10 @@ describe('receiptFromSaved (pesanan tersimpan)', () => {
 
 describe('nama berkas dan judul share', () => {
   it('Struk untuk lunas, Tagihan untuk belum dibayar, nomor dibersihkan', () => {
-    expect(receiptFilename({ number: 'A1B2C3D4', status: 'lunas' })).toBe('Struk-A1B2C3D4.pdf');
-    expect(receiptFilename({ number: 'A1B2C3D4', status: 'belum' })).toBe('Tagihan-A1B2C3D4.pdf');
-    expect(receiptFilename({ number: ' #12/3 ', status: 'lunas' })).toBe('Struk-12-3.pdf');
-    expect(receiptFilename({ number: '', status: 'lunas' })).toBe('Struk-pesanan.pdf');
+    expect(receiptFilename({ number: 'A1B2C3D4', status: 'lunas' })).toBe('Struk-A1B2C3D4.png');
+    expect(receiptFilename({ number: 'A1B2C3D4', status: 'belum' })).toBe('Tagihan-A1B2C3D4.png');
+    expect(receiptFilename({ number: ' #12/3 ', status: 'lunas' })).toBe('Struk-12-3.png');
+    expect(receiptFilename({ number: '', status: 'lunas' })).toBe('Struk-pesanan.png');
   });
   it('judul memuat nomor dan nama pelanggan', () => {
     expect(receiptShareTitle({ number: 'A1', status: 'lunas', customerName: 'Bu Rina' })).toBe('Struk #A1 · Bu Rina');

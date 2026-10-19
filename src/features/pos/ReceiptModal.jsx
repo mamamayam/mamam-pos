@@ -12,7 +12,7 @@ const DENOMS = [1000, 2000, 5000, 10000, 20000, 50000, 100000];
  * Memakai DetailModal supaya tampilannya sama dengan detail di Riwayat:
  * nomor + waktu, badge metode & tipe order, pelanggan, daftar item (varian, qty x harga),
  * subtotal / diskon / ongkir, rincian pembayaran, dan Total Tagihan.
- * Tombol Bagikan membuat struk PDF di perangkat lalu membukanya di menu share HP (shareReceipt.js).
+ * Tombol Bagikan membuat struk GAMBAR di perangkat lalu membukanya di menu share HP (shareReceipt.js).
  * Belum ada cetak ke printer, jadi tidak ada tombol Cetak.
  */
 export default function ReceiptModal({ result, onClose, triggerAlert, formatRupiah = defaultRupiah }) {

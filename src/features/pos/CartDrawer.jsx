@@ -1,23 +1,28 @@
 import { useState, useEffect } from 'react';
 import {
-  ShoppingCart, Trash2, X, Award, Truck, Edit3, Minus, Plus, Ticket, ChevronRight, Users, Pencil,
+  ShoppingCart, Trash2, X, Award, Truck, Edit3, Minus, Plus, Ticket, ChevronRight, Users, Pencil, Bookmark, Clock,
 } from 'lucide-react';
 import { usePosStore } from '../../store/usePosStore';
-import { computeOrderTotals } from './posMath';
+import { computeOrderTotals, displayNumberFromId } from './posMath';
+import { saveOrder, deleteSavedOrder } from './savedOrders';
+import { useSavedOrders } from '../../hook/useSavedOrders';
 import useBackLayer from '../../hook/useBackLayer';
 import Overlay from '../../components/ui/Overlay';
 import CustomerPickerModal from './CustomerPicker';
+import OrderBreakdown from './OrderBreakdown';
+import SavedOrdersSheet from './SavedOrdersSheet';
 import NominalInput from '../../components/ui/NominalInput';
 import Button from '../../components/ui/Button';
+import Badge from '../../components/ui/Badge';
 import { Select } from '../../components/ui/Input';
 
 /**
  * CartDrawer — di-port dari mamam-global, DIPANGKAS sesuai scope
  * gelombang 1 Mamam POS:
- *  - TANPA "Simpan Bill" (savedBills) — sesuai keputusan: checkout
- *    langsung selesai atau batal. Draft cart tetap aman lewat
- *    usePosStore (persist localStorage), bukan lewat mekanisme bill
- *    terpisah.
+ *  - "Simpan Pesanan" (bayar nanti) ADA, tapi bukan savedBills ala mamam-global:
+ *    pesanan disimpan di server sebagai transactions.status = 'open' (lihat
+ *    savedOrders.js), tidak dihitung penjualan sampai dibayar. Draft cart
+ *    yang belum disimpan tetap aman lewat usePosStore (persist localStorage).
  *  - TANPA Klaim Poin (poin ditunda ke gelombang berikutnya).
  *  - TANPA pajak/service charge (di luar scope gelombang 1).
  *  - Voucher tetap ada (kolomnya sudah di skema, dipakai checkout),
@@ -59,16 +64,79 @@ export default function CartDrawer({ menus, customers, saveCustomer, vouchers, e
   const voucherCode = usePosStore((s) => s.voucherCode);
   const setVoucherCode = usePosStore((s) => s.setVoucherCode);
   const resetDraft = usePosStore((s) => s.resetDraft);
+  const savedOrderId = usePosStore((s) => s.savedOrderId);
+  const setSavedOrderId = usePosStore((s) => s.setSavedOrderId);
+  const loadSavedOrder = usePosStore((s) => s.loadSavedOrder);
 
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [voucherInput, setVoucherInput] = useState(voucherCode);
+  const [isSavedOpen, setIsSavedOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const saved = useSavedOrders(isCartOpen);
 
   const activeCustomer = customers.find(c => c.id === selectedCustomerId) || null;
   const appliedVoucher = vouchers.find(v => v.code === voucherCode) || null;
 
   useEffect(() => { if (orderType !== 'Delivery') setCustomFeeMode(false); }, [orderType]);
+  // Pesanan tersimpan dimuat / keranjang direset: samakan isian lokal (mode ongkir custom, kolom voucher) dengan store.
+  useEffect(() => {
+    setCustomFeeMode(deliveryFee > 0 && !FEE_PRESETS.includes(deliveryFee));
+    setVoucherInput(voucherCode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedOrderId]);
 
   const totals = computeOrderTotals({ cart, voucher: appliedVoucher, manualDiscount, orderType, deliveryFee });
+
+  const openPayment = (type = orderType) => setPaymentModal({
+    isOpen: true, isSplitMode: false, splitPayments: [], method: type === 'Ojol' ? 'Ojol' : 'Tunai',
+    amountPaid: '', ojolPlatform: '', orderNumber: '',
+  });
+
+  // Simpan keranjang sebagai pesanan belum dibayar (baru, atau memperbarui yang sedang dilanjutkan).
+  const handleSaveOrder = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const r = await saveOrder({
+        orderId: savedOrderId, cart, orderType, customerId: selectedCustomerId, customerName,
+        deliveryFee, voucher: appliedVoucher, manualDiscount,
+      });
+      resetDraft();
+      setIsCartOpen(false);
+      saved.reload();
+      triggerAlert(`Pesanan #${r.display_number} disimpan. Status: belum dibayar. Lanjutkan dari Tersimpan di keranjang.`);
+    } catch (e) {
+      triggerAlert(e.message || 'Gagal menyimpan pesanan.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Lanjutkan / Bayar dari daftar Tersimpan. Kalau pesanan itu sudah ada di keranjang, pakai isi keranjang apa adanya
+  // (perubahan yang belum disimpan tidak ditimpa); kalau keranjang berisi hal lain, minta konfirmasi dulu.
+  const resumeOrder = (o, { pay = false } = {}) => {
+    const go = () => {
+      if (savedOrderId !== o.id) loadSavedOrder(o);
+      setIsSavedOpen(false);
+      if (pay) openPayment(savedOrderId === o.id ? orderType : o.orderType);
+    };
+    if (cart.length > 0 && savedOrderId !== o.id) {
+      triggerConfirm('Isi keranjang saat ini akan diganti dengan pesanan tersimpan ini. Lanjutkan?', go);
+    } else go();
+  };
+
+  const deleteSaved = (o) => triggerConfirm(
+    `Hapus pesanan tersimpan #${o.number} (${formatRupiah(o.total)})? Tidak bisa dikembalikan.`,
+    async () => {
+      try {
+        await deleteSavedOrder(o.id);
+        if (savedOrderId === o.id) setSavedOrderId(null); // isi keranjang tetap, tapi jadi pesanan baru
+        await saved.reload();
+      } catch (e) {
+        triggerAlert(e.message || 'Gagal menghapus pesanan.');
+      }
+    },
+  );
 
   const handleClearCustomer = () => { setCustomerName(''); setSelectedCustomerId(null); };
 
@@ -111,8 +179,15 @@ export default function CartDrawer({ menus, customers, saveCustomer, vouchers, e
             <ShoppingCart className="w-5 h-5 text-slate-800 dark:text-slate-100" /> Keranjang Pesanan
           </h2>
           <div className="flex gap-2">
+            <button type="button" onClick={() => setIsSavedOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs font-bold text-slate-600 dark:text-slate-300 hover:border-accent-300 dark:hover:border-accent-500/50 transition-colors">
+              <Clock className="w-3.5 h-3.5" /> Tersimpan
+              {saved.orders.length > 0 && <span data-testid="saved-count" className="min-w-4 h-4 px-1 rounded-full bg-accent-600 dark:bg-accent-500 text-white text-[10px] leading-4 text-center">{saved.orders.length}</span>}
+            </button>
             {cart.length > 0 && (
-              <button onClick={() => triggerConfirm('Hapus semua isi keranjang? Data pelanggan & pesanan ikut direset.', resetDraft)}
+              <button onClick={() => triggerConfirm(savedOrderId
+                ? 'Kosongkan keranjang? Pesanan ini tetap tersimpan di daftar Tersimpan.'
+                : 'Hapus semua isi keranjang? Data pelanggan & pesanan ikut direset.', resetDraft)}
                 className="p-2 text-accent-500 dark:text-accent-400 hover:bg-accent-50 dark:hover:bg-accent-500/10 rounded-full transition-colors" title="Kosongkan Keranjang">
                 <Trash2 className="w-5 h-5" />
               </button>
@@ -273,6 +348,24 @@ export default function CartDrawer({ menus, customers, saveCustomer, vouchers, e
                   </div>
                 </div>
               )}
+
+              {/* --- RINCIAN PEMBELIAN (sebelum bayar) --- */}
+              <div data-testid="rincian-pembelian" className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div className="min-w-0">
+                    <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Rincian Pembelian</label>
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 truncate">
+                      {[savedOrderId && `#${displayNumberFromId(savedOrderId)}`, activeCustomer?.name || customerName.trim() || 'Tanpa nama', orderType].filter(Boolean).join(' · ')}
+                    </p>
+                  </div>
+                  <Badge variant="warning" dot className="shrink-0">Belum dibayar</Badge>
+                </div>
+                <OrderBreakdown
+                  items={cart} subtotal={totals.subtotal} voucherCode={appliedVoucher?.code || ''} voucherDiscount={totals.voucherDiscount}
+                  manualDiscountAmount={totals.manualDiscountAmount} deliveryFee={totals.deliveryFee}
+                  showDelivery={orderType === 'Delivery'} total={totals.total} formatRupiah={formatRupiah}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -280,21 +373,29 @@ export default function CartDrawer({ menus, customers, saveCustomer, vouchers, e
         {/* --- CHECKOUT SUMMARY --- */}
         {cart.length > 0 && (
           <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shadow-[0_-4px_10px_rgba(0,0,0,0.03)] animate-in slide-in-from-bottom-2 duration-300">
-            <div className="space-y-1.5 mb-4 text-sm">
-              <div className="flex justify-between text-slate-500 dark:text-slate-400"><span>Subtotal</span><span className="font-semibold">{formatRupiah(totals.subtotal)}</span></div>
-              {appliedVoucher && <div className="flex justify-between text-green-500 dark:text-green-400"><span className="flex items-center gap-1"><Ticket className="w-3 h-3" /> Diskon ({appliedVoucher.code})</span><span className="font-semibold">-{formatRupiah(totals.voucherDiscount)}</span></div>}
-              {totals.manualDiscountAmount > 0 && <div className="flex justify-between text-blue-500 dark:text-blue-400"><span className="flex items-center gap-1"><Minus className="w-3 h-3" /> Diskon Tambahan</span><span className="font-semibold">-{formatRupiah(totals.manualDiscountAmount)}</span></div>}
-              {orderType === 'Delivery' && <div className="flex justify-between text-accent-600 dark:text-accent-400"><span>Ongkir</span><span className="font-semibold">{formatRupiah(totals.deliveryFee)}</span></div>}
-              <div className="flex justify-between text-lg font-bold text-slate-800 dark:text-slate-100 border-t border-slate-100 dark:border-slate-800 pt-2 mt-2"><span>Total Tagihan</span><span className="text-accent-600 dark:text-accent-400">{formatRupiah(totals.total)}</span></div>
+            <div className="flex items-baseline justify-between mb-3">
+              <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Total Tagihan</span>
+              <span className="font-heading text-xl font-bold text-accent-600 dark:text-accent-400 tabular-nums">{formatRupiah(totals.total)}</span>
             </div>
-            <Button
-              size="full"
-              iconRight={<ChevronRight className="w-4 h-4" />}
-              onClick={() => setPaymentModal({ isOpen: true, isSplitMode: false, splitPayments: [], method: orderType === 'Ojol' ? 'Ojol' : 'Tunai', amountPaid: '', ojolPlatform: '', orderNumber: '' })}>
-              Bayar
-            </Button>
+            <div className="grid grid-cols-[1fr_1.25fr] gap-2.5">
+              <Button variant="secondary" size="full" loading={saving} icon={<Bookmark className="w-4 h-4" />} onClick={handleSaveOrder}>
+                Simpan Pesanan
+              </Button>
+              <Button size="full" iconRight={<ChevronRight className="w-4 h-4" />} onClick={() => openPayment()}>
+                Bayar
+              </Button>
+            </div>
+            <p className="mt-2 text-center text-xs text-slate-400 dark:text-slate-500">
+              Simpan untuk dibayar nanti. Belum dihitung sebagai penjualan sebelum dibayar.
+            </p>
           </div>
         )}
+
+        <SavedOrdersSheet
+          isOpen={isSavedOpen} onClose={() => setIsSavedOpen(false)}
+          orders={saved.orders} loading={saved.loading} error={saved.error} activeId={savedOrderId} formatRupiah={formatRupiah}
+          onResume={(o) => resumeOrder(o)} onPay={(o) => resumeOrder(o, { pay: true })} onDelete={deleteSaved}
+        />
       </>
     </Overlay>
   );

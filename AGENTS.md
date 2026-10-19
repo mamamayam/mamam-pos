@@ -75,6 +75,13 @@ Rincian: `docs/versioning.md`. Versi tampil di menu Lainnya dan layar login (`sr
 
 **Gaji** mengikuti aturan hitung mamam-kasir (B): `docs/payroll-rules.md`. Jangan diubah diam-diam.
 
+**Simpan Pesanan / bayar nanti** (`src/features/pos/savedOrders.js`, `OrderBreakdown.jsx`, `SavedOrdersSheet.jsx`, `src/hook/useSavedOrders.js`; tanpa migrasi):
+- Keranjang punya kartu **Rincian Pembelian** (per item: qty × harga, catatan; subtotal, diskon, ongkir, total; badge "Belum dibayar") dan dua tombol: **Simpan Pesanan** (secondary) dan **Bayar** (primary). Pil **Tersimpan** di header keranjang membuka daftar pesanan belum dibayar.
+- Pesanan tersimpan = baris `transactions` berstatus `open` + `transaction_items`, **di server** (bisa dilanjutkan dari HP lain). Bukan penjualan: Laporan, Shift, Dompet, dan Beranda semua membaca `status = 'paid'`; jangan menghapus filter itu. Baru dihitung setelah dibayar.
+- Dari daftar: **Lanjutkan** memuat pesanan ke keranjang (`loadSavedOrder`, `savedOrderId` di `usePosStore`; Simpan lagi = memperbarui pesanan yang sama), **Bayar** memuat lalu membuka pembayaran, **Hapus** menghapus permanen (hanya yang `open`). Keranjang yang belum disimpan tetap aman di localStorage seperti sebelumnya.
+- Membayar pesanan tersimpan lewat `checkout({ orderId })`: baris `open` diubah jadi `paid` (nomor tetap, `paid_at` dan `created_at` = waktu bayar), item diganti dulu baru status dibalik. Ditolak kalau pesanan sudah dibayar/dihapus dari HP lain (update dibatasi `status = 'open'`).
+- Keputusan lama "tanpa Simpan Bill" digantikan permintaan pemilik 19 Okt 2026.
+
 **Catat Cepat (Beranda)** (`src/features/home/`): menggantikan daftar "Riwayat Pesanan Hari Ini". Tile **Pengeluaran** (toko, di atas), lalu **Tambah** dan **Potongan** (karyawan), dua kartu ringkasan
 (**Pengeluaran Karyawan** dan **Pengeluaran Toko**), banner "Menunggu persetujuan" (owner; membuka sheet Persetujuan), dan catatan hari ini.
 - Form-nya **komponen yang sama** dengan modul asli: Pengeluaran = `ExpenseFormSheet` (juga dipakai layar Pengeluaran); Tambah/Potongan = `AdjustmentFields` (juga dipakai Penggajian).

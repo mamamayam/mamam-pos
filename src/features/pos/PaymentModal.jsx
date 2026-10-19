@@ -3,7 +3,7 @@ import {
   SplitSquareHorizontal, X, Wallet, QrCode, CreditCard, Trash2, Receipt, Bike,
 } from 'lucide-react';
 import { usePosStore } from '../../store/usePosStore';
-import { computeOrderTotals, cashChange, splitStatus } from './posMath';
+import { computeOrderTotals, cashChange, splitStatus, displayNumberFromId } from './posMath';
 import { checkout } from './useCheckout';
 import useBackLayer from '../../hook/useBackLayer';
 import NominalInput from '../../components/ui/NominalInput';
@@ -42,6 +42,7 @@ export default function PaymentModal({ menus, customers, vouchers, employees, tr
   const manualDiscount = usePosStore((s) => s.manualDiscount);
   const voucherCode = usePosStore((s) => s.voucherCode);
   const resetDraft = usePosStore((s) => s.resetDraft);
+  const savedOrderId = usePosStore((s) => s.savedOrderId);
 
   const [busy, setBusy] = useState(false);
 
@@ -90,6 +91,7 @@ export default function PaymentModal({ menus, customers, vouchers, employees, tr
         deliveryFee, voucher: appliedVoucher, manualDiscount,
         paymentMethod: method, amountPaid, isSplitMode, splitPayments,
         ojolPlatform, orderNumber, deliveryCourierId, deliveryPaidTo, employees,
+        orderId: savedOrderId, // pesanan tersimpan yang sedang dibayar (null = transaksi baru)
       });
       setPaymentModal({ isOpen: false, isSplitMode: false, splitPayments: [], method: 'Tunai', amountPaid: '', ojolPlatform: '', orderNumber: '' });
       setIsCartOpen(false);
@@ -111,6 +113,7 @@ export default function PaymentModal({ menus, customers, vouchers, employees, tr
         <div className="p-5 border-b flex justify-between items-center bg-slate-50 dark:bg-slate-950">
           <div>
             <h2 className="font-heading text-lg font-bold text-slate-800 dark:text-slate-100">Pembayaran</h2>
+            {savedOrderId && <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Pesanan tersimpan #{displayNumberFromId(savedOrderId)}</p>}
             {isSplitMode && <span className="text-xs bg-accent-100 dark:bg-accent-500/15 text-accent-600 dark:text-accent-400 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Mode Multi Payment</span>}
           </div>
           <div className="flex items-center gap-2">

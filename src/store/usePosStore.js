@@ -16,9 +16,10 @@ import { persist } from 'zustand/middleware';
  *
  * DIHAPUS dari versi A (di luar scope gelombang 1 / sudah diputuskan):
  *  - pointsToRedeem — poin ditunda ke gelombang berikutnya
- *  - status: 'pending'/'completed' pada paymentModal — C tidak punya alur
- *    "buka bill" (checkout langsung selesai atau batal), field ini
- *    kehilangan makna tanpa itu
+ *  - status: 'pending'/'completed' pada paymentModal — status bayar tidak
+ *    disimpan di sini. "Simpan Pesanan" (bayar nanti) memakai baris
+ *    transactions berstatus 'open' di server, bukan state lokal; yang
+ *    dicatat di store hanya `savedOrderId` pesanan yang sedang dilanjutkan.
  */
 
 const DRAFT_KEY = 'mamam-pos-draft-v1';
@@ -79,6 +80,9 @@ export const usePosStore = create(
       deliveryPaidTo: 'kasir',   // 'kasir' = uang masuk laci; 'kurir' = dipegang kurir (COD)
       manualDiscount: { type: 'fixed', value: 0 },
       voucherCode: '',
+      // id pesanan tersimpan (transactions.status = 'open') yang sedang dilanjutkan di keranjang.
+      // null = keranjang baru. Simpan memperbarui pesanan ini, Bayar mengubahnya jadi 'paid'.
+      savedOrderId: null,
 
 
       // ─── CART ACTIONS ────────────────────────────────────────────────
@@ -180,6 +184,22 @@ export const usePosStore = create(
       setDeliveryPaidTo: (paidTo) => set({ deliveryPaidTo: paidTo }),
       setManualDiscount: (discount) => set({ manualDiscount: discount }),
       setVoucherCode: (code) => set({ voucherCode: code }),
+      setSavedOrderId: (id) => set({ savedOrderId: id }),
+
+      /** loadSavedOrder — muat pesanan tersimpan (hasil orderFromRow di savedOrders.js) ke keranjang. */
+      loadSavedOrder: (order) => set({
+        cart: order.items,
+        customerName: order.customerName || '',
+        selectedCustomerId: order.customerId || null,
+        orderType: order.orderType,
+        deliveryFee: order.deliveryFee || 0,
+        customDeliveryFee: order.deliveryFee > 0 ? String(order.deliveryFee) : '',
+        deliveryCourierId: '',
+        deliveryPaidTo: 'kasir',
+        manualDiscount: order.manualDiscount || { type: 'fixed', value: 0 },
+        voucherCode: order.voucherCode || '',
+        savedOrderId: order.id,
+      }),
 
       /** resetDraft — panggil setelah checkout berhasil / batal total. */
       resetDraft: () => set({
@@ -193,6 +213,7 @@ export const usePosStore = create(
         deliveryPaidTo: 'kasir',
         manualDiscount: { type: 'fixed', value: 0 },
         voucherCode: '',
+        savedOrderId: null,
       }),
 
     }),
@@ -209,6 +230,7 @@ export const usePosStore = create(
         deliveryPaidTo: state.deliveryPaidTo,
         manualDiscount: state.manualDiscount,
         voucherCode: state.voucherCode,
+        savedOrderId: state.savedOrderId,
       }),
     }
   )

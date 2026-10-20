@@ -6,7 +6,7 @@ import { usePayrollCategories } from '../../hook/usePayrollCategories';
 import { useAppContext } from '../../context/AppContext';
 import { toLocalDateString } from '../../utils/formatters';
 import { PAYMENT_METHODS } from './quickEntryMath';
-import { detailLabel } from '../payroll/additionDetail';
+import { isAutoDetailLabel } from '../payroll/additionDetail';
 import { showToast } from '../../lib/toast';
 import useDirty from '../../hook/useDirty';
 
@@ -53,7 +53,7 @@ export default function QuickAdjustmentSheet({ isOpen, kind, onClose, quick, can
     if (editing) {
       const it = editing.item;
       // Keterangan otomatis (= nama kategori / ringkasan rincian) dikosongkan supaya ikut berubah bersama isiannya.
-      const autoLabel = it.label === it.category || (it.detail && it.label === detailLabel(it.detail));
+      const autoLabel = it.label === it.category || isAutoDetailLabel(it.detail, it.label);
       setForm({ type: it.type === 'tambahan' ? 'tambahan' : 'potongan', label: autoLabel ? '' : it.label, amount: String(it.amount), date: it.date, category: it.category, detail: it.detail || null });
       setEmployeeId(it.employeeId); setPaymentMethod(it.paymentMethod || 'Tunai'); setRequestedBy('');
       return;

@@ -2,7 +2,7 @@ import { Plus, X } from 'lucide-react';
 import { Input, NominalInput, Select } from '../../components/ui';
 import { useAppContext } from '../../context/AppContext';
 import {
-  DETAIL_KIND, CUSTOM_CUT, detailTitle, emptyRow, withCutType, detailTotal, detailPieces,
+  DETAIL_KIND, CUSTOM_CUT, CUT_UNIT, detailTitle, emptyRow, withCutType, detailTotal, detailPieces,
 } from './additionDetail';
 
 /**
@@ -48,8 +48,8 @@ export default function AdditionDetailEditor({ detail, onChange, onClose, cutPri
                     <option value={CUSTOM_CUT}>{CUSTOM_CUT}</option>
                   </Select>
                 </div>
-                <div className="w-16 shrink-0"><Input type="number" inputMode="numeric" min="1" placeholder="Jml" value={r.qty} onChange={(e) => patchRow(i, { qty: e.target.value })} aria-label="Jumlah potong" /></div>
-                <div className="w-28 shrink-0"><NominalInput title="Harga per potong" placeholder="0" value={r.price} onChange={(e) => patchRow(i, { price: e.target.value })} /></div>
+                <div className="w-16 shrink-0"><Input type="number" inputMode="numeric" min="1" placeholder="Jml" value={r.qty} onChange={(e) => patchRow(i, { qty: e.target.value })} aria-label={`Jumlah ${CUT_UNIT}`} /></div>
+                <div className="w-28 shrink-0"><NominalInput title={`Harga per ${CUT_UNIT}`} placeholder="0" value={r.price} onChange={(e) => patchRow(i, { price: e.target.value })} /></div>
                 <button type="button" aria-label="Hapus baris" onClick={() => removeRow(i)} className={REMOVE}><X className="w-4 h-4" /></button>
               </div>
               {r.type === CUSTOM_CUT && <Input placeholder="Nama potongan (mis. Kepala ayam)" value={r.name} onChange={(e) => patchRow(i, { name: e.target.value })} aria-label="Nama potongan" />}
@@ -63,7 +63,7 @@ export default function AdditionDetailEditor({ detail, onChange, onClose, cutPri
       </button>
 
       <div className="flex items-baseline justify-between border-t border-slate-200 dark:border-slate-800 pt-2 text-sm">
-        <span className="text-slate-500 dark:text-slate-400">{isOngkir ? 'Total ongkir' : `Total upah potong · ${detailPieces(detail)} potong`}</span>
+        <span className="text-slate-500 dark:text-slate-400">{isOngkir ? 'Total ongkir' : `Total upah potong · ${detailPieces(detail)} ${CUT_UNIT}`}</span>
         <span className="font-bold text-slate-800 dark:text-slate-100" data-testid="detail-total">{formatRupiah(total)}</span>
       </div>
     </div>

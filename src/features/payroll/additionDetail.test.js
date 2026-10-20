@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   DETAIL_KIND, CUSTOM_CUT, DEFAULT_CUT_PRICES, detailKindForCategory, emptyRow, startDetail, withCutType, rowAmount, detailTotal,
-  cleanDetail, detailForForm, detailLabel, detailSubRows, parseDetail, buildAttachments, sanitizeCutPrices, validateCutPrices, fmtTgl,
+  cleanDetail, detailForForm, detailLabel, isAutoDetailLabel, detailSubRows, parseDetail, buildAttachments, sanitizeCutPrices, validateCutPrices, fmtTgl,
 } from './additionDetail';
 
 describe('detailKindForCategory', () => {
@@ -73,7 +73,7 @@ describe('label dan baris kecil', () => {
 
   it('detailLabel', () => {
     expect(detailLabel(ong)).toBe('Ongkir (2 customer)');
-    expect(detailLabel(pot)).toBe('Potong Ayam (16 potong)');
+    expect(detailLabel(pot)).toBe('Potong Ayam (16 kg)');
     expect(detailLabel(null)).toBe('');
   });
 
@@ -165,5 +165,16 @@ describe('detailForForm (mode ubah: rincian dari database ke isian form)', () =>
     const ongkir = { kind: 'ongkir', rows: [{ customer: 'Budi', amount: 5000 }] };
     expect(detailForForm(ongkir)).toBe(ongkir);
     expect(detailForForm(null)).toBe(null);
+  });
+});
+
+describe('isAutoDetailLabel', () => {
+  const pot = { kind: 'potong_ayam', rows: [{ name: 'Bld', qty: 10, price: 3000 }, { name: 'Sayap', qty: 6, price: 3000 }] };
+  it('keterangan otomatis baru (kg) dan lama (potong) dikenali; ketikan sendiri tidak', () => {
+    expect(isAutoDetailLabel(pot, 'Potong Ayam (16 kg)')).toBe(true);
+    expect(isAutoDetailLabel(pot, 'Potong Ayam (16 potong)')).toBe(true);
+    expect(isAutoDetailLabel(pot, 'Potong Ayam (15 kg)')).toBe(false);
+    expect(isAutoDetailLabel(pot, 'Potong sore')).toBe(false);
+    expect(isAutoDetailLabel(null, 'Potong Ayam (16 kg)')).toBe(false);
   });
 });

@@ -50,7 +50,7 @@ describe('AdjustmentFields: rincian Tambahan', () => {
     ] } });
     expect(html).toContain('Detail potong ayam');
     // Dropdown jenis sekarang bottom sheet: pilihan lain (Sayap, Karkas) baru dirender saat sheet dibuka; yang terpilih tampil di tombol.
-    for (const t of ['Bld', 'Lainnya', 'Nama potongan (mis. Kepala ayam)', '12 potong', 'Rp 39.000']) expect(html).toContain(t);
+    for (const t of ['Bld', 'Lainnya', 'Nama potongan (mis. Kepala ayam)', '12 kg', 'Rp 39.000']) expect(html).toContain(t);
   });
 
   it('mode ubah: rincian dari database (tanpa type) menampilkan jenisnya, bukan kolom kosong', () => {
@@ -60,7 +60,7 @@ describe('AdjustmentFields: rincian Tambahan', () => {
     expect(html).toContain('Sayap');
     expect(html).toContain('Lainnya');                       // nama bebas jadi Lainnya...
     expect(html).toContain('value="Kepala ayam"');           // ...dengan namanya terisi
-    expect(html).toContain('3 potong');
+    expect(html).toContain('3 kg');
     expect(html).toContain('Rp 10.500');
   });
 

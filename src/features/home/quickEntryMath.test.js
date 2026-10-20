@@ -157,7 +157,7 @@ describe('newAdditionRow — rincian Ongkir / Potong Ayam', () => {
     expect(r.detail).toEqual({ kind: 'ongkir', rows: [{ customer: 'Pak Hendra', amount: 5000 }, { customer: 'Bu Rina', amount: 4000 }] });
     const p = newAdditionRow(form({ category: 'Potong Ayam', amount: '', detail: potong }), { canApprove: false, nowISO: NOW });
     expect(p.amount).toBe(39000);
-    expect(p.label).toBe('Potong Ayam (12 potong)');
+    expect(p.label).toBe('Potong Ayam (12 kg)');
     expect(p.detail.rows[1]).toEqual({ name: 'Kepala ayam', qty: 2, price: 4500 });
     expect(p.status).toBe('menunggu');
   });

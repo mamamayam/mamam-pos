@@ -5,7 +5,7 @@
  *  - ongkir      : rows = [{ customer, amount }]
  *  - potong_ayam : rows = [{ name, qty, price }]   (harga disalin ke baris, jadi mengubah harga di Pengaturan
  *                                                   tidak mengubah catatan lama)
- * Nominal Tambahan = total rincian. Keterangan (label) otomatis "Ongkir (2 customer)" / "Potong Ayam (16 potong)"
+ * Nominal Tambahan = total rincian. Keterangan (label) otomatis "Ongkir (2 customer)" / "Potong Ayam (16 kg)"
  * kalau dikosongkan. Baris lama tanpa rincian tidak berubah sama sekali.
  *
  * Saat mengisi form, angka disimpan sebagai teks digit (dari NominalInput); cleanDetail() mengubahnya jadi
@@ -17,6 +17,8 @@ export const DEFAULT_CUT_PRICES = Object.freeze([
   Object.freeze({ name: 'Bld', price: 3000 }), Object.freeze({ name: 'Sayap', price: 3000 }), Object.freeze({ name: 'Karkas', price: 3000 }),
 ]);
 export const MAX_DETAIL_ROWS = 100;
+/** Satuan jumlah Potong Ayam yang tampil di layar dan keterangan otomatis (permintaan pemilik 21 Okt 2026: kg, bukan potong). */
+export const CUT_UNIT = 'kg';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 const int = (v) => { const n = Number(String(v ?? '').replace(/[^\d]/g, '')); return Number.isFinite(n) ? n : 0; };
@@ -108,7 +110,17 @@ export function cleanDetail(detail) {
 /** Keterangan otomatis dari rincian yang sudah bersih. */
 export function detailLabel(detail) {
   if (!detail) return '';
-  return detail.kind === DETAIL_KIND.ONGKIR ? `Ongkir (${detail.rows.length} customer)` : `Potong Ayam (${detailPieces(detail)} potong)`;
+  return detail.kind === DETAIL_KIND.ONGKIR ? `Ongkir (${detail.rows.length} customer)` : `Potong Ayam (${detailPieces(detail)} ${CUT_UNIT})`;
+}
+
+/**
+ * Apakah `label` keterangan OTOMATIS dari rincian ini? Catatan lama bersatuan "potong" ("Potong Ayam (16 potong)")
+ * tetap dikenali, supaya saat diubah keterangannya ikut berganti bersama isian dan tidak dianggap ketikan sendiri.
+ */
+export function isAutoDetailLabel(detail, label) {
+  if (!detail) return false;
+  if (label === detailLabel(detail)) return true;
+  return detail.kind === DETAIL_KIND.POTONG && label === `Potong Ayam (${detailPieces(detail)} potong)`;
 }
 
 /** Baris kecil untuk layar: [{ text, amount }]. */

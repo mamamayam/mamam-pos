@@ -33,12 +33,18 @@
  * Perubahan dalam satu tarikan napas (tutup modal + buka layar) digabung lewat
  * microtask, jadi tidak menghasilkan go() + pushState yang sia-sia.
  *
+ * LAPISAN YANG BOLEH MENOLAK (`register(close, { guard })`): form yang isiannya belum disimpan tidak boleh tertutup
+ * begitu saja. Saat pengguna menekan Back dan `guard()` bernilai true, lapisan TIDAK dibuang: `close()` tetap dipanggil
+ * (induk menampilkan konfirmasi) dan entri riwayat yang baru saja dilepas browser langsung didorong lagi, SINKRON di
+ * handler popstate yang sama. Tidak boleh menunggu render React lalu mendaftar ulang: Back kedua yang datang cepat
+ * (ketuk dua kali) akan mendarat di entri dasar/jangkar dan membuat aplikasi keluar.
+ *
  * Modul ini tidak mengimpor React; `win` bisa diganti objek palsu untuk tes.
  */
 const GESTURE_EVENTS = ['click', 'keydown'];   // peristiwa yang dihitung browser sebagai interaksi pengguna
 
 export function createBackStack(win, { exitWindowMs = 2000 } = {}) {
-  const layers = [];        // [{ id, close }] urutan dibuka
+  const layers = [];        // [{ id, close, guard }] urutan dibuka
   let nextId = 1;
   let depth = 0;            // entri riwayat yang sudah kita buat di atas entri dasar
   let traversing = false;   // menunggu popstate dari history.go() buatan sendiri
@@ -192,9 +198,18 @@ export function createBackStack(win, { exitWindowMs = 2000 } = {}) {
     }
   }
 
-  function closeDownTo(n) {
+  /**
+   * Tutup lapisan dari atas sampai tersisa `n`. Dengan `respectGuard`, lapisan yang `guard()`-nya true menolak:
+   * `close()`-nya dipanggil (untuk bertanya) tetapi lapisan tetap ada dan penutupan berhenti di situ.
+   */
+  function closeDownTo(n, respectGuard = false) {
     while (layers.length > n) {
-      const top = layers.pop();
+      const top = layers[layers.length - 1];
+      if (respectGuard && top.guard && top.guard()) {
+        try { top.close(); } catch (err) { console.error('[backStack] close gagal:', err); }
+        return;
+      }
+      layers.pop();
       try { top.close(); } catch (err) { console.error('[backStack] close gagal:', err); }
     }
   }
@@ -211,6 +226,20 @@ export function createBackStack(win, { exitWindowMs = 2000 } = {}) {
     traversing = false;
     clearTimeout(guardTimer);
     depth = 0;
+    if (layers.some((l) => l.guard && l.guard())) {
+      // Ada form belum tersimpan yang menolak ditutup, tapi Back sudah mendarat di jangkar (mis. Back kedua datang
+      // sebelum popstate pertama sampai karena HP sedang sibuk). Jangan keluar: dorong entri dasar lagi di atas
+      // jangkar, tanya konfirmasi lewat lapisan itu, dan pulihkan entri lapisan yang tersisa.
+      try {
+        win.history.pushState({ mdr: 0, sid, anchored: true }, '');
+      } catch { anchorOwned = false; }
+      atAnchor = false;
+      clearTimeout(exitTimer);
+      setArmed(false);
+      closeDownTo(0, true);
+      sync();
+      return;
+    }
     closeDownTo(0);        // kalau pengguna melompat jauh di riwayat, semua lapisan ikut ditutup
     atAnchor = true;
     setArmed(true);
@@ -266,17 +295,22 @@ export function createBackStack(win, { exitWindowMs = 2000 } = {}) {
     }
     const target = st.mdr;
     depth = target;
-    closeDownTo(target);
+    closeDownTo(target, true);
     // Kalau pengguna menekan Forward (target > jumlah lapisan), dikembalikan di sini.
+    // Lapisan yang menolak ditutup (guard) masih ada, jadi entri riwayatnya didorong lagi di sini juga, tanpa jeda.
     sync();
   }
 
-  /** Daftarkan lapisan baru. `close` dipanggil saat pengguna menekan Back. Mengembalikan id. */
-  function register(close) {
+  /**
+   * Daftarkan lapisan baru. `close` dipanggil saat pengguna menekan Back. Mengembalikan id.
+   * `guard` (opsional): fungsi; selama mengembalikan true, Back TIDAK menutup lapisan ini, hanya memanggil `close()`
+   * (dipakai form yang minta konfirmasi sebelum ditutup, lihat catatan di atas).
+   */
+  function register(close, { guard } = {}) {
     start();
     disarmExit();   // pengguna kembali memakai aplikasi: batalkan "ketuk lagi untuk keluar"
     const id = nextId++;
-    layers.push({ id, close });
+    layers.push({ id, close, guard });
     schedule();
     return id;
   }

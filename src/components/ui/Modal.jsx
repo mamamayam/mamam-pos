@@ -125,8 +125,8 @@ function ModalFrame({
   guardClose = false,
 }) {
   // Tombol Back browser/HP menutup modal ini (sama dengan menekan X), bukan keluar dari layar.
-  // Form yang minta konfirmasi (guardClose) memasang ulang lapisannya kalau Back tidak jadi menutupnya.
-  useBackLayer(isOpen && Boolean(onClose), onClose, { rearm: guardClose });
+  // Form yang minta konfirmasi (guardClose): Back hanya memunculkan konfirmasi, lapisannya tetap terpasang.
+  useBackLayer(isOpen && Boolean(onClose), onClose, { guard: guardClose });
 
   const z = Z_LEVELS[zLevel] ?? Z_LEVELS.modal;
   const sizeClass = SIZES[size] ?? SIZES.sm;

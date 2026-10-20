@@ -8,8 +8,10 @@ import { buatBackStackHpp, setelahSinkron } from '../hpp/hppBackStack.js';
  *  - go(n) ASINKRON; arah dihitung saat dijalankan; popstate dikirim sesudahnya
  *  - menuju entri "luar" (halaman sebelumnya) = keluar dari aplikasi, tanpa popstate
  *  - tap()/keydown disalurkan ke pendengar yang dipasang lewat addEventListener
+ *  - popDelay: popstate sampai ke halaman TERLAMBAT (main thread HP sibuk), padahal posisi riwayat di browser
+ *    sudah berpindah saat Back ditekan. Back kedua bisa mendarat di entri sebelumnya sebelum halaman sempat bereaksi.
  */
-function fakeBrowser({ previousPage = true, staleEntries = [], navType } = {}) {
+function fakeBrowser({ previousPage = true, staleEntries = [], navType, popDelay = 0 } = {}) {
   const entries = [];
   if (previousPage) entries.push({ external: true, state: null });
   for (const st of staleEntries) entries.push({ state: st });
@@ -20,7 +22,8 @@ function fakeBrowser({ previousPage = true, staleEntries = [], navType } = {}) {
   const listeners = [];                         // popstate
   const handlers = {};                          // jenis lain (click, keydown)
   const log = [];
-  const fire = () => { log.push('pop'); [...listeners].forEach((fn) => fn({ state: entries[index].state })); };
+  const dispatch = (state) => { log.push('pop'); [...listeners].forEach((fn) => fn({ state })); };
+  const fire = () => dispatch(entries[index].state);
   const win = {
     history: {
       get state() { return entries[index].state; },
@@ -34,6 +37,7 @@ function fakeBrowser({ previousPage = true, staleEntries = [], navType } = {}) {
           if (next < 0 || next >= entries.length) return;
           index = next;
           if (entries[index].external) { left = true; return; }
+          if (popDelay) { const st = entries[index].state; setTimeout(() => dispatch(st), popDelay); return; }
           fire();
         }, 0);
       },
@@ -159,64 +163,91 @@ describe('backStack — lapisan ditutup lewat tombol di layar', () => {
   });
 });
 
-describe('backStack — lapisan yang menolak ditutup (form belum disimpan, lihat useBackLayer `rearm`)', () => {
-  /** Meniru useBackLayer({ rearm: true }): close() menampilkan konfirmasi lalu mendaftarkan lapisan lagi. */
-  function guardedLayer(bs, { onAsk, onDiscard }) {
-    let alive = true;
-    const attach = () => bs.register(() => {
-      if (!alive) return;
-      onAsk();
-      queueMicrotask(() => { if (alive) attach(); });   // effect React yang memasang ulang lapisan
-    });
-    attach();
-    return { discard: () => { alive = false; onDiscard(); } };
-  }
-
-  it('Back pertama hanya memunculkan konfirmasi (form tetap terbuka); Back berikutnya muncul lagi, TIDAK keluar aplikasi', async () => {
+describe('backStack — lapisan yang menolak ditutup (form belum disimpan, useBackLayer `guard`)', () => {
+  it('Back: close() dipanggil untuk bertanya, lapisan TETAP ada dan entri riwayat dikembalikan saat itu juga (tanpa menunggu render)', async () => {
     const { b, bs } = make(); let asked = 0;
-    guardedLayer(bs, { onAsk: () => { asked += 1; }, onDiscard: () => {} }); await tick();
+    bs.register(() => { asked += 1; }, { guard: () => true }); await tick();
     expect(bs.snapshot()).toMatchObject({ layers: 1, depth: 1 });
-    b.userBack(); await tick();
+    const lengthBefore = b.length;
+    b.userBack(); await tick(2);                                  // tidak menunggu apa pun selain popstate itu sendiri
     expect(asked).toBe(1);
+    expect(bs.snapshot()).toMatchObject({ layers: 1, depth: 1, exitArmed: false });
+    expect(b.length).toBe(lengthBefore);                          // riwayat tidak bocor
+    expect(b.state).toMatchObject({ mdr: 1 });                    // kembali berdiri di entri lapisan
     expect(b.left).toBe(false);
-    expect(bs.snapshot()).toMatchObject({ layers: 1, depth: 1, exitArmed: false });   // lapisan terpasang lagi, riwayat tidak bocor
-    b.userBack(); await tick();
-    expect(asked).toBe(2);
-    expect(b.left).toBe(false);
-    expect(bs.snapshot()).toMatchObject({ layers: 1, depth: 1 });
   });
 
-  it('konfirmasi di atas form: Back menutup konfirmasi dulu (Lanjut Isi), form tetap ada; riwayat tetap sinkron', async () => {
+  it('BUG yang diperbaiki: Back dua kali dengan cepat TIDAK keluar aplikasi dan tidak memunculkan "ketuk lagi untuk keluar"', async () => {
+    const { b, bs } = make(); let asked = 0;
+    bs.register(() => { asked += 1; }, { guard: () => true }); await tick();
+    b.userBack(); b.userBack(); b.userBack(); await tick(30);     // tiga ketukan beruntun tanpa jeda
+    expect(asked).toBe(3);
+    expect(b.left).toBe(false);
+    expect(bs.snapshot()).toMatchObject({ layers: 1, depth: 1, exitArmed: false, atAnchor: false });
+    expect(b.state).toMatchObject({ mdr: 1 });
+  });
+
+  it('konfirmasi di atas form: Back menutup konfirmasi saja (Lanjut Isi), form tidak ditanya ulang', async () => {
     const { b, bs } = make(); const log = [];
-    // form (menolak ditutup) + konfirmasi yang muncul sesudahnya (lapisan di atasnya)
-    let confirmClosed = false;
-    const form = guardedLayer(bs, {
-      onAsk: () => { log.push('ask'); },
-      onDiscard: () => {},
-    }); await tick();
-    // tombol X di layar memunculkan konfirmasi: lapisan konfirmasi ditambah di atas form
-    const confirmId = bs.register(() => { confirmClosed = true; log.push('keep'); }); await tick();
+    bs.register(() => log.push('ask-form'), { guard: () => true });
+    bs.register(() => log.push('keep'));                          // lapisan konfirmasi (tanpa guard)
+    await tick();
     expect(bs.snapshot()).toMatchObject({ layers: 2, depth: 2 });
     b.userBack(); await tick();
-    expect(confirmClosed).toBe(true);                           // konfirmasi tertutup = Lanjut Isi
-    expect(log).toEqual(['keep']);                              // form TIDAK bertanya lagi
+    expect(log).toEqual(['keep']);
     expect(bs.snapshot()).toMatchObject({ layers: 1, depth: 1 });
-    expect(bs.has(confirmId)).toBe(false);
     expect(b.left).toBe(false);
-    form.discard();
   });
 
-  it('Buang: lapisan dilepas, riwayat dirapikan, Back berikutnya memunculkan notif keluar seperti biasa', async () => {
-    const { b, bs } = make(); let asked = 0;
-    const form = guardedLayer(bs, { onAsk: () => { asked += 1; }, onDiscard: () => {} }); await tick();
-    b.userBack(); await tick();                                 // konfirmasi tampil, lapisan terpasang ulang
-    expect(asked).toBe(1);
-    expect(bs.snapshot().layers).toBe(1);
-    form.discard();                                             // "Buang": induk menutup form
-    b.userBack(); await tick();                                 // close() tidak lagi bertanya karena form sudah ditutup
-    expect(asked).toBe(1);
+  it('guard jadi false (isian sudah disimpan/bersih): Back menutup form seperti biasa', async () => {
+    const { b, bs } = make(); let dirty = true; let closed = 0; let asked = 0;
+    bs.register(() => { if (dirty) asked += 1; else closed += 1; }, { guard: () => dirty }); await tick();
+    b.userBack(); await tick();
+    expect(asked).toBe(1); expect(closed).toBe(0);
+    dirty = false;
+    b.userBack(); await tick();
+    expect(closed).toBe(1);
     expect(bs.snapshot()).toMatchObject({ layers: 0, depth: 0 });
     await doubleBackExits(b, bs);
+  });
+
+  it('Buang: induk melepas lapisan (unregister), riwayat dirapikan, Back berikutnya memunculkan notif keluar seperti biasa', async () => {
+    const { b, bs } = make(); let asked = 0;
+    const id = bs.register(() => { asked += 1; }, { guard: () => true }); await tick();
+    b.userBack(); await tick();
+    expect(asked).toBe(1);
+    bs.unregister(id); await tick();
+    expect(bs.snapshot()).toMatchObject({ layers: 0, depth: 0 });
+    await doubleBackExits(b, bs);
+  });
+
+  it('BUG LAPANGAN: Back kedua datang sebelum popstate pertama sampai (HP sibuk) dan mendarat di jangkar: form tetap, riwayat dipulihkan, TIDAK keluar', async () => {
+    const { b, bs } = make({ popDelay: 25 }); let asked = 0;
+    const id = bs.register(() => { asked += 1; }, { guard: () => true }); await tick();
+    b.userBack(); await tick(5); b.userBack();                    // dua ketukan cepat, popstate keduanya baru tiba 25 ms kemudian
+    await tick(120);
+    expect(b.left).toBe(false);
+    expect(asked).toBeGreaterThanOrEqual(1);
+    expect(bs.snapshot()).toMatchObject({ layers: 1, depth: 1, exitArmed: false, atAnchor: false });
+    expect(b.state).toMatchObject({ mdr: 1 });                    // berdiri lagi di entri lapisan
+    bs.unregister(id); await tick(120);                           // "Buang": form ditutup
+    expect(bs.snapshot()).toMatchObject({ layers: 0, depth: 0 });
+    // Entri dasar masih ada. Pemulihan tadi bisa meninggalkan satu entri sisa di riwayat; Back melewatinya sendiri
+    // (beberapa lompatan lambat di browser palsu ini), lalu notif muncul, dan Back berikutnya keluar.
+    b.userBack();
+    for (let i = 0; i < 30 && !bs.snapshot().exitArmed; i += 1) await tick(10);
+    expect(b.left).toBe(false);
+    expect(bs.snapshot().exitArmed).toBe(true);
+    b.userBack(); await tick(60);
+    expect(b.left).toBe(true);
+  });
+
+  it('lapisan biasa (tanpa guard) tidak berubah: Back menutupnya', async () => {
+    const { b, bs } = make(); let closed = 0;
+    bs.register(() => { closed += 1; }); await tick();
+    b.userBack(); await tick();
+    expect(closed).toBe(1);
+    expect(bs.snapshot()).toMatchObject({ layers: 0, depth: 0 });
   });
 });
 

@@ -29,7 +29,7 @@ import {
  *                              (mis. Kembalian di PaymentModal)
  *   onClose()
  */
-const KEY = 'h-14 short:h-11 rounded-2xl text-xl short:text-lg font-medium bg-[#262626] text-[#ECECEC] active:bg-[#3A3A3C] select-none touch-manipulation';
+const KEY = 'h-11 short:h-10 rounded-2xl text-xl short:text-lg font-medium bg-[#262626] text-[#ECECEC] active:bg-[#3A3A3C] select-none touch-manipulation';
 const ICON_BTN = 'p-2 rounded-[10px] text-[#FF9F0A] active:bg-[#3A3A3C] touch-manipulation';
 
 export default function NominalKeypadSheet({
@@ -80,14 +80,14 @@ export default function NominalKeypadSheet({
   return (
     <>
       <NominalDock onClose={onClose} hidden={calcOpen}>
-        <div className="bg-black border-t border-[#1C1C1E] px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] max-h-[100dvh] overflow-y-auto">
+        <div className="bg-black border-t border-[#1C1C1E] px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] max-h-[100dvh] overflow-y-auto">
          <div className="w-full max-w-md mx-auto">
 
-          {title && (
-            <div className="text-xs font-bold text-[#8E8E93] uppercase tracking-wider mb-2 truncate">{title}</div>
-          )}
-
-          <div className="flex items-center rounded-2xl pl-4 pr-1 py-2 mb-1">
+          {/* Judul dan angka satu baris (judul kecil di kiri) supaya keypad tidak memakan separuh layar. */}
+          <div className="flex items-center gap-2 rounded-2xl pl-2 pr-1 py-1">
+            {title && (
+              <div className="shrink-0 max-w-[34%] text-xs font-bold text-[#8E8E93] uppercase tracking-wider truncate">{title}</div>
+            )}
             <div
               data-testid="nominal-display"
               className={`flex-1 text-right text-3xl font-medium overflow-x-auto whitespace-nowrap hide-scrollbar ${
@@ -109,10 +109,10 @@ export default function NominalKeypadSheet({
           </div>
 
           {hint && (
-            <div className="px-1 mb-1 text-xs font-bold text-[#8E8E93]">{hint(number)}</div>
+            <div className="px-1 text-xs font-bold text-[#8E8E93]">{hint(number)}</div>
           )}
 
-          <div className="mt-3 short:mt-2 grid grid-cols-3 gap-2 short:gap-1.5">
+          <div className="mt-1.5 grid grid-cols-3 gap-1.5">
             {['7', '8', '9', '4', '5', '6', '1', '2', '3'].map((k) => (
               <button key={k} type="button" className={KEY} onClick={() => press(k)}>{k}</button>
             ))}
@@ -124,7 +124,7 @@ export default function NominalKeypadSheet({
           <button
             type="button"
             onClick={onClose}
-            className="mt-3 w-full h-12 short:h-11 rounded-[14px] bg-accent-600 dark:bg-accent-500 text-white text-sm font-bold select-none touch-manipulation"
+            className="mt-2 w-full h-11 rounded-[14px] bg-accent-600 dark:bg-accent-500 text-white text-sm font-bold select-none touch-manipulation"
           >
             Selesai
           </button>

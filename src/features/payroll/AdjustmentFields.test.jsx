@@ -64,6 +64,16 @@ describe('AdjustmentFields: rincian Tambahan', () => {
     expect(html).toContain('Rp 10.500');
   });
 
+  it('jumlah desimal: total dan jumlah kg di editor mengikuti (2,5 kg × Rp 3.000)', () => {
+    const html = render({ type: 'tambahan', category: 'Potong Ayam', detail: { kind: 'potong_ayam', rows: [
+      { type: 'Sayap', name: '', qty: '2,5', price: '3000' }, { type: 'Bld', name: '', qty: '1', price: '3000' },
+    ] } });
+    expect(html).toContain('3,5 kg');
+    expect(html).toContain('Rp 10.500');
+    expect(html).toContain('inputMode="decimal"');
+    expect(html).toContain('value="2,5"');
+  });
+
   it('detail dari kategori lain diabaikan (tidak bocor setelah ganti kategori)', () => {
     const html = render({ type: 'tambahan', category: 'Bonus', detail: { kind: 'ongkir', rows: [{ customer: 'A', amount: '1000' }] } });
     expect(html).not.toContain('detail-editor');

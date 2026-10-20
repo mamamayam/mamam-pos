@@ -2,7 +2,7 @@ import { Plus, X } from 'lucide-react';
 import { Input, NominalInput, Select } from '../../components/ui';
 import { useAppContext } from '../../context/AppContext';
 import {
-  DETAIL_KIND, CUSTOM_CUT, CUT_UNIT, detailTitle, emptyRow, withCutType, detailTotal, detailPieces,
+  DETAIL_KIND, CUSTOM_CUT, CUT_UNIT, detailTitle, emptyRow, withCutType, detailTotal, detailPieces, fmtQty,
 } from './additionDetail';
 
 /**
@@ -10,6 +10,13 @@ import {
  * Nominal Tambahan = total rincian (dihitung di AdjustmentFields / quickEntryMath, bukan di sini).
  * `detail` = { kind, rows } dengan angka berupa teks digit; aturan dan validasi ada di additionDetail.js.
  */
+/** Kolom jumlah menerima angka dengan satu koma/titik desimal (mis. 2,5), maksimal 3 angka di belakangnya. */
+const cleanQtyInput = (v) => {
+  const s = String(v).replace(/[^\d.,]/g, '');
+  const i = s.search(/[.,]/);
+  if (i === -1) return s;
+  return `${s.slice(0, i + 1)}${s.slice(i + 1).replace(/[.,]/g, '').slice(0, 3)}`;
+};
 const REMOVE = 'shrink-0 mt-1.5 w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 active:bg-slate-100 dark:active:bg-slate-800';
 
 export default function AdditionDetailEditor({ detail, onChange, onClose, cutPrices }) {
@@ -48,7 +55,7 @@ export default function AdditionDetailEditor({ detail, onChange, onClose, cutPri
                     <option value={CUSTOM_CUT}>{CUSTOM_CUT}</option>
                   </Select>
                 </div>
-                <div className="w-16 shrink-0"><Input type="number" inputMode="numeric" min="1" placeholder="Jml" value={r.qty} onChange={(e) => patchRow(i, { qty: e.target.value })} aria-label={`Jumlah ${CUT_UNIT}`} /></div>
+                <div className="w-20 shrink-0"><Input type="text" inputMode="decimal" placeholder="Jml" value={r.qty} onChange={(e) => patchRow(i, { qty: cleanQtyInput(e.target.value) })} aria-label={`Jumlah ${CUT_UNIT}`} /></div>
                 <div className="w-28 shrink-0"><NominalInput title={`Harga per ${CUT_UNIT}`} placeholder="0" value={r.price} onChange={(e) => patchRow(i, { price: e.target.value })} /></div>
                 <button type="button" aria-label="Hapus baris" onClick={() => removeRow(i)} className={REMOVE}><X className="w-4 h-4" /></button>
               </div>
@@ -63,7 +70,7 @@ export default function AdditionDetailEditor({ detail, onChange, onClose, cutPri
       </button>
 
       <div className="flex items-baseline justify-between border-t border-slate-200 dark:border-slate-800 pt-2 text-sm">
-        <span className="text-slate-500 dark:text-slate-400">{isOngkir ? 'Total ongkir' : `Total upah potong · ${detailPieces(detail)} ${CUT_UNIT}`}</span>
+        <span className="text-slate-500 dark:text-slate-400">{isOngkir ? 'Total ongkir' : `Total upah potong · ${fmtQty(detailPieces(detail))} ${CUT_UNIT}`}</span>
         <span className="font-bold text-slate-800 dark:text-slate-100" data-testid="detail-total">{formatRupiah(total)}</span>
       </div>
     </div>

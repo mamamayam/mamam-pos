@@ -3,13 +3,14 @@
  *
  * Rincian disimpan di kolom `detail` (jsonb) payroll_additions: { kind, rows }.
  *  - ongkir      : rows = [{ customer, amount }]
- *  - potong_ayam : rows = [{ name, qty, price }]   (harga disalin ke baris, jadi mengubah harga di Pengaturan
- *                                                   tidak mengubah catatan lama)
+ *  - potong_ayam : rows = [{ name, qty, price }]   (qty = jumlah kg, boleh DESIMAL mis. 2,5; harga = rupiah per kg,
+ *                                                   disalin ke baris, jadi mengubah harga di Pengaturan tidak mengubah catatan lama)
  * Nominal Tambahan = total rincian. Keterangan (label) otomatis "Ongkir (2 customer)" / "Potong Ayam (16 kg)"
  * kalau dikosongkan. Baris lama tanpa rincian tidak berubah sama sekali.
  *
- * Saat mengisi form, angka disimpan sebagai teks digit (dari NominalInput); cleanDetail() mengubahnya jadi
- * integer dan melempar Error berpesan Indonesia kalau ada yang belum benar.
+ * Saat mengisi form, angka disimpan sebagai teks (dari NominalInput / kolom jumlah); cleanDetail() mengubahnya jadi
+ * angka dan melempar Error berpesan Indonesia kalau ada yang belum benar. Uang tetap integer rupiah: upah satu baris =
+ * round(jumlah × harga), jumlah desimal (koma atau titik, maksimal 3 angka di belakang koma) hanya untuk kg.
  */
 export const DETAIL_KIND = Object.freeze({ ONGKIR: 'ongkir', POTONG: 'potong_ayam' });
 export const CUSTOM_CUT = 'Lainnya';
@@ -22,6 +23,14 @@ export const CUT_UNIT = 'kg';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 const int = (v) => { const n = Number(String(v ?? '').replace(/[^\d]/g, '')); return Number.isFinite(n) ? n : 0; };
+/** Jumlah desimal dari teks ("2,5" / "2.5" / 2.5 -> 2.5); selain angka = 0. Dibulatkan 3 angka di belakang koma. */
+export const dec = (v) => {
+  const m = /^\d*(?:[.,]\d*)?/.exec(String(v ?? '').trim());
+  const n = parseFloat((m ? m[0] : '').replace(',', '.'));
+  return Number.isFinite(n) ? Math.round(n * 1000) / 1000 : 0;
+};
+/** Jumlah untuk layar: koma desimal, tanpa nol di belakang ("2,5", "3"). */
+export const fmtQty = (n) => String(dec(n)).replace('.', ',');
 const text = (v) => String(v ?? '').trim().replace(/\s+/g, ' ');
 export const fmtNum = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 const dots = fmtNum;
@@ -74,12 +83,13 @@ export function detailForForm(detail, cutPrices = DEFAULT_CUT_PRICES) {
 }
 
 export function rowAmount(kind, row) {
-  return kind === DETAIL_KIND.ONGKIR ? int(row?.amount) : int(row?.qty) * int(row?.price);
+  return kind === DETAIL_KIND.ONGKIR ? int(row?.amount) : Math.round(dec(row?.qty) * int(row?.price));
 }
 export const detailTotal = (detail) => (detail?.rows || []).reduce((s, r) => s + rowAmount(detail.kind, r), 0);
-export const detailPieces = (detail) => (detail?.rows || []).reduce((s, r) => s + int(r?.qty), 0);
+/** Jumlah kg seluruh baris (bisa desimal). Nama lama `detailPieces` dipertahankan supaya pemanggil tidak berubah. */
+export const detailPieces = (detail) => Math.round((detail?.rows || []).reduce((s, r) => s + dec(r?.qty), 0) * 1000) / 1000;
 
-const isBlank = (kind, r) => (kind === DETAIL_KIND.ONGKIR ? !text(r?.customer) && !int(r?.amount) : !int(r?.qty) && !int(r?.price));
+const isBlank = (kind, r) => (kind === DETAIL_KIND.ONGKIR ? !text(r?.customer) && !int(r?.amount) : !dec(r?.qty) && !int(r?.price));
 const rowName = (r) => (r?.type === CUSTOM_CUT ? text(r?.name) : text(r?.type ?? r?.name));
 
 /** Validasi + rapikan rincian dari form. Mengembalikan { kind, rows } berisi integer, atau null kalau tidak ada rincian. */
@@ -100,9 +110,9 @@ export function cleanDetail(detail) {
     }
     const name = rowName(r);
     if (!name) throw new Error(`Baris ${n}: isi nama potongan.`);
-    if (int(r.qty) <= 0) throw new Error(`Baris ${n}: jumlah harus lebih dari 0.`);
+    if (dec(r.qty) <= 0) throw new Error(`Baris ${n}: jumlah harus lebih dari 0.`);
     if (int(r.price) <= 0) throw new Error(`Baris ${n}: isi harga.`);
-    return { name, qty: int(r.qty), price: int(r.price) };
+    return { name, qty: dec(r.qty), price: int(r.price) };
   });
   return { kind, rows };
 }
@@ -110,7 +120,7 @@ export function cleanDetail(detail) {
 /** Keterangan otomatis dari rincian yang sudah bersih. */
 export function detailLabel(detail) {
   if (!detail) return '';
-  return detail.kind === DETAIL_KIND.ONGKIR ? `Ongkir (${detail.rows.length} customer)` : `Potong Ayam (${detailPieces(detail)} ${CUT_UNIT})`;
+  return detail.kind === DETAIL_KIND.ONGKIR ? `Ongkir (${detail.rows.length} customer)` : `Potong Ayam (${fmtQty(detailPieces(detail))} ${CUT_UNIT})`;
 }
 
 /**
@@ -120,7 +130,7 @@ export function detailLabel(detail) {
 export function isAutoDetailLabel(detail, label) {
   if (!detail) return false;
   if (label === detailLabel(detail)) return true;
-  return detail.kind === DETAIL_KIND.POTONG && label === `Potong Ayam (${detailPieces(detail)} potong)`;
+  return detail.kind === DETAIL_KIND.POTONG && label === `Potong Ayam (${fmtQty(detailPieces(detail))} potong)`;
 }
 
 /** Baris kecil untuk layar: [{ text, amount }]. */
@@ -128,7 +138,7 @@ export function detailSubRows(detail) {
   if (!detail) return [];
   return detail.rows.map((r) => (detail.kind === DETAIL_KIND.ONGKIR
     ? { text: r.customer, amount: r.amount }
-    : { text: `${r.name} ${r.qty} × ${dots(r.price)}`, amount: r.qty * r.price }));
+    : { text: `${r.name} ${fmtQty(r.qty)} × ${dots(r.price)}`, amount: rowAmount(detail.kind, r) }));
 }
 
 /** Baca kolom jsonb dari database dengan aman (null / teks / bentuk salah = tidak ada rincian). */
@@ -141,7 +151,7 @@ export function parseDetail(raw) {
     return rows.length ? { kind: v.kind, rows } : null;
   }
   if (v.kind === DETAIL_KIND.POTONG) {
-    const rows = v.rows.map((r) => ({ name: text(r?.name), qty: int(r?.qty), price: int(r?.price) })).filter((r) => r.name && r.qty > 0);
+    const rows = v.rows.map((r) => ({ name: text(r?.name), qty: dec(r?.qty), price: int(r?.price) })).filter((r) => r.name && r.qty > 0);
     return rows.length ? { kind: v.kind, rows } : null;
   }
   return null;
@@ -158,7 +168,7 @@ export function buildAttachments(additions) {
     const d = parseDetail(a.detail);
     if (!d) continue;
     if (d.kind === DETAIL_KIND.ONGKIR) d.rows.forEach((r) => ongkir.push({ date: a.date, customer: r.customer, amount: r.amount }));
-    else d.rows.forEach((r) => potong.push({ date: a.date, name: r.name, qty: r.qty, price: r.price, subtotal: r.qty * r.price }));
+    else d.rows.forEach((r) => potong.push({ date: a.date, name: r.name, qty: r.qty, price: r.price, subtotal: rowAmount(DETAIL_KIND.POTONG, r) }));
   }
   if (!ongkir.length && !potong.length) return null;
   return {

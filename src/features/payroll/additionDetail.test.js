@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   DETAIL_KIND, CUSTOM_CUT, DEFAULT_CUT_PRICES, detailKindForCategory, emptyRow, startDetail, withCutType, rowAmount, detailTotal,
-  cleanDetail, detailForForm, detailLabel, isAutoDetailLabel, detailSubRows, parseDetail, buildAttachments, sanitizeCutPrices, validateCutPrices, fmtTgl,
+  cleanDetail, detailForForm, detailLabel, isAutoDetailLabel, dec, fmtQty, detailPieces, detailSubRows, parseDetail, buildAttachments, sanitizeCutPrices, validateCutPrices, fmtTgl,
 } from './additionDetail';
 
 describe('detailKindForCategory', () => {
@@ -176,5 +176,58 @@ describe('isAutoDetailLabel', () => {
     expect(isAutoDetailLabel(pot, 'Potong Ayam (15 kg)')).toBe(false);
     expect(isAutoDetailLabel(pot, 'Potong sore')).toBe(false);
     expect(isAutoDetailLabel(null, 'Potong Ayam (16 kg)')).toBe(false);
+  });
+});
+
+describe('jumlah desimal (kg)', () => {
+  it('dec: koma atau titik, angka rusak = 0, dibulatkan 3 angka di belakang koma', () => {
+    expect(dec('2,5')).toBe(2.5);
+    expect(dec('2.5')).toBe(2.5);
+    expect(dec(2.5)).toBe(2.5);
+    expect(dec('3')).toBe(3);
+    expect(dec('0,25')).toBe(0.25);
+    expect(dec(',5')).toBe(0.5);
+    expect(dec('1,23456')).toBe(1.235);
+    expect(dec('')).toBe(0);
+    expect(dec('abc')).toBe(0);
+    expect(dec(null)).toBe(0);
+    expect(dec('2,5,7')).toBe(2.5);
+  });
+  it('fmtQty: koma desimal tanpa nol di belakang', () => {
+    expect(fmtQty(2.5)).toBe('2,5');
+    expect(fmtQty('3.0')).toBe('3');
+    expect(fmtQty(0.125)).toBe('0,125');
+  });
+  it('upah baris = jumlah × harga dibulatkan ke rupiah; total dan jumlah kg menjumlah baris', () => {
+    expect(rowAmount('potong_ayam', { qty: '2,5', price: '3000' })).toBe(7500);
+    expect(rowAmount('potong_ayam', { qty: '0,333', price: '3000' })).toBe(999);
+    expect(rowAmount('potong_ayam', { qty: '1,5', price: '3333' })).toBe(5000);   // 4999,5 dibulatkan
+    const d = { kind: 'potong_ayam', rows: [{ qty: '2,5', price: '3000' }, { qty: '1', price: '3000' }, { qty: '0,25', price: '4000' }] };
+    expect(detailTotal(d)).toBe(7500 + 3000 + 1000);
+    expect(detailPieces(d)).toBe(3.75);
+  });
+  it('cleanDetail menyimpan jumlah desimal sebagai angka; nol / kosong tetap ditolak', () => {
+    const c = cleanDetail({ kind: 'potong_ayam', rows: [{ type: 'Sayap', name: '', qty: '2,5', price: '3000' }] });
+    expect(c).toEqual({ kind: 'potong_ayam', rows: [{ name: 'Sayap', qty: 2.5, price: 3000 }] });
+    expect(() => cleanDetail({ kind: 'potong_ayam', rows: [{ type: 'Sayap', name: '', qty: '0,0', price: '3000' }] })).toThrow('jumlah harus lebih dari 0');
+    expect(() => cleanDetail({ kind: 'potong_ayam', rows: [{ type: 'Sayap', name: '', qty: '', price: '' }] })).toThrow('Isi minimal satu baris');
+    expect(() => cleanDetail({ kind: 'potong_ayam', rows: [{ type: 'Sayap', name: '', qty: ',', price: '3000' }, { type: 'Bld', name: '', qty: '1', price: '3000' }] })).toThrow('jumlah harus lebih dari 0');
+  });
+  it('keterangan otomatis, baris kecil, parseDetail, dan lampiran memakai koma desimal dan upah yang dibulatkan', () => {
+    const d = { kind: 'potong_ayam', rows: [{ name: 'Sayap', qty: 2.5, price: 3000 }, { name: 'Bld', qty: 1, price: 3000 }] };
+    expect(detailLabel(d)).toBe('Potong Ayam (3,5 kg)');
+    expect(isAutoDetailLabel(d, 'Potong Ayam (3,5 kg)')).toBe(true);
+    expect(detailSubRows(d)).toEqual([{ text: 'Sayap 2,5 × 3.000', amount: 7500 }, { text: 'Bld 1 × 3.000', amount: 3000 }]);
+    expect(parseDetail(JSON.stringify(d))).toEqual(d);
+    expect(parseDetail({ kind: 'potong_ayam', rows: [{ name: 'Sayap', qty: '2,5', price: 3000 }] }).rows[0].qty).toBe(2.5);
+    const att = buildAttachments([{ date: '2026-10-07', detail: d }]);
+    expect(att.potong.rows[0]).toMatchObject({ qty: 2.5, subtotal: 7500 });
+    expect(att.potong.total).toBe(10500);
+  });
+  it('rincian lama berbilangan bulat tidak berubah hasilnya', () => {
+    const d = { kind: 'potong_ayam', rows: [{ name: 'Bld', qty: 10, price: 3000 }, { name: 'Sayap', qty: 6, price: 3000 }] };
+    expect(detailLabel(d)).toBe('Potong Ayam (16 kg)');
+    expect(detailTotal(d)).toBe(48000);
+    expect(detailSubRows(d)[0]).toEqual({ text: 'Bld 10 × 3.000', amount: 30000 });
   });
 });

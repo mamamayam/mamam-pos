@@ -1,5 +1,5 @@
 import { fmtHM } from './payrollReport';
-import { fmtTgl, fmtNum } from './additionDetail';
+import { fmtTgl, fmtNum, fmtQty } from './additionDetail';
 import { formatRupiah as defaultRupiah } from '../../utils/formatters';
 
 /**
@@ -202,7 +202,7 @@ export function buildPayslipPdf({ business = 'Mamam Ayam', employeeName, role, p
       section('POTONG AYAM', [
         { head: 'Tanggal', x: M + 4, align: 'left', w: 52, get: (r) => fmtTgl(r.date) },
         { head: 'Jenis', x: M + 64, align: 'left', w: CW - 64 - 190, get: (r) => r.name },
-        { head: 'Jml × Harga', x: RIGHT - 84, align: 'right', w: 100, get: (r) => `${r.qty} × ${fmtNum(r.price)}` },
+        { head: 'Jml × Harga', x: RIGHT - 84, align: 'right', w: 100, get: (r) => `${fmtQty(r.qty)} × ${fmtNum(r.price)}` },
         { head: 'Subtotal', x: RIGHT - 4, align: 'right', w: 70, get: (r) => fmtNum(r.subtotal) },
       ], att.potong.rows, 'Total', att.potong.total);
     }

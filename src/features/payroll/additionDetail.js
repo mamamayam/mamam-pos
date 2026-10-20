@@ -52,6 +52,25 @@ export function withCutType(row, type, cutPrices = DEFAULT_CUT_PRICES) {
   return { ...row, type, name: type === CUSTOM_CUT ? row.name || '' : '', price: preset ? String(preset.price) : '' };
 }
 
+/**
+ * Rincian tersimpan (bentuk database: { name, qty, price }) -> bentuk isian form. Baris Potong Ayam di form memakai
+ * `type` (nama jenis dari daftar harga, atau "Lainnya" + `name` bebas); tanpa `type`, kolom Jenis tampil kosong
+ * (bug "Sayap hilang" saat mengubah Tambahan). Nama yang cocok dengan daftar harga (tanpa peduli huruf besar/kecil)
+ * jadi jenis itu; selain itu (jenis sudah dihapus dari Pengaturan, nama bebas) jadi "Lainnya" dengan namanya.
+ * Harga dan jumlah baris tetap apa adanya. Objek yang sama dikembalikan kalau tidak ada yang perlu diubah.
+ */
+export function detailForForm(detail, cutPrices = DEFAULT_CUT_PRICES) {
+  if (!detail || detail.kind !== DETAIL_KIND.POTONG) return detail;
+  if ((detail.rows || []).every((r) => r?.type)) return detail;
+  const rows = (detail.rows || []).map((r) => {
+    if (r?.type) return r;
+    const nm = text(r?.name);
+    const preset = cutPrices.find((c) => c.name.toLowerCase() === nm.toLowerCase());
+    return preset ? { ...r, type: preset.name, name: '' } : { ...r, type: CUSTOM_CUT, name: nm };
+  });
+  return { ...detail, rows };
+}
+
 export function rowAmount(kind, row) {
   return kind === DETAIL_KIND.ONGKIR ? int(row?.amount) : int(row?.qty) * int(row?.price);
 }

@@ -3,7 +3,7 @@ import { PillTabs, Input, NominalInput } from '../../components/ui';
 import CategorySelect from '../../components/CategorySelect';
 import AdditionDetailEditor from './AdditionDetailEditor';
 import { useAppSettings } from '../../hook/useAppSettings';
-import { detailKindForCategory, startDetail, detailTotal, sanitizeCutPrices } from './additionDetail';
+import { detailKindForCategory, startDetail, detailTotal, detailForForm, sanitizeCutPrices } from './additionDetail';
 
 /**
  * AdjustmentFields — isian Tambahan/Potongan gaji (jenis, kategori yang bisa dikelola,
@@ -22,7 +22,8 @@ export default function AdjustmentFields({ form, onChange, categories, onManage,
   const cutPrices = sanitizeCutPrices(settings.potong_ayam_prices);
   const firstCat = (type) => (categories[type] || [])[0] || '';
   const kind = form.type === 'tambahan' ? detailKindForCategory(form.category) : null;
-  const detail = kind && form.detail?.kind === kind ? form.detail : null;
+  // Rincian dari database (mode ubah) tidak punya `type`: disesuaikan dulu supaya kolom Jenis terisi (detailForForm).
+  const detail = kind && form.detail?.kind === kind ? detailForForm(form.detail, cutPrices) : null;
 
   return (
     <>

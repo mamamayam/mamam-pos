@@ -53,6 +53,17 @@ describe('AdjustmentFields: rincian Tambahan', () => {
     for (const t of ['Bld', 'Lainnya', 'Nama potongan (mis. Kepala ayam)', '12 potong', 'Rp 39.000']) expect(html).toContain(t);
   });
 
+  it('mode ubah: rincian dari database (tanpa type) menampilkan jenisnya, bukan kolom kosong', () => {
+    const html = render({ type: 'tambahan', category: 'Potong Ayam', detail: { kind: 'potong_ayam', rows: [
+      { name: 'Sayap', qty: 2, price: 3000 }, { name: 'Kepala ayam', qty: 1, price: 4500 },
+    ] } });
+    expect(html).toContain('Sayap');
+    expect(html).toContain('Lainnya');                       // nama bebas jadi Lainnya...
+    expect(html).toContain('value="Kepala ayam"');           // ...dengan namanya terisi
+    expect(html).toContain('3 potong');
+    expect(html).toContain('Rp 10.500');
+  });
+
   it('detail dari kategori lain diabaikan (tidak bocor setelah ganti kategori)', () => {
     const html = render({ type: 'tambahan', category: 'Bonus', detail: { kind: 'ongkir', rows: [{ customer: 'A', amount: '1000' }] } });
     expect(html).not.toContain('detail-editor');

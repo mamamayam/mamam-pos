@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   DETAIL_KIND, CUSTOM_CUT, DEFAULT_CUT_PRICES, detailKindForCategory, emptyRow, startDetail, withCutType, rowAmount, detailTotal,
-  cleanDetail, detailLabel, detailSubRows, parseDetail, buildAttachments, sanitizeCutPrices, validateCutPrices, fmtTgl,
+  cleanDetail, detailForForm, detailLabel, detailSubRows, parseDetail, buildAttachments, sanitizeCutPrices, validateCutPrices, fmtTgl,
 } from './additionDetail';
 
 describe('detailKindForCategory', () => {
@@ -142,4 +142,28 @@ describe('harga potong ayam', () => {
 
 describe('fmtTgl', () => {
   it('6 Okt', () => { expect(fmtTgl('2026-10-06')).toBe('6 Okt'); expect(fmtTgl('')).toBe(''); });
+});
+
+describe('detailForForm (mode ubah: rincian dari database ke isian form)', () => {
+  const stored = { kind: 'potong_ayam', rows: [{ name: 'Sayap', qty: 2, price: 3000 }, { name: 'karkas', qty: 1, price: 3500 }, { name: 'Kepala ayam', qty: 4, price: 500 }] };
+  it('nama yang cocok daftar harga jadi jenisnya (tanpa peduli huruf besar/kecil); selain itu Lainnya + nama bebas', () => {
+    const f = detailForForm(stored, DEFAULT_CUT_PRICES);
+    expect(f.rows[0]).toMatchObject({ type: 'Sayap', name: '', qty: 2, price: 3000 });
+    expect(f.rows[1]).toMatchObject({ type: 'Karkas', name: '', qty: 1, price: 3500 });   // harga catatan lama tetap
+    expect(f.rows[2]).toMatchObject({ type: CUSTOM_CUT, name: 'Kepala ayam', qty: 4, price: 500 });
+  });
+  it('jenis yang sudah dihapus dari Pengaturan tetap tampil sebagai Lainnya dengan namanya', () => {
+    const f = detailForForm({ kind: 'potong_ayam', rows: [{ name: 'Sayap', qty: 1, price: 3000 }] }, [{ name: 'Bld', price: 3000 }]);
+    expect(f.rows[0]).toMatchObject({ type: CUSTOM_CUT, name: 'Sayap' });
+  });
+  it('hasilnya tetap bisa disimpan ulang: nama, jumlah, harga sama dengan aslinya', () => {
+    expect(cleanDetail(detailForForm(stored, DEFAULT_CUT_PRICES))).toEqual({ kind: 'potong_ayam', rows: stored.rows.map((r, i) => (i === 1 ? { ...r, name: 'Karkas' } : r)) });
+  });
+  it('baris yang sudah punya type, rincian ongkir, dan null tidak berubah (objek sama)', () => {
+    const formDetail = startDetail('potong_ayam');
+    expect(detailForForm(formDetail)).toBe(formDetail);
+    const ongkir = { kind: 'ongkir', rows: [{ customer: 'Budi', amount: 5000 }] };
+    expect(detailForForm(ongkir)).toBe(ongkir);
+    expect(detailForForm(null)).toBe(null);
+  });
 });

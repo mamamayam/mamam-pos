@@ -24,10 +24,10 @@ export const PERMISSIONS = {
   'screen.hpp': ['owner'],               // tombol HPP di menu Lainnya (membuka /hpp). Pagar tampilan saja; data HPP dijaga RLS
   'laporan.labaKotor': ['owner'],        // kartu Laba Kotor di Laporan (Laba Rugi)
   'laporan.hapusTransaksi': ['owner'],   // hapus transaksi LANGSUNG di Riwayat. Yang tanpa izin ini (staf) hanya bisa MENGAJUKAN hapus, owner memutuskan di sheet Persetujuan
-  'persetujuan.kelola': ['owner'],       // sheet Persetujuan (tile di menu slide-up, banner Beranda, badge): setujui/tolak hapus transaksi + Tambahan
+  'persetujuan.kelola': ['owner'],       // sheet Persetujuan (tile di menu slide-up, banner Beranda, badge): setujui/tolak hapus transaksi, hapus pengeluaran + Tambahan
   'beranda.laba': ['owner'],             // kartu Laba Kotor di Beranda
   'tambahan.setujui': ['owner'],         // setujui/tolak pengajuan Tambahan karyawan dari staf (Catat Cepat di Beranda)
-  'pengeluaran.ubah': ['owner'],         // edit & hapus pengeluaran (mencatat baru boleh semua)
+  'pengeluaran.ubah': ['owner'],         // edit & hapus pengeluaran LANGSUNG (mencatat baru boleh semua). Staf hanya bisa MENGAJUKAN hapus, owner memutuskan di sheet Persetujuan
   'catatan.ubah': ['owner'],             // ubah catatan dari daftar "Catatan Hari Ini" di Beranda (Tambah, Potongan, Pengeluaran)
   'karyawan.kelola': ['owner'],          // tambah/edit/hapus/impor karyawan
   'karyawan.upah': ['owner'],            // melihat upah, bonus, tarif lembur

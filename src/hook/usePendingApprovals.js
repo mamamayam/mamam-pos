@@ -3,11 +3,11 @@ import { supabase } from '../lib/supabase';
 
 /**
  * usePendingApprovals — jumlah pengajuan yang menunggu keputusan owner (Tambahan karyawan +
- * hapus transaksi), dipakai badge merah di BottomNav (ikon Beranda dan Menu) dan di tile
+ * hapus transaksi + hapus pengeluaran), dipakai badge merah di BottomNav (ikon Beranda dan Menu) dan di tile
  * Persetujuan, supaya owner tahu ada laporan masuk walau sedang di layar lain.
  *
  * Toko kecil, jadi cukup polling ringan (tiap 60 detik + saat aplikasi dibuka kembali),
- * bukan realtime. Kalau migrasi 009 / 016 belum dijalankan, bagian itu diam-diam dihitung 0
+ * bukan realtime. Kalau migrasi 009 / 016 / 018 belum dijalankan, bagian itu diam-diam dihitung 0
  * (tidak mengganggu layar lain).
  */
 let count = 0;
@@ -25,14 +25,16 @@ const subscribe = (fn) => { listeners.add(fn); return () => listeners.delete(fn)
 /** Jumlah saat ini (untuk badge). */
 export const usePendingApprovals = () => useSyncExternalStore(subscribe, () => count, () => 0);
 
-/** Hitung ulang dari database: Tambahan menunggu + pengajuan hapus transaksi menunggu. */
+/** Hitung ulang dari database: Tambahan menunggu + pengajuan hapus transaksi + pengajuan hapus pengeluaran menunggu. */
 export async function refreshPendingApprovals() {
   const countOf = async (table) => {
     const { count: n, error } = await supabase.from(table).select('id', { count: 'exact', head: true }).eq('status', 'menunggu');
     return error ? 0 : (n || 0);
   };
-  const [tambahan, hapus] = await Promise.all([countOf('payroll_additions'), countOf('transaction_delete_requests')]);
-  setPendingApprovals(tambahan + hapus);
+  const [tambahan, hapus, hapusPengeluaran] = await Promise.all([
+    countOf('payroll_additions'), countOf('transaction_delete_requests'), countOf('expense_delete_requests'),
+  ]);
+  setPendingApprovals(tambahan + hapus + hapusPengeluaran);
 }
 
 /**

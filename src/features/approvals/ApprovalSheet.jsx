@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Check, X, Trash2, Plus, ClipboardCheck } from 'lucide-react';
+import { Check, X, Trash2, Plus, ClipboardCheck, Receipt } from 'lucide-react';
 import { Modal, Button, Input, EmptyState, PillTabs } from '../../components/ui';
 import { useAppContext } from '../../context/AppContext';
-import { usePendingDeleteRequests, putuskanHapusTransaksi } from '../../hook/useDeleteRequests';
+import { usePendingDeleteRequests, putuskanHapusTransaksi, usePendingExpenseDeleteRequests, putuskanHapusPengeluaran } from '../../hook/useDeleteRequests';
 import { usePendingAdditions, decideAddition } from '../../hook/usePendingAdditions';
 import { detailSubRows } from '../payroll/additionDetail';
 
 /**
  * ApprovalSheet — menu slide-up "Persetujuan" (owner). Satu tempat untuk semua yang menunggu keputusan:
- *  - Hapus Transaksi : staf mengajukan hapus dari Riwayat (alasan + nama wajib). Setuju = transaksi dihapus
+ *  - Transaksi       : staf mengajukan hapus dari Riwayat (alasan + nama wajib). Setuju = transaksi dihapus
  *                      PERMANEN oleh database (RPC putuskan_hapus_transaksi); Tolak = transaksi tetap.
+ *  - Pengeluaran     : sama, untuk catatan di layar Pengeluaran (RPC putuskan_hapus_pengeluaran, migrasi 018).
+ *                      Pengeluaran karyawan (potongan) yang dihapus ikut menghapus potongan gajinya.
  *  - Tambahan        : pengajuan Tambahan gaji karyawan dari staf (dulu kartu di Beranda). Setuju = masuk hitungan gaji.
  * Dibuka dari tile Persetujuan di menu slide-up dan dari banner di Beranda. Badge jumlahnya di BottomNav
  * (usePendingApprovals). Keputusan memuat ulang daftar dan memberi sinyal ke layar lain (notifyApprovalsChanged).
@@ -20,6 +22,7 @@ const when = (iso) => (iso ? new Date(iso).toLocaleString('id-ID', { day: '2-dig
 export default function ApprovalSheet({ isOpen, onClose }) {
   const { formatRupiah, triggerAlert, triggerConfirm } = useAppContext();
   const del = usePendingDeleteRequests(isOpen);
+  const exp = usePendingExpenseDeleteRequests(isOpen);
   const add = usePendingAdditions(isOpen);
 
   const [pickedTab, setPickedTab] = useState(null);
@@ -29,14 +32,14 @@ export default function ApprovalSheet({ isOpen, onClose }) {
 
   useEffect(() => { if (!isOpen) { setPickedTab(null); setRejectingId(null); setRejectReason(''); } }, [isOpen]);
 
-  // Tab awal: yang ada isinya (hapus transaksi dulu kalau keduanya ada).
-  const tab = pickedTab ?? (del.list.length === 0 && add.list.length > 0 ? 'tambahan' : 'hapus');
+  // Tab awal: yang ada isinya (urutan: transaksi, pengeluaran, tambahan; kalau semua kosong, transaksi).
+  const tab = pickedTab ?? (del.list.length ? 'hapus' : exp.list.length ? 'pengeluaran' : add.list.length ? 'tambahan' : 'hapus');
 
   const run = async (fn) => {
     if (busy) return;
     setBusy(true);
     try { await fn(); } catch (e) { triggerAlert(e.message || 'Terjadi kesalahan.'); }
-    finally { await Promise.all([del.reload(), add.reload()]); setRejectingId(null); setRejectReason(''); setBusy(false); }
+    finally { await Promise.all([del.reload(), exp.reload(), add.reload()]); setRejectingId(null); setRejectReason(''); setBusy(false); }
   };
 
   const startReject = (id) => { setRejectingId(id); setRejectReason(''); };
@@ -47,6 +50,11 @@ export default function ApprovalSheet({ isOpen, onClose }) {
     () => run(() => putuskanHapusTransaksi(r.id, true)),
   );
   const rejectDelete = (r) => run(() => putuskanHapusTransaksi(r.id, false, rejectReason));
+  const approveExpense = (r) => triggerConfirm(
+    `Hapus pengeluaran ${r.category} (${formatRupiah(r.amount)}) PERMANEN?${r.employeeId ? ' Potongan gaji karyawan yang tertaut ikut terhapus.' : ' Angka dompet dan laba rugi ikut berubah.'}`,
+    () => run(() => putuskanHapusPengeluaran(r.id, true)),
+  );
+  const rejectExpense = (r) => run(() => putuskanHapusPengeluaran(r.id, false, rejectReason));
   const approveAddition = (r) => run(() => decideAddition(r.id, true));
   const rejectAddition = (r) => run(() => decideAddition(r.id, false, rejectReason));
 
@@ -61,7 +69,8 @@ export default function ApprovalSheet({ isOpen, onClose }) {
   );
 
   const tabs = [
-    { value: 'hapus', label: `Hapus Transaksi${del.list.length ? ` (${del.list.length})` : ''}`, testId: 'tab-persetujuan-hapus' },
+    { value: 'hapus', label: `Transaksi${del.list.length ? ` (${del.list.length})` : ''}`, testId: 'tab-persetujuan-hapus' },
+    { value: 'pengeluaran', label: `Pengeluaran${exp.list.length ? ` (${exp.list.length})` : ''}`, testId: 'tab-persetujuan-pengeluaran' },
     { value: 'tambahan', label: `Tambahan${add.list.length ? ` (${add.list.length})` : ''}`, testId: 'tab-persetujuan-tambahan' },
   ];
 
@@ -95,6 +104,42 @@ export default function ApprovalSheet({ isOpen, onClose }) {
                   <div className="grid grid-cols-2 gap-2 mt-2.5">
                     <Button variant="secondary" size="sm" disabled={busy} onClick={() => startReject(r.id)} icon={<X className="w-4 h-4" />}>Tolak</Button>
                     <Button variant="danger" size="sm" disabled={busy} onClick={() => approveDelete(r)} icon={<Trash2 className="w-4 h-4" />}>Setujui & Hapus</Button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === 'pengeluaran' && (
+          <div className="space-y-2" data-testid="daftar-hapus-pengeluaran">
+            {exp.error && <p className="text-xs text-red-500 text-center">{exp.error}</p>}
+            {exp.list.length === 0 && !exp.error && (
+              <EmptyState icon={<Receipt className="w-10 h-10" />} title="Tidak ada pengajuan hapus pengeluaran." className="py-8" />
+            )}
+            {exp.list.map(r => (
+              <div key={r.id} className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-3" data-testid="pengajuan-hapus-pengeluaran">
+                <div className="flex justify-between items-start gap-3">
+                  <div className="min-w-0">
+                    <p className="font-bold text-sm text-slate-800 dark:text-slate-100">{r.category}{r.employeeName && <span className="font-medium text-slate-500 dark:text-slate-400"> · {r.employeeName}</span>}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{[r.supplier, r.paymentMethod === 'Non-Tunai' ? 'Bank' : 'Tunai', r.date].filter(Boolean).join(' • ')}</p>
+                    {r.detail && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 break-words whitespace-pre-line">{r.detail}</p>}
+                  </div>
+                  <p className="font-bold text-sm text-red-600 dark:text-red-400 shrink-0">-{formatRupiah(r.amount)}</p>
+                </div>
+                <div className="bg-amber-50 dark:bg-amber-500/10 rounded-xl px-3 py-2 mt-2.5">
+                  <p className="text-xs text-amber-800 dark:text-amber-300 break-words"><span className="font-bold">Alasan:</span> {r.reason}</p>
+                  <p className="text-[11px] text-amber-700/70 dark:text-amber-400/70 mt-0.5">Diajukan {r.requestedBy} · {when(r.createdAt)}</p>
+                </div>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
+                  {r.employeeId
+                    ? `Kalau disetujui, pengeluaran ini dihapus permanen beserta potongan gaji ${r.employeeName || 'karyawan'} yang tertaut.`
+                    : 'Kalau disetujui, pengeluaran ini dihapus permanen dan angka dompet serta laba rugi ikut berubah.'}
+                </p>
+                {rejectingId === r.id ? rejectBox(() => rejectExpense(r)) : (
+                  <div className="grid grid-cols-2 gap-2 mt-2.5">
+                    <Button variant="secondary" size="sm" disabled={busy} onClick={() => startReject(r.id)} icon={<X className="w-4 h-4" />}>Tolak</Button>
+                    <Button variant="danger" size="sm" disabled={busy} onClick={() => approveExpense(r)} icon={<Trash2 className="w-4 h-4" />}>Setujui & Hapus</Button>
                   </div>
                 )}
               </div>

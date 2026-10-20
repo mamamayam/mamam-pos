@@ -1,5 +1,6 @@
 /**
- * deleteRequestMath — pengajuan hapus transaksi (staf mengajukan, owner memutuskan; migrasi 016).
+ * deleteRequestMath — pengajuan hapus transaksi (migrasi 016) dan pengeluaran (migrasi 018): staf mengajukan,
+ * owner memutuskan. Bentuk pengajuannya sama (alasan, pengaju, status), jadi validasi dan indeks dipakai bersama.
  * FUNGSI MURNI (dites di deleteRequestMath.test.js).
  */
 
@@ -15,28 +16,42 @@ export const mapDeleteRequest = (r) => ({
   status: normalizeStatus(r.status), rejectReason: r.reject_reason || '', createdAt: r.created_at || '',
 });
 
-/** Validasi form pengajuan. Mengembalikan nilai yang sudah dirapikan atau melempar Error berpesan Indonesia. */
-export function validateDeleteRequest({ reason, requestedBy } = {}) {
+/** Baris tabel expense_delete_requests -> bentuk yang dipakai tampilan. `expenseId` = kunci indeks (lihat requestIndex). */
+export const mapExpenseDeleteRequest = (r) => ({
+  id: r.id, expenseId: r.expense_id, date: r.expense_date || '', category: r.category || '', supplier: r.supplier || '',
+  detail: r.detail || '', paymentMethod: r.payment_method || '', amount: Number(r.amount) || 0,
+  employeeId: r.employee_id || null, employeeName: r.employee_name || '',
+  reason: r.reason || '', requestedBy: r.requested_by || '',
+  status: normalizeStatus(r.status), rejectReason: r.reject_reason || '', createdAt: r.created_at || '',
+});
+
+/**
+ * Validasi form pengajuan. Mengembalikan nilai yang sudah dirapikan atau melempar Error berpesan Indonesia.
+ * `noun` = yang dihapus ('transaksi' | 'pengeluaran'), hanya untuk kalimat pesannya.
+ */
+export function validateDeleteRequest({ reason, requestedBy } = {}, noun = 'transaksi') {
   const r = String(reason || '').trim();
   const by = String(requestedBy || '').trim();
-  if (!r) throw new Error('Isi alasan kenapa transaksi ini harus dihapus.');
+  if (!r) throw new Error(`Isi alasan kenapa ${noun} ini harus dihapus.`);
   if (!by) throw new Error('Pilih namamu dulu.');
   return { reason: r, requestedBy: by };
 }
 
 /**
- * Indeks per transaksi untuk Riwayat: transactionId -> pengajuan yang relevan.
+ * Indeks per catatan untuk Riwayat / Pengeluaran: kunci -> pengajuan yang relevan. `keyOf` memilih kuncinya
+ * (bawaan transactionId; pengeluaran memakai (r) => r.expenseId).
  * 'menunggu' menang; kalau tidak ada, pengajuan 'ditolak' TERBARU (supaya staf tahu kenapa ditolak).
  * 'disetujui' tidak masuk: transaksinya sudah tidak ada.
  */
-export function requestIndex(requests) {
+export function requestIndex(requests, keyOf = (r) => r.transactionId) {
   const map = new Map();
   for (const r of requests || []) {
     if (r.status === REQUEST_STATUS.APPROVED) continue;
-    const cur = map.get(r.transactionId);
-    if (!cur) { map.set(r.transactionId, r); continue; }
+    const key = keyOf(r);
+    const cur = map.get(key);
+    if (!cur) { map.set(key, r); continue; }
     if (cur.status === REQUEST_STATUS.PENDING) continue;
-    if (r.status === REQUEST_STATUS.PENDING || r.createdAt > cur.createdAt) map.set(r.transactionId, r);
+    if (r.status === REQUEST_STATUS.PENDING || r.createdAt > cur.createdAt) map.set(key, r);
   }
   return map;
 }

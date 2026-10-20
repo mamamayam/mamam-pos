@@ -1,9 +1,11 @@
 import { useState, useMemo } from 'react';
-import { TrendingDown, Pencil, Trash2, Plus, Store, User } from 'lucide-react';
+import { TrendingDown, Pencil, Trash2, Plus, Store, User, Send } from 'lucide-react';
 import { Button, Badge, EmptyState, DetailModal, BulkSelectBar, FilterBar, SummaryPills } from '../../components/ui';
 import ExpenseFormSheet from './ExpenseFormSheet';
 import QuickAdjustmentSheet from '../home/QuickAdjustmentSheet';
+import DeleteRequestSheet from '../history/DeleteRequestSheet';
 import { updateDeduction, fetchDeductionByExpense } from '../../hook/deductionEdit';
+import { useExpenseDeleteRequestIndex } from '../../hook/useDeleteRequests';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../auth/AuthContext';
 import { useExpenseData } from '../../hook/useExpenseData';
@@ -25,7 +27,9 @@ import { dayOf, filterByPeriod, filterExpenses, sourceStats, sourceOf, isDateSor
  *
  * Tampilan sama dengan Riwayat: kartu FilterBar (cari + chip Periode / Kategori / Urutkan),
  * ringkasan per sumber (Toko / Karyawan, ketuk untuk menyaring), lalu daftar ringkas per hari.
- * Ketuk satu catatan = Detail (di sana ada Edit dan Hapus).
+ * Ketuk satu catatan = Detail (di sana ada Edit dan Hapus untuk owner). Staf TIDAK bisa menghapus langsung: di Detail
+ * hanya ada "Ajukan Hapus" (alasan + nama wajib, migrasi 018); catatan tetap ada sampai owner menyetujui di sheet
+ * Persetujuan. Catatan yang sedang diajukan diberi badge "Menunggu hapus"; yang ditolak menampilkan alasannya di Detail.
  *
  * Tanggal pengeluaran diperlakukan sebagai string "YYYY-MM-DD" apa adanya,
  * TIDAK di-parse jadi Date UTC, supaya tidak bergeser sehari di zona waktu
@@ -43,7 +47,8 @@ const showDate = (v) => {
 const ExpenseView = () => {
   const { formatRupiah, triggerAlert, triggerConfirm } = useAppContext();
   const { can } = useAuth();
-  const canChange = can('pengeluaran.ubah');   // edit & hapus; mencatat baru boleh semua peran
+  const canChange = can('pengeluaran.ubah');   // edit & hapus LANGSUNG; mencatat baru boleh semua peran
+  const canRequest = !canChange;               // tanpa izin hapus langsung = mengajukan hapus ke owner
   const canWage = can('karyawan.upah');        // boleh melihat nominal pengeluaran karyawan (gaji, kasbon); staf: disensor seperti di Beranda
   const expenseData = useExpenseData();
   const { expenses, categories, employees, loading, error, reload, deleteExpense, bulkDeleteExpenses } = expenseData;
@@ -57,6 +62,9 @@ const ExpenseView = () => {
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(PAGE);
   const [detail, setDetail] = useState(null);
+  const [requestFor, setRequestFor] = useState(null);   // pengeluaran yang sedang diajukan hapus (sheet Ajukan Hapus)
+  const { index: requests, reload: reloadRequests } = useExpenseDeleteRequestIndex();
+  const detailRequest = detail ? requests.get(detail.id) : null;
   const [editDeduction, setEditDeduction] = useState(null);   // { item, onSave } potongan (pengeluaran karyawan) yang diubah
   const [isSelecting, setIsSelecting] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -183,6 +191,7 @@ const ExpenseView = () => {
                 {exp.cashHolderName && <Badge variant="warning">💰 {exp.cashHolderName}</Badge>}
               </span>
             )}
+            {requests.get(exp.id)?.status === 'menunggu' && <Badge variant="warning" dot>Menunggu hapus</Badge>}
           </span>
         </button>
       </div>
@@ -281,6 +290,8 @@ const ExpenseView = () => {
           { label: 'Pemegang Kas', value: detail?.cashHolderName },
           { label: 'Dicatat dari', value: detail?.deviceName },
           { label: 'Catatan', value: detail ? noteLines(detail.note).join('\n') : '', type: 'multiline' },
+          ...(detailRequest?.status === 'menunggu' ? [{ label: 'Pengajuan hapus', value: `Menunggu keputusan owner (diajukan ${detailRequest.requestedBy})` }] : []),
+          ...(detailRequest?.status === 'ditolak' ? [{ label: 'Pengajuan hapus ditolak', value: detailRequest.rejectReason || 'Owner menolak pengajuan hapus ini.' }] : []),
         ] }]}
         highlight={isWageHidden(detail, canWage)
           ? { label: 'Nominal', value: WAGE_MASK, type: 'text', tone: 'danger' }
@@ -289,7 +300,15 @@ const ExpenseView = () => {
           // Pengeluaran karyawan (dari potongan) juga bisa diubah: membuka form Potongan yang sama (lihat handleEditClick).
           { label: 'Edit', icon: <Pencil className="w-4 h-4" />, variant: 'secondary', onClick: () => handleEditClick(detail) },
           { label: 'Hapus', icon: <Trash2 className="w-4 h-4" />, variant: 'danger', onClick: () => handleDelete(detail) },
+        ] : detail && canRequest && detailRequest?.status !== 'menunggu' ? [
+          { label: 'Ajukan Hapus', icon: <Send className="w-4 h-4" />, variant: 'danger', onClick: () => { setRequestFor(detail); setDetail(null); } },
         ] : []}
+      />
+
+      <DeleteRequestSheet
+        isOpen={!!requestFor} onClose={() => setRequestFor(null)} expense={requestFor}
+        hideAmount={isWageHidden(requestFor, canWage)} employeeName={requestFor ? employeeName(requestFor) : ''}
+        onSubmitted={reloadRequests}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mapDeleteRequest, validateDeleteRequest, requestIndex, pendingDeleteRequests, REQUEST_STATUS } from './deleteRequestMath';
+import { mapDeleteRequest, mapExpenseDeleteRequest, validateDeleteRequest, requestIndex, pendingDeleteRequests, REQUEST_STATUS } from './deleteRequestMath';
 
 const row = (over = {}) => ({
   id: 'r1', transaction_id: 't1', display_number: '0042', customer_name: 'Budi', order_type: 'Takeaway', payment_method: 'Tunai',
@@ -60,5 +60,35 @@ describe('pendingDeleteRequests', () => {
     ];
     expect(pendingDeleteRequests(list).map((r) => r.id)).toEqual(['early', 'late']);
     expect(REQUEST_STATUS.PENDING).toBe('menunggu');
+  });
+});
+
+describe('pengajuan hapus pengeluaran', () => {
+  const erow = (over = {}) => ({
+    id: 'x1', expense_id: 'e1', expense_date: '2026-10-16', category: 'Belanja', supplier: 'Pasar', detail: 'Sayur', payment_method: 'Tunai',
+    amount: 120000, employee_id: null, employee_name: null, reason: 'Dobel catat', requested_by: 'Andi', status: 'menunggu', reject_reason: null,
+    created_at: '2026-10-16T04:00:00Z', ...over,
+  });
+  it('memetakan kolom; kolom kosong aman; status asing dianggap menunggu', () => {
+    expect(mapExpenseDeleteRequest(erow())).toMatchObject({ id: 'x1', expenseId: 'e1', category: 'Belanja', amount: 120000, employeeId: null, reason: 'Dobel catat', requestedBy: 'Andi', status: 'menunggu', rejectReason: '' });
+    expect(mapExpenseDeleteRequest({ id: 'x2', expense_id: 'e2', status: 'aneh' })).toMatchObject({ category: '', supplier: '', amount: 0, status: 'menunggu' });
+  });
+  it('validasi memakai kata "pengeluaran" di pesannya', () => {
+    expect(() => validateDeleteRequest({ reason: ' ', requestedBy: 'Andi' }, 'pengeluaran')).toThrow('pengeluaran ini');
+    expect(() => validateDeleteRequest({ reason: 'x', requestedBy: '' }, 'pengeluaran')).toThrow('namamu');
+    expect(validateDeleteRequest({ reason: ' x ', requestedBy: ' A ' }, 'pengeluaran')).toEqual({ reason: 'x', requestedBy: 'A' });
+  });
+  it('indeks per pengeluaran lewat keyOf: menunggu menang, ditolak terbaru, disetujui tidak masuk', () => {
+    const m = (over) => mapExpenseDeleteRequest(erow(over));
+    const idx = requestIndex([
+      m({ id: 'a', status: 'ditolak', created_at: '2026-10-16T05:00:00Z' }),
+      m({ id: 'b', status: 'menunggu' }),
+      m({ id: 'c', expense_id: 'e2', status: 'disetujui' }),
+      m({ id: 'd', expense_id: 'e3', status: 'ditolak', created_at: '2026-10-15T01:00:00Z' }),
+      m({ id: 'e', expense_id: 'e3', status: 'ditolak', created_at: '2026-10-16T01:00:00Z' }),
+    ], (r) => r.expenseId);
+    expect(idx.get('e1').id).toBe('b');
+    expect(idx.has('e2')).toBe(false);
+    expect(idx.get('e3').id).toBe('e');
   });
 });

@@ -10,7 +10,7 @@ import {
  * NominalKeypadSheet — keypad nominal (pengganti keyboard HP). Muncul menempel di
  * dasar layar seperti keyboard biasa (lihat NominalDock), bukan pop-up geser.
  * Layout dari "Preview: Nominal Keypad + Kalkulator Popup": layar angka +
- * ikon kalkulator, lalu 789 / 456 / 123 / 00 0 ⌫ (susunan sama dengan kalkulator).
+ * ikon kalkulator, lalu 123 / 456 / 789 / 00 0 ⌫ (susunan keypad telepon, permintaan pemilik 22 Okt 2026; kalkulator tetap 789 di atas).
  * Tampilan SAMA dengan NominalCalculator: palet gelap/oranye SENGAJA tetap
  * (tidak ikut tema aplikasi), seperti kalkulator bawaan HP.
  *
@@ -113,7 +113,7 @@ export default function NominalKeypadSheet({
           )}
 
           <div className="mt-1.5 grid grid-cols-3 gap-1.5">
-            {['7', '8', '9', '4', '5', '6', '1', '2', '3'].map((k) => (
+            {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((k) => (
               <button key={k} type="button" className={KEY} onClick={() => press(k)}>{k}</button>
             ))}
             <button type="button" className={KEY} onClick={() => press('00')}>00</button>

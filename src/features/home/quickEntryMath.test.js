@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   validateAdjustment, adjustmentLabel, newAdditionRow, deductionRpcArgs, deductionUpdateArgs, summarizeTodayExpenses,
-  mapAdditionRow, mapDeductionRow, mapExpenseRow, additionUpdateRow, buildFeed, filterFeed, pendingRequests, formatClock, startOfLocalDayISO,
+  mapAdditionRow, mapDeductionRow, mapExpenseRow, additionUpdateRow, additionChanged, shownAdditionAmount, buildFeed, filterFeed, pendingRequests, formatClock, startOfLocalDayISO,
 } from './quickEntryMath.js';
 
 const form = (over = {}) => ({ employeeId: 'e1', category: 'Ongkir', label: '', amount: '15000', date: '2026-10-08', requestedBy: 'Andi', ...over });
@@ -232,5 +232,47 @@ describe('data untuk mengubah catatan dari Beranda', () => {
     const feed = buildFeed({ additions: [a], deductions: [d], expenses: [x] });
     expect(feed.map((i) => i.source.id)).toEqual(['a1', 'd1', 'x9']);
     expect(feed[1].source.expenseId).toBe('x1');
+  });
+});
+
+describe('Tambah diedit / ditolak', () => {
+  const row = { id: 'a1', employee_id: 'e1', category: 'Bonus', label: 'Target', amount: 100000, date: '2026-10-08', status: 'disetujui', created_at: '2026-10-08T01:50:00.000Z' };
+  it('mapAdditionRow membaca edited_at; kosong = belum pernah diubah', () => {
+    expect(mapAdditionRow(row).editedAt).toBe('');
+    expect(mapAdditionRow({ ...row, edited_at: '2026-10-09T02:00:00Z' }).editedAt).toBe('2026-10-09T02:00:00Z');
+  });
+  it('additionChanged: hanya true kalau isinya berubah', () => {
+    const cur = mapAdditionRow(row);
+    const same = { label: 'Target', amount: 100000, date: '2026-10-08', category: 'Bonus' };
+    expect(additionChanged(cur, same)).toBe(false);
+    expect(additionChanged(cur, { ...same, amount: 120000 })).toBe(true);
+    expect(additionChanged(cur, { ...same, label: 'Target Oktober' })).toBe(true);
+    expect(additionChanged(cur, { ...same, date: '2026-10-09' })).toBe(true);
+    expect(additionChanged(cur, { ...same, category: 'Ongkir' })).toBe(true);
+  });
+  it('additionChanged: rincian ikut dibandingkan (tidak dikirim = tidak berubah; dibuang = berubah)', () => {
+    const detail = { kind: 'potong_ayam', rows: [{ name: 'Sayap', qty: 2.5, price: 3000 }] };
+    const cur = mapAdditionRow({ ...row, category: 'Potong Ayam', amount: 7500, label: 'Potong Ayam (2,5 kg)', detail });
+    const same = { label: 'Potong Ayam (2,5 kg)', amount: 7500, date: '2026-10-08', category: 'Potong Ayam' };
+    expect(additionChanged(cur, same)).toBe(false);                                  // detail tidak dikirim
+    expect(additionChanged(cur, { ...same, detail })).toBe(false);                   // detail sama
+    expect(additionChanged(cur, { ...same, detail: { kind: 'potong_ayam', rows: [{ name: 'Sayap', qty: 3, price: 3000 }] } })).toBe(true);
+    expect(additionChanged(cur, { ...same, detail: null })).toBe(true);              // rincian dibuang
+  });
+  it('shownAdditionAmount: ditolak = 0, selain itu nominalnya', () => {
+    expect(shownAdditionAmount({ status: 'ditolak', amount: 50000 })).toBe(0);
+    expect(shownAdditionAmount({ status: 'menunggu', amount: 50000 })).toBe(50000);
+    expect(shownAdditionAmount({ status: 'disetujui', amount: 50000 })).toBe(50000);
+  });
+  it('buildFeed: Tambah ditolak membawa shownAmount 0 (amount asli tetap), Tambah diedit ditandai', () => {
+    const feed = buildFeed({ additions: [
+      mapAdditionRow({ ...row, id: 'r', status: 'ditolak', reject_reason: 'Belum tercapai' }, { e1: 'Sari' }),
+      mapAdditionRow({ ...row, id: 'd', edited_at: '2026-10-09T02:00:00Z' }, { e1: 'Sari' }),
+      mapAdditionRow({ ...row, id: 'n' }, { e1: 'Sari' }),
+    ] });
+    const by = Object.fromEntries(feed.map((i) => [i.id, i]));
+    expect(by.r).toMatchObject({ amount: 100000, shownAmount: 0, edited: false, status: 'ditolak', reason: 'Belum tercapai' });
+    expect(by.d).toMatchObject({ shownAmount: 100000, edited: true });
+    expect(by.n).toMatchObject({ shownAmount: 100000, edited: false });
   });
 });

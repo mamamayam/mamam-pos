@@ -1024,3 +1024,9 @@ grant execute on function ajukan_hapus_pengeluaran(uuid, text, text, uuid) to an
 grant execute on function ajukan_hapus_pengeluaran(uuid, text, text, uuid) to authenticated;
 grant execute on function putuskan_hapus_pengeluaran(uuid, boolean, text) to anon;
 grant execute on function putuskan_hapus_pengeluaran(uuid, boolean, text) to authenticated;
+
+
+-- ---------------------------------------------------------------------
+-- Migrasi 019: penanda "Diedit" pada Tambahan gaji. Lihat migrations/019_tambahan_diedit.sql.
+-- ---------------------------------------------------------------------
+alter table payroll_additions add column if not exists edited_at timestamptz;

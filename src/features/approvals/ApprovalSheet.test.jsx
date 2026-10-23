@@ -52,6 +52,12 @@ describe('ApprovalSheet', () => {
     expect(html).toContain('Setelah disetujui, masuk hitungan gaji Sari');
     expect(html).toContain('Tambahan (1)');
   });
+  it('Tambahan yang sudah diedit owner diberi tanda "Diedit owner"', () => {
+    state.add = [{ ...addReq, editedAt: '2026-10-16T05:00:00Z' }];
+    expect(render()).toContain('data-testid="pengajuan-diedit"');
+    state.add = [addReq];
+    expect(render()).not.toContain('pengajuan-diedit');
+  });
   it('keduanya ada: hapus transaksi dulu', () => {
     state.del = [delReq]; state.add = [addReq];
     expect(render()).toContain('data-testid="daftar-hapus"');

@@ -157,6 +157,7 @@ export default function QuickEntrySection({ onChanged }) {
           const { Icon, cls, amt, sign } = KIND_ICON[item.kind];
           const masked = item.kind !== 'pengeluaran' && !canWage;
           const badge = item.kind === 'tambah' ? STATUS_BADGE[item.status] : null;
+          const rejected = item.kind === 'tambah' && item.status === 'ditolak';
           return (
             <div key={item.key} data-testid="catatan"
               {...(canEdit ? { role: 'button', tabIndex: 0, 'aria-label': `Ubah catatan ${item.title}`, onClick: () => openEdit(item), onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(item); } } } : {})}
@@ -172,8 +173,12 @@ export default function QuickEntrySection({ onChanged }) {
                 )}
               </div>
               <div className="flex flex-col items-end gap-1 shrink-0">
-                <p className={`font-bold text-sm ${masked ? 'text-slate-400' : amt}`}>{masked ? MASK : `${sign}${formatRupiah(item.amount)}`}</p>
+                {/* Pengajuan ditolak tidak menambah apa pun: nominalnya 0, bukan angka yang diajukan. */}
+                {rejected
+                  ? <p className="font-bold text-sm text-slate-400 dark:text-slate-500" data-testid="nominal-ditolak">{`${sign}${formatRupiah(0)}`}</p>
+                  : <p className={`font-bold text-sm ${masked ? 'text-slate-400' : amt}`}>{masked ? MASK : `${sign}${formatRupiah(item.amount)}`}</p>}
                 {badge && <Badge variant={badge[0]} dot>{badge[1]}</Badge>}
+                {item.kind === 'tambah' && item.edited && <span data-testid="badge-diedit"><Badge variant="info">Diedit</Badge></span>}
                 {canEdit && <Pencil className="w-3 h-3 text-slate-300 dark:text-slate-600" aria-hidden="true" />}
               </div>
             </div>

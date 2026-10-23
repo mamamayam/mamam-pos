@@ -75,6 +75,25 @@ export function additionUpdateRow(form, { hadDetail = false } = {}) {
   };
 }
 
+/**
+ * Apakah isi Tambah benar-benar berubah? `current` = bentuk tampilan (mapAdditionRow), `patch` = hasil additionUpdateRow.
+ * Dipakai untuk mengisi penanda "Diedit" hanya kalau ada yang berubah (menyimpan tanpa mengubah apa pun bukan edit).
+ */
+export function additionChanged(current, patch) {
+  const detailOf = (d) => JSON.stringify(d || null);
+  const nextDetail = patch.detail === undefined ? current.detail : patch.detail;   // detail tidak dikirim = tidak berubah
+  return (
+    String(current.label ?? '') !== String(patch.label ?? '')
+    || Number(current.amount) !== Number(patch.amount)
+    || dayOf(current.date) !== dayOf(patch.date)
+    || String(current.category ?? '') !== String(patch.category ?? '')
+    || detailOf(current.detail) !== detailOf(nextDetail)
+  );
+}
+
+/** Nominal yang ditampilkan untuk Tambah: pengajuan yang DITOLAK tidak menambah apa pun, jadi 0. */
+export const shownAdditionAmount = (a) => (a?.status === ADDITION_STATUS.REJECTED ? 0 : Number(a?.amount) || 0);
+
 /** Argumen RPC catat_potongan (potongan gaji + pengeluaran karyawan, satu transaksi). */
 export function deductionRpcArgs(form) {
   const amount = validateAdjustment(form);
@@ -126,6 +145,7 @@ export const mapAdditionRow = (r, nameById = {}) => ({
   category: r.category, label: r.label, amount: r.amount, date: dayOf(r.date),
   status: normalizeStatus(r.status), requestedBy: r.requested_by || '', rejectReason: r.reject_reason || '',
   createdAt: r.created_at || '', detail: parseDetail(r.detail),
+  editedAt: r.edited_at || '',   // diisi saat owner mengubah isinya (migrasi 019); kosong = belum pernah diubah
 });
 
 export const mapDeductionRow = (r, nameById = {}) => ({
@@ -160,7 +180,7 @@ export function buildFeed({ additions = [], deductions = [], expenses = [] }) {
   const items = [
     ...additions.map((a) => ({
       key: `tambah-${a.id}`, id: a.id, kind: 'tambah', title: a.employeeName, tag: a.category, note: a.label,
-      amount: a.amount, status: a.status, reason: a.rejectReason, by: a.requestedBy, createdAt: a.createdAt, source: a,
+      amount: a.amount, shownAmount: shownAdditionAmount(a), edited: Boolean(a.editedAt), status: a.status, reason: a.rejectReason, by: a.requestedBy, createdAt: a.createdAt, source: a,
     })),
     ...deductions.map((d) => ({
       key: `potongan-${d.id}`, id: d.id, kind: 'potongan', title: d.employeeName, tag: d.category, note: d.label,

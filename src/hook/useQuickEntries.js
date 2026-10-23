@@ -4,7 +4,7 @@ import { deviceRpcArg } from '../lib/deviceId';
 import { toLocalDateString } from '../utils/formatters';
 import {
   newAdditionRow, additionUpdateRow, deductionRpcArgs, summarizeTodayExpenses, buildFeed, startOfLocalDayISO,
-  mapAdditionRow, mapDeductionRow, mapExpenseRow,
+  mapAdditionRow, mapDeductionRow, mapExpenseRow, additionChanged,
 } from '../features/home/quickEntryMath';
 import { onApprovalsChanged } from './usePendingApprovals';
 import { updateDeduction as updateDeductionRpc, fetchExpensePayment } from './deductionEdit';
@@ -125,7 +125,13 @@ export function useQuickEntries({ canApprove, onChanged }) {
    */
   const updateAddition = async (id, form, hadDetail = false) => {
     const patch = additionUpdateRow(form, { hadDetail });
-    const { data, error: e } = await supabase.from('payroll_additions').update(patch).eq('id', id).select('id');
+    // Penanda "Diedit" (kolom edited_at, migrasi 019) hanya diisi kalau isinya benar-benar berubah.
+    const { data: before } = await supabase.from('payroll_additions').select('*').eq('id', id).maybeSingle();
+    const changed = before ? additionChanged(mapAdditionRow(before), patch) : false;
+    const run = (p) => supabase.from('payroll_additions').update(p).eq('id', id).select('id');
+    let { data, error: e } = await run(changed ? { ...patch, edited_at: new Date().toISOString() } : patch);
+    // Kolom edited_at belum ada (migrasi 019 belum dijalankan): simpan perubahannya saja, tanpa penanda.
+    if (e && changed && ['PGRST204', '42703'].includes(e.code)) ({ data, error: e } = await run(patch));
     if (e) fail(e, 'Gagal mengubah tambahan');
     if (!data || data.length === 0) { await reload(); throw new Error('Tambahan ini sudah tidak ada (mungkin dihapus). Tampilan sudah diperbarui.'); }
     await reload();

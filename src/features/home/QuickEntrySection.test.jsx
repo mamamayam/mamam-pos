@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderToString } from 'react-dom/server';
 
 // Hook dipalsukan; yang diuji: baris "Catatan Hari Ini" hanya bisa diketuk (diubah) oleh yang berizin `catatan.ubah`.
-const auth = { owner: true };
-vi.mock('../../auth/AuthContext', () => ({ useAuth: () => ({ can: (p) => (auth.owner ? true : p === 'karyawan.upah') }) }));
+const auth = { owner: true, wage: true };   // wage: staf boleh melihat nominal karyawan (izin karyawan.upah)
+vi.mock('../../auth/AuthContext', () => ({ useAuth: () => ({ can: (p) => (auth.owner ? true : p === 'karyawan.upah' && auth.wage) }) }));
 vi.mock('../../context/AppContext', () => ({ useAppContext: () => ({ formatRupiah: (n) => `Rp ${n}`, triggerAlert: () => {}, triggerConfirm: () => {}, openApprovals: () => {} }) }));
 let pendingCount = 0;
 vi.mock('../../hook/usePendingApprovals', () => ({ usePendingApprovals: () => pendingCount }));
@@ -21,7 +21,7 @@ import QuickEntrySection from './QuickEntrySection';
 
 const base = { status: 'tercatat', time: '10:27', amount: 1000, tag: '', note: '' };
 beforeEach(() => {
-  auth.owner = true;
+  auth.owner = true; auth.wage = true;
   pendingCount = 0;
   quick.feed = [
     { ...base, key: 'p1', kind: 'pengeluaran', title: 'Belanja', source: { id: 'x1' } },
@@ -60,5 +60,38 @@ describe('Beranda — banner persetujuan (keputusannya di sheet Persetujuan)', (
   it('staf tidak pernah melihat banner (hanya owner memutuskan)', () => {
     auth.owner = false; pendingCount = 3;
     expect(renderToString(<QuickEntrySection />)).not.toContain('menunggu-persetujuan');
+  });
+});
+
+describe('Catatan Hari Ini — pengajuan ditolak dan diedit', () => {
+  const add = (over) => ({ ...base, key: 'a', kind: 'tambah', title: 'Sari', tag: 'Bonus', amount: 50000, shownAmount: 50000, edited: false, source: { id: 'a' }, ...over });
+  it('ditolak: badge Ditolak, nominal +Rp 0 (bukan angka yang diajukan), alasan tetap tampil', () => {
+    quick.feed = [add({ status: 'ditolak', shownAmount: 0, reason: 'Belum tercapai' })];
+    const html = renderToString(<QuickEntrySection />).replace(/<!-- -->/g, '');
+    expect(html).toContain('Ditolak');
+    expect(html).toContain('data-testid="nominal-ditolak"');
+    expect(html).toContain('+Rp 0');
+    expect(html).not.toContain('Rp 50000');
+    expect(html).toContain('Alasan: Belum tercapai');
+  });
+  it('staf tanpa izin lihat upah: Tambah biasa tetap disensor, yang ditolak menampilkan +Rp 0 (bukan angka upah)', () => {
+    auth.owner = false; auth.wage = false;
+    quick.feed = [add({ key: 'x', status: 'menunggu' }), add({ key: 'y', status: 'ditolak', shownAmount: 0, source: { id: 'y' } })];
+    const html = renderToString(<QuickEntrySection />).replace(/<!-- -->/g, '');
+    expect((html.match(/Rp •••••/g) || []).length).toBe(2);   // kartu Pengeluaran Karyawan + baris Tambah yang menunggu; baris ditolak tidak
+    expect(html).toContain('+Rp 0');
+  });
+  it('disetujui + diedit: badge Disetujui dan badge Diedit; tanpa edit tidak ada badge Diedit', () => {
+    quick.feed = [add({ key: 'e', status: 'disetujui', edited: true }), add({ key: 'f', status: 'disetujui', edited: false, source: { id: 'f' } })];
+    const html = renderToString(<QuickEntrySection />).replace(/<!-- -->/g, '');
+    expect((html.match(/data-testid="badge-diedit"/g) || []).length).toBe(1);
+    expect(html).toContain('Diedit');
+    expect(html).toContain('Disetujui');
+  });
+  it('menunggu + diedit: badge Menunggu dan Diedit; Potongan/Pengeluaran tidak punya badge Diedit', () => {
+    quick.feed = [add({ status: 'menunggu', edited: true }), { ...base, key: 'p', kind: 'pengeluaran', title: 'Belanja', edited: true, source: { id: 'p' } }];
+    const html = renderToString(<QuickEntrySection />).replace(/<!-- -->/g, '');
+    expect(html).toContain('Menunggu');
+    expect((html.match(/data-testid="badge-diedit"/g) || []).length).toBe(1);
   });
 });

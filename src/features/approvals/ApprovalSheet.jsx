@@ -165,7 +165,7 @@ export default function ApprovalSheet({ isOpen, onClose }) {
                         ))}
                       </ul>
                     )}
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Dicatat {r.requestedBy || 'staf'} · untuk {r.date}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Dicatat {r.requestedBy || 'staf'} · untuk {r.date}{r.editedAt && <span className="font-bold text-sky-600 dark:text-sky-400" data-testid="pengajuan-diedit"> · Diedit owner</span>}</p>
                   </div>
                   <p className="font-bold text-sm text-emerald-600 dark:text-emerald-400 shrink-0">+{formatRupiah(r.amount)}</p>
                 </div>

@@ -14,6 +14,9 @@ vi.mock('../../hook/usePendingAdditions', () => ({
   usePendingAdditions: () => ({ list: state.add, reload: async () => {} }),
   decideAddition: vi.fn(),
 }));
+vi.mock('../../hook/usePendingApprovals', () => ({ notifyApprovalsChanged: vi.fn() }));
+vi.mock('../../hook/additionEdit', () => ({ saveAdditionEdit: vi.fn() }));
+vi.mock('../home/QuickAdjustmentSheet', () => ({ default: () => null }));
 vi.mock('../../components/ui', async () => {
   const real = await vi.importActual('../../components/ui');
   return { ...real, Modal: ({ isOpen, children, title }) => (isOpen ? <div data-title={title}>{children}</div> : null) };
@@ -51,6 +54,14 @@ describe('ApprovalSheet', () => {
     expect(html).toContain('Sari');
     expect(html).toContain('Setelah disetujui, masuk hitungan gaji Sari');
     expect(html).toContain('Tambahan (1)');
+  });
+  it('Tambahan: tiap pengajuan punya tombol Ubah di samping Tolak dan Setujui', () => {
+    state.add = [addReq, { ...addReq, id: 'a2', employeeName: 'Budi' }];
+    const html = render();
+    expect((html.match(/data-testid="ubah-pengajuan"/g) || []).length).toBe(2);
+    expect(html).toContain('Tolak');
+    expect(html).toContain('Setujui');
+    expect(html).toContain('Ubah');
   });
   it('Tambahan yang sudah diedit owner diberi tanda "Diedit owner"', () => {
     state.add = [{ ...addReq, editedAt: '2026-10-16T05:00:00Z' }];

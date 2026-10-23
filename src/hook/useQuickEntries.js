@@ -8,6 +8,7 @@ import {
 } from '../features/home/quickEntryMath';
 import { onApprovalsChanged } from './usePendingApprovals';
 import { updateDeduction as updateDeductionRpc, fetchExpensePayment } from './deductionEdit';
+import { saveAdditionEdit } from './additionEdit';
 
 /**
  * useQuickEntries — data "Catat Cepat" di Beranda, ONLINE-FIRST.
@@ -124,16 +125,8 @@ export function useQuickEntries({ canApprove, onChanged }) {
    * ditutup ditolak oleh database (trigger migrasi 006).
    */
   const updateAddition = async (id, form, hadDetail = false) => {
-    const patch = additionUpdateRow(form, { hadDetail });
-    // Penanda "Diedit" (kolom edited_at, migrasi 019) hanya diisi kalau isinya benar-benar berubah.
-    const { data: before } = await supabase.from('payroll_additions').select('*').eq('id', id).maybeSingle();
-    const changed = before ? additionChanged(mapAdditionRow(before), patch) : false;
-    const run = (p) => supabase.from('payroll_additions').update(p).eq('id', id).select('id');
-    let { data, error: e } = await run(changed ? { ...patch, edited_at: new Date().toISOString() } : patch);
-    // Kolom edited_at belum ada (migrasi 019 belum dijalankan): simpan perubahannya saja, tanpa penanda.
-    if (e && changed && ['PGRST204', '42703'].includes(e.code)) ({ data, error: e } = await run(patch));
-    if (e) fail(e, 'Gagal mengubah tambahan');
-    if (!data || data.length === 0) { await reload(); throw new Error('Tambahan ini sudah tidak ada (mungkin dihapus). Tampilan sudah diperbarui.'); }
+    const ada = await saveAdditionEdit(id, form, hadDetail);   // penanda "Diedit" (edited_at, migrasi 019) diurus di additionEdit
+    if (!ada) { await reload(); throw new Error('Tambahan ini sudah tidak ada (mungkin dihapus). Tampilan sudah diperbarui.'); }
     await reload();
     onChangedRef.current?.();
   };

@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Check, X, Trash2, Plus, ClipboardCheck, Receipt } from 'lucide-react';
+import { Check, X, Trash2, Plus, ClipboardCheck, Receipt, Pencil } from 'lucide-react';
 import { Modal, Button, Input, EmptyState, PillTabs } from '../../components/ui';
 import { useAppContext } from '../../context/AppContext';
 import { usePendingDeleteRequests, putuskanHapusTransaksi, usePendingExpenseDeleteRequests, putuskanHapusPengeluaran } from '../../hook/useDeleteRequests';
 import { usePendingAdditions, decideAddition } from '../../hook/usePendingAdditions';
+import { saveAdditionEdit } from '../../hook/additionEdit';
+import { notifyApprovalsChanged } from '../../hook/usePendingApprovals';
+import QuickAdjustmentSheet from '../home/QuickAdjustmentSheet';
 import { detailSubRows } from '../payroll/additionDetail';
 
 /**
@@ -13,6 +16,8 @@ import { detailSubRows } from '../payroll/additionDetail';
  *  - Pengeluaran     : sama, untuk catatan di layar Pengeluaran (RPC putuskan_hapus_pengeluaran, migrasi 018).
  *                      Pengeluaran karyawan (potongan) yang dihapus ikut menghapus potongan gajinya.
  *  - Tambahan        : pengajuan Tambahan gaji karyawan dari staf (dulu kartu di Beranda). Setuju = masuk hitungan gaji.
+ *                      Owner bisa MENGUBAH isi pengajuan dulu (tombol Ubah = form Tambahan yang sama dalam mode ubah,
+ *                      QuickAdjustmentSheet `editing`); status tetap menunggu, kartu diberi tanda "Diedit owner".
  * Dibuka dari tile Persetujuan di menu slide-up dan dari banner di Beranda. Badge jumlahnya di BottomNav
  * (usePendingApprovals). Keputusan memuat ulang daftar dan memberi sinyal ke layar lain (notifyApprovalsChanged).
  */
@@ -29,8 +34,9 @@ export default function ApprovalSheet({ isOpen, onClose }) {
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const [editAdd, setEditAdd] = useState(null);   // { item, onSave } pengajuan Tambahan yang sedang diubah owner
 
-  useEffect(() => { if (!isOpen) { setPickedTab(null); setRejectingId(null); setRejectReason(''); } }, [isOpen]);
+  useEffect(() => { if (!isOpen) { setPickedTab(null); setRejectingId(null); setRejectReason(''); setEditAdd(null); } }, [isOpen]);
 
   // Tab awal: yang ada isinya (urutan: transaksi, pengeluaran, tambahan; kalau semua kosong, transaksi).
   const tab = pickedTab ?? (del.list.length ? 'hapus' : exp.list.length ? 'pengeluaran' : add.list.length ? 'tambahan' : 'hapus');
@@ -57,6 +63,17 @@ export default function ApprovalSheet({ isOpen, onClose }) {
   const rejectExpense = (r) => run(() => putuskanHapusPengeluaran(r.id, false, rejectReason));
   const approveAddition = (r) => run(() => decideAddition(r.id, true));
   const rejectAddition = (r) => run(() => decideAddition(r.id, false, rejectReason));
+  const startEditAddition = (r) => { cancelReject(); setEditAdd({
+    item: { id: r.id, type: 'tambahan', employeeId: r.employeeId, employeeName: r.employeeName, category: r.category, label: r.label, amount: r.amount, date: r.date, detail: r.detail },
+    onSave: async (id, form) => {
+      const ada = await saveAdditionEdit(id, form, !!r.detail);
+      await add.reload();
+      notifyApprovalsChanged();
+      if (!ada) throw new Error('Pengajuan ini sudah tidak ada (mungkin dihapus). Tampilan sudah diperbarui.');
+    },
+  }); };
+  // Sheet ubah hanya memakai `lastRequester` dari `quick` pada mode catat baru; mode ubah tidak butuh daftar karyawan.
+  const editQuick = { employees: [], lastRequester: { current: '' } };
 
   const rejectBox = (onSend) => (   // dipanggil sebagai fungsi (bukan komponen) supaya kolom alasan tidak kehilangan fokus tiap ketik
     <div className="mt-2.5 space-y-2">
@@ -75,6 +92,7 @@ export default function ApprovalSheet({ isOpen, onClose }) {
   ];
 
   return (
+    <>
     <Modal isOpen={isOpen} onClose={onClose} sheet size="lg" maxHeight title="Persetujuan">
       <div className="p-5 pt-2 space-y-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]" data-testid="sheet-persetujuan">
         <PillTabs size="sm" value={tab} onChange={(v) => { setPickedTab(v); cancelReject(); }} options={tabs} />
@@ -171,8 +189,9 @@ export default function ApprovalSheet({ isOpen, onClose }) {
                 </div>
                 <p className="text-xs text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-950 rounded-lg px-2.5 py-1.5 mt-2">Setelah disetujui, masuk hitungan gaji {r.employeeName}.</p>
                 {rejectingId === r.id ? rejectBox(() => rejectAddition(r)) : (
-                  <div className="grid grid-cols-2 gap-2 mt-2.5">
+                  <div className="grid grid-cols-3 gap-2 mt-2.5">
                     <Button variant="secondary" size="sm" disabled={busy} onClick={() => startReject(r.id)} icon={<X className="w-4 h-4" />}>Tolak</Button>
+                    <Button variant="secondary" size="sm" disabled={busy} onClick={() => startEditAddition(r)} icon={<Pencil className="w-4 h-4" />} data-testid="ubah-pengajuan">Ubah</Button>
                     <Button size="sm" disabled={busy} onClick={() => approveAddition(r)} icon={<Check className="w-4 h-4" />}>Setujui</Button>
                   </div>
                 )}
@@ -182,5 +201,9 @@ export default function ApprovalSheet({ isOpen, onClose }) {
         )}
       </div>
     </Modal>
+    {editAdd && (
+      <QuickAdjustmentSheet isOpen kind="tambahan" editing={editAdd} onClose={() => setEditAdd(null)} quick={editQuick} canApprove />
+    )}
+    </>
   );
 }

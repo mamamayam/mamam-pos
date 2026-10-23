@@ -7,6 +7,8 @@
  * pelanggan, absensi, catat pengeluaran). Owner-only hanya hal yang
  * menyangkut laba, gaji, upah, HPP, dan aksi yang menghapus/mengubah uang.
  *
+ * Manajemen Menu: terbuka untuk semua (tambah/ubah menu, harga, varian, kategori). HPP dan hapus tetap owner-only.
+ *
  * Riwayat: terbuka untuk semua. Staf hanya bisa MENGAJUKAN hapus transaksi (owner yang memutuskan).
  *
  * Penggajian: layarnya terbuka untuk staf, tapi isinya berbeda. Staf melihat
@@ -19,7 +21,8 @@ export const PERMISSIONS = {
   'screen.karyawan': ['owner'],          // layar Karyawan (data diri, upah) — disembunyikan dari staf
   'screen.pengaturan': ['owner'],        // layar Pengaturan (login, PIN, PIN karyawan)
   'penggajian.semua': ['owner'],         // Penggajian penuh (semua karyawan, edit). Staf hanya lihat gaji sendiri lewat PIN karyawan
-  'screen.menu': ['owner'],              // layar Manajemen Menu (ubah harga & HPP)
+  'menu.hpp': ['owner'],                 // melihat & mengisi HPP/Modal di Manajemen Menu (layarnya sendiri terbuka untuk staf)
+  'menu.hapus': ['owner'],               // hapus menu / grup varian / kategori / opsi varian di Manajemen Menu. Staf boleh tambah & ubah, tapi tidak menghapus (belum ada alur persetujuan untuk menu)
   'screen.laporan': ['owner'],           // layar Laporan (Laba Rugi)
   'screen.hpp': ['owner'],               // tombol HPP di menu Lainnya (membuka /hpp). Pagar tampilan saja; data HPP dijaga RLS
   'laporan.labaKotor': ['owner'],        // kartu Laba Kotor di Laporan (Laba Rugi)
@@ -38,7 +41,6 @@ export const PERMISSIONS = {
 export const VIEW_PERMISSION = {
   karyawan: 'screen.karyawan',
   pengaturan: 'screen.pengaturan',
-  menu: 'screen.menu',
   persetujuan: 'persetujuan.kelola',     // bukan layar: tile di menu slide-up yang membuka sheet Persetujuan (disembunyikan dari staf)
   laporan: 'screen.laporan',
   hpp: 'screen.hpp',

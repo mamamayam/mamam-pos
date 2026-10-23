@@ -40,7 +40,7 @@ import EmptyState from './ui/EmptyState';
 function SortableCategoryItem({
     cat, idx,
     editIndex, editValue, setEditValue,
-    startEdit, saveEdit, handleDelete, setEditIndex,
+    startEdit, saveEdit, handleDelete, setEditIndex, canDelete,
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
         useSortable({ id: cat });
@@ -98,9 +98,11 @@ function SortableCategoryItem({
                         <IconButton variant="edit" onClick={() => startEdit(cat, idx)}>
                             <Edit3 className="w-4 h-4" />
                         </IconButton>
-                        <IconButton variant="delete" onClick={() => handleDelete(cat, idx)}>
-                            <Trash2 className="w-4 h-4" />
-                        </IconButton>
+                        {canDelete && (
+                            <IconButton variant="delete" onClick={() => handleDelete(cat, idx)}>
+                                <Trash2 className="w-4 h-4" />
+                            </IconButton>
+                        )}
                     </div>
                 </>
             )}
@@ -117,6 +119,7 @@ const CategoryModal = ({
     deleteMessage, // opsional (C): (cat) => string, ganti teks konfirmasi hapus bawaan
     onRenameAsync, // opsional (C): rename = UPDATE nama di baris yang sama (bukan hapus+tambah)
     triggerAlert, triggerConfirm,
+    canDelete = true, // false = tombol hapus kategori disembunyikan (mis. staf di Manajemen Menu)
 }) => {
     const [newCat, setNewCat]       = useState('');
     const [editIndex, setEditIndex] = useState(-1);
@@ -243,6 +246,7 @@ const CategoryModal = ({
                                         saveEdit={saveEdit}
                                         handleDelete={handleDelete}
                                         setEditIndex={setEditIndex}
+                                        canDelete={canDelete}
                                     />
                                 ))}
                             </ul>

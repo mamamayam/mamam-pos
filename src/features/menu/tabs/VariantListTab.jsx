@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useAppContext } from "../../../context/AppContext";
+import { useAuth } from "../../../auth/AuthContext";
 import { Plus, Edit3, Trash2, Settings2, Trash, GripVertical, ChevronDown, ChevronUp } from "lucide-react";
 import CategoryModal from "../../../components/CategoryModal";
 import { Button, IconButton, Input, NominalInput, Select, EmptyState, Badge, Modal } from "../../../components/ui";
@@ -8,7 +9,7 @@ import useDirty from "../../../hook/useDirty";
 import { showToast } from "../../../lib/toast";
 
 // ─── Komponen Kelompok Kategori Varian ───
-const VariantCategorySection = ({ category, groups, onReorder, onEdit, onDelete, categoryDrag }) => {
+const VariantCategorySection = ({ category, groups, onReorder, onEdit, onDelete, categoryDrag, canDelete }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const itemDrag = useDragReorder(onReorder);
 
@@ -92,7 +93,7 @@ const VariantCategorySection = ({ category, groups, onReorder, onEdit, onDelete,
                 {/* --- Info Kanan: Tombol Aksi --- */}
                 <div className="flex items-center justify-end gap-1 shrink-0 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity duration-300 border-t border-slate-50 dark:border-slate-800/50 sm:border-0 pt-2 sm:pt-0">
                   <IconButton variant="edit" onClick={() => onEdit(vg)} title="Edit Grup Varian"><Edit3 className="w-4 h-4" /></IconButton>
-                  <IconButton variant="delete" onClick={() => onDelete(vg.id)} title="Hapus Grup Varian"><Trash2 className="w-4 h-4" /></IconButton>
+                  {canDelete && <IconButton variant="delete" onClick={() => onDelete(vg.id)} title="Hapus Grup Varian"><Trash2 className="w-4 h-4" /></IconButton>}
                 </div>
               </div>
             );
@@ -105,6 +106,9 @@ const VariantCategorySection = ({ category, groups, onReorder, onEdit, onDelete,
 
 const VariantListTab = ({ data }) => {
   const { formatRupiah, triggerAlert, triggerConfirm } = useAppContext();
+  const { can } = useAuth();
+  // Staf boleh tambah/ubah grup varian, tapi tidak menghapus (grup, opsi, kategori).
+  const canDelete = can('menu.hapus');
   const {
     variantGroups, variantCategories,
     saveVariantGroup, deleteVariantGroup, reorderVariantGroups,
@@ -263,6 +267,7 @@ const VariantListTab = ({ data }) => {
             onEdit={(vg) => { setFormData({ ...vg, options: vg.options ?? [] }); setIsEditing(true); }}
             onDelete={handleDelete}
             categoryDrag={categoryDrag}
+            canDelete={canDelete}
           />
         ))}
         {(variantGroups ?? []).length === 0 && (
@@ -339,7 +344,7 @@ const VariantListTab = ({ data }) => {
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <IconButton variant="edit" size="sm" onClick={() => handleEditOption(opt)}><Edit3 className="w-4 h-4" /></IconButton>
-                        <IconButton variant="delete" size="sm" onClick={() => handleRemoveOption(opt.id)}><Trash className="w-4 h-4" /></IconButton>
+                        {canDelete && <IconButton variant="delete" size="sm" onClick={() => handleRemoveOption(opt.id)}><Trash className="w-4 h-4" /></IconButton>}
                       </div>
                     </div>
                   );
@@ -359,6 +364,7 @@ const VariantListTab = ({ data }) => {
         setCategories={(next) => run(() => setVariantCategoriesPersist(next))}
         triggerAlert={triggerAlert}
         triggerConfirm={triggerConfirm}
+        canDelete={canDelete}
         onDeleteFallback="Lainnya"
         onRenameAsync={(oldCat, newCat) => {
           run(() => renameVariantCategory(oldCat, newCat));

@@ -76,6 +76,8 @@ Rincian: `docs/versioning.md`. Versi tampil di menu Lainnya dan layar login (`sr
 
 **Pengeluaran**: kolom Kategori adalah dropdown; kategori baru ditambah lewat ikon gerigi (Kelola Kategori). Staf mencatat bebas tapi tidak menghapus langsung: hanya **mengajukan hapus** (lihat Persetujuan).
 
+**Manajemen Menu** (`src/features/menu/`) terbuka untuk staf (permintaan pemilik 23 Okt 2026): staf boleh menambah dan mengubah menu (nama, kategori, harga jual, varian terkait), grup varian, dan kategori. **HPP/Modal disembunyikan dari staf** (izin `menu.hpp`: label di daftar dan kolom di form; HPP menu yang diubah staf tetap utuh, menu baru dari staf HPP = 0) dan **hapus tetap owner** (izin `menu.hapus`: hapus menu, grup varian, opsi varian, kategori). Belum ada alur persetujuan untuk menu, jadi staf tidak menghapus apa pun di sana; kalau nanti perlu, tambah alur seperti hapus transaksi, jangan membuka hapus langsung.
+
 **Staf** tidak boleh melihat/membuka **Laporan** (owner-only). **Riwayat** terbuka untuk staf, tapi staf TIDAK bisa menghapus langsung: hanya **mengajukan hapus** per transaksi (lihat Persetujuan di bawah).
 
 **Gaji** mengikuti aturan hitung mamam-kasir (B): `docs/payroll-rules.md`. Jangan diubah diam-diam.

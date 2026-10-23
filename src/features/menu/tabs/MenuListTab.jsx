@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useAppContext } from "../../../context/AppContext";
+import { useAuth } from "../../../auth/AuthContext";
 import { Plus, Edit3, Trash2, Settings2, Search, X, GripVertical, ChevronDown, ChevronUp } from "lucide-react";
 import CategoryModal from "../../../components/CategoryModal";
 import { Button, IconButton, Input, NominalInput, Select, EmptyState, Badge, Modal } from "../../../components/ui";
@@ -17,7 +18,9 @@ const MenuCategorySection = ({
   onDelete,
   formatRupiah,
   categoryDrag,
-  isDragEnabled
+  isDragEnabled,
+  showHpp,
+  canDelete
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const itemDrag = useDragReorder(onReorderItem);
@@ -93,10 +96,10 @@ const MenuCategorySection = ({
                       {menu.name}
                     </h3>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-                      <span className="font-medium">HPP: {formatRupiah(menu.hpp || 0)}</span>
+                      {showHpp && <span className="font-medium">HPP: {formatRupiah(menu.hpp || 0)}</span>}
                       {menu.variantGroupIds?.length > 0 && (
                         <>
-                          <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0"></span>
+                          {showHpp && <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0"></span>}
                           <span className="truncate">
                             Varian: {menu.variantGroupIds.map(vid => variantGroups.find(v => v.id === vid)?.name).filter(Boolean).join(', ')}
                           </span>
@@ -115,9 +118,11 @@ const MenuCategorySection = ({
                     <IconButton variant="edit" onClick={() => onEdit(menu)} title="Edit Menu">
                       <Edit3 className="w-4 h-4" />
                     </IconButton>
-                    <IconButton variant="delete" onClick={() => onDelete(menu.id)} title="Hapus Menu">
-                      <Trash2 className="w-4 h-4" />
-                    </IconButton>
+                    {canDelete && (
+                      <IconButton variant="delete" onClick={() => onDelete(menu.id)} title="Hapus Menu">
+                        <Trash2 className="w-4 h-4" />
+                      </IconButton>
+                    )}
                   </div>
                 </div>
               </div>
@@ -131,6 +136,10 @@ const MenuCategorySection = ({
 
 const MenuListTab = ({ data }) => {
   const { formatRupiah, triggerAlert, triggerConfirm } = useAppContext();
+  const { can } = useAuth();
+  // Staf boleh tambah/ubah menu, tapi HPP disembunyikan dan hapus hanya owner.
+  const showHpp = can('menu.hpp');
+  const canDelete = can('menu.hapus');
   const {
     menus, variantGroups, categories,
     saveMenu, deleteMenu, reorderMenus,
@@ -268,6 +277,8 @@ const MenuListTab = ({ data }) => {
                 formatRupiah={formatRupiah}
                 categoryDrag={categoryDrag}
                 isDragEnabled={!searchQuery} // Nonaktifkan drag & drop saat mencari
+                showHpp={showHpp}
+                canDelete={canDelete}
               />
             );
           })}
@@ -292,9 +303,9 @@ const MenuListTab = ({ data }) => {
                 )}
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className={showHpp ? 'grid grid-cols-2 gap-4' : ''}>
               <NominalInput id="menuPrice" label="Harga Jual" value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="0" />
-              <NominalInput id="menuHpp" label="HPP / Modal" value={formData.hpp} onChange={e => setFormData({ ...formData, hpp: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="0" />
+              {showHpp && <NominalInput id="menuHpp" label="HPP / Modal" value={formData.hpp} onChange={e => setFormData({ ...formData, hpp: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="0" />}
             </div>
           </div>
           <div className="space-y-3">
@@ -329,6 +340,7 @@ const MenuListTab = ({ data }) => {
         setCategories={(next) => run(() => setCategoriesPersist(next))}
         triggerAlert={triggerAlert}
         triggerConfirm={triggerConfirm}
+        canDelete={canDelete}
         onRenameAsync={(oldCat, newCat) => {
           run(() => renameMenuCategory(oldCat, newCat));
           if (formData.category === oldCat) setFormData(prev => ({ ...prev, category: newCat }));

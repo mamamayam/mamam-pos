@@ -109,3 +109,16 @@ export function computeDifference(actualCash, expectedCash) {
 export function shiftCodeFromId(uuid) {
   return `DOMPET-${String(uuid || '').replace(/-/g, '').slice(0, 8).toUpperCase()}`;
 }
+
+/**
+ * Penutupan dompet pada satu hari (hari TUTUP, 'YYYY-MM-DD' lokal), urut dari yang paling awal.
+ * `dayOf` mengubah timestamp jadi 'YYYY-MM-DD' lokal (dioper supaya fungsi ini tetap murni dan bisa dites).
+ */
+export function closedOnDay(history, day, dayOf) {
+  return (history || [])
+    .filter(s => s?.closed_at && dayOf(s.closed_at) === day)
+    .sort((a, b) => String(a.closed_at).localeCompare(String(b.closed_at)));
+}
+
+/** Nada selisih tutup: 'minus' | 'lebih' | 'pas'. */
+export const diffTone = (d) => (Number(d) < 0 ? 'minus' : Number(d) > 0 ? 'lebih' : 'pas');

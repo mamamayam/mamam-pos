@@ -1,16 +1,25 @@
-import { useState, useMemo } from 'react';
-import { Clock, FileText, AlertTriangle, Users } from 'lucide-react';
-import { Button, Card, Input, NominalInput, Select, PillTabs, EmptyState, Badge, Modal } from '../../components/ui';
+import { useState, useMemo, useEffect } from 'react';
+import { Wallet, AlertTriangle, RefreshCw, Bike, ChevronDown } from 'lucide-react';
+import { Button, Card, NominalInput, Select, EmptyState, Badge, Modal } from '../../components/ui';
+import PeriodNav from '../../components/PeriodNav';
 import useDirty from '../../hook/useDirty';
 import { showToast } from '../../lib/toast';
 import { useAppContext } from '../../context/AppContext';
 import { useShiftData } from '../../hook/useShiftData';
 import { toLocalDateString } from '../../utils/formatters';
+import { dayLabel, dayOptions, shiftDate } from '../reports/reportsMath';
+import { closedOnDay, diffTone } from './shiftMath';
 
 /**
- * ShiftView — Dompet (buka/tutup kas). Tampilan mengikuti mamam-global
- * (kartu Buka Dompet, kartu Dompet Terbuka + Saldo Aktual, laporan tutup,
- * tab Riwayat), dengan perbedaan yang DISENGAJA:
+ * ShiftView — Dompet (buka/tutup kas). SATU halaman, bergaya Absensi (navigasi hari), tanpa tab Riwayat:
+ *   - Kartu status Dompet di atas, dengan SAKLAR buka/tutup (ketuk = sheet Buka/Tutup Dompet yang sama seperti
+ *     sebelumnya; saklar baru bergeser setelah berhasil).
+ *   - Navigasi hari `‹ [Sab, 24 Okt 2026 ▾] ›` + "Ke hari ini" + "Diperbarui / Perbarui" (PeriodNav, pola Absensi).
+ *   - Isi hari yang dipilih: hari ini + dompet terbuka = kartu UANG DI DOMPET (kasir, angka utama; rincian dilipat),
+ *     kartu UANG DI KURIR (warna sekunder), dan TOTAL CASH (dompet + kurir). Penutupan pada hari itu tampil langsung
+ *     dengan gaya yang sama (isi laporan tutup); tanpa penutupan = keterangan kosong.
+ * Aturan uang TIDAK berubah (shiftMath): Uang di Dompet = expectedCash, kurir terpisah, Total Cash = totalCashBisnis.
+ * Perbedaan yang DISENGAJA dari mamam-global:
  *   - tidak ada "Catat Perpindahan Uang" / ledger; uang yang masih di kurir
  *     saat tutup hanya jadi SNAPSHOT di laporan
  *   - tidak ada tab Log Transaksi
@@ -18,7 +27,6 @@ import { toLocalDateString } from '../../utils/formatters';
  *   - laporan tutup hanya tampil di layar (tanpa Cetak/Bagikan)
  */
 
-const money = (fn, n) => fn(n ?? 0);
 const diffLabel = (d) => (d < 0 ? 'SELISIH MINUS' : d > 0 ? 'SELISIH LEBIH' : 'BALANCE (PAS)');
 const diffColor = (d) =>
   d < 0 ? 'text-accent-500 dark:text-accent-400' : d > 0 ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-100';
@@ -86,24 +94,144 @@ function ClosedReport({ shift, formatRupiah, onClose }) {
   );
 }
 
+// ── Potongan tampilan (hanya presentasi; angka dari shiftMath/useShiftData) ───
+
+// Saklar Dompet: ketuk membuka sheet Buka/Tutup (isian di sana butuh nominal), jadi saklar tidak berubah sendiri.
+function WalletSwitch({ on, onToggle, disabled }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} aria-label={on ? 'Tutup dompet' : 'Buka dompet'} onClick={onToggle} disabled={disabled}
+      data-testid="dompet-saklar"
+      className={`relative h-8 w-14 shrink-0 rounded-full transition-all duration-300 active:scale-95 disabled:opacity-60 ${on ? 'bg-gradient-to-r from-accent-600 to-accent-500 dark:from-accent-500 dark:to-accent-600 shadow-[0_4px_14px_rgba(var(--color-accent-500),0.3)]' : 'bg-slate-200 dark:bg-slate-700'}`}>
+      <span className={`absolute top-1 left-1 h-6 w-6 rounded-full bg-white shadow-md transition-transform duration-300 ${on ? 'translate-x-6' : ''}`} />
+    </button>
+  );
+}
+
+// Satu baris rincian (tanda + / −) di dalam kartu utama.
+const Ledger = ({ l, v, sign, formatRupiah }) => (
+  <div className="flex justify-between items-center text-xs gap-3">
+    <span className="flex items-center gap-2 min-w-0"><span className="w-3 text-center opacity-70">{sign}</span><span className="truncate">{l}</span></span>
+    <span className="font-bold tabular-nums">{formatRupiah(v)}</span>
+  </div>
+);
+
+// Kartu utama: HANYA uang di dompet (kasir). Rincian asal angkanya dilipat.
+function Hero({ label, hint, amount, badge, rows, formatRupiah, testId }) {
+  const [openRows, setOpenRows] = useState(false);
+  return (
+    <div data-testid={testId} className="rounded-3xl p-5 text-white bg-gradient-to-br from-accent-600 to-accent-500 dark:from-accent-500 dark:to-accent-600 shadow-[0_8px_24px_rgba(var(--color-accent-500),0.25)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-bold tracking-wider uppercase opacity-80">{label}</p>
+          <p className="font-heading font-bold text-4xl mt-1 tracking-tight">{formatRupiah(amount)}</p>
+          <p className="text-xs opacity-80 mt-1">{hint}</p>
+        </div>
+        {badge}
+      </div>
+      <button type="button" onClick={() => setOpenRows(v => !v)} aria-expanded={openRows}
+        className="mt-4 w-full flex items-center justify-between rounded-xl bg-white/15 px-3 py-2 text-xs font-bold active:scale-[0.98] transition-all">
+        <span>Rincian</span><ChevronDown className={`w-4 h-4 transition-transform duration-300 ${openRows ? 'rotate-180' : ''}`} />
+      </button>
+      {openRows && (
+        <div className="mt-2 rounded-xl bg-white/10 px-3 py-2.5 space-y-1.5 animate-in fade-in duration-300">
+          {rows.map(r => <Ledger key={r.l} {...r} formatRupiah={formatRupiah} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Uang yang dipegang kurir: warna sekunder (biru muda), jelas bukan bagian uang dompet. Saldo bisa negatif (kurir nombokin).
+function CourierCard({ couriers, note, extra, formatRupiah }) {
+  const total = couriers.reduce((a, c) => a + (Number(c.balance) || 0), 0);
+  const nameOf = (c) => c.employeeName || c.name || 'Kurir';
+  return (
+    <div data-testid="kartu-kurir" className="rounded-2xl p-4 bg-sky-50 dark:bg-sky-500/10 border border-sky-100 dark:border-sky-500/20">
+      <div className="flex items-center justify-between gap-3">
+        <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-sky-700 dark:text-sky-300"><Bike className="w-4 h-4" />Uang di Kurir</p>
+        <p className="font-heading font-bold text-lg text-sky-700 dark:text-sky-300">{formatRupiah(total)}</p>
+      </div>
+      <div className="mt-2 space-y-1">
+        {couriers.length > 1
+          ? couriers.map(c => (
+            <div key={c.employeeId || nameOf(c)} className="flex justify-between text-xs text-sky-700/80 dark:text-sky-300/80">
+              <span>{nameOf(c)}{c.balance < 0 && <span className="font-bold text-red-500 dark:text-red-400"> (bisnis berutang)</span>}</span>
+              <span className="font-bold">{formatRupiah(c.balance)}</span>
+            </div>
+          ))
+          : <p className="text-xs text-sky-700/80 dark:text-sky-300/80">{nameOf(couriers[0])}{couriers[0].balance < 0 && <span className="font-bold text-red-500 dark:text-red-400"> (bisnis berutang)</span>}</p>}
+        {extra && <p className="text-xs text-sky-700/80 dark:text-sky-300/80">{extra}</p>}
+        {note && <p className="text-xs italic text-sky-700/60 dark:text-sky-300/60">{note}</p>}
+      </div>
+    </div>
+  );
+}
+
+function TotalCash({ wallet, courier, total, formatRupiah }) {
+  return (
+    <div data-testid="total-cash" className="rounded-2xl px-4 py-3.5 bg-slate-800 dark:bg-slate-900 border border-transparent dark:border-slate-700 text-white flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-xs font-bold tracking-wider uppercase text-slate-300">Total Cash</p>
+        <p className="text-xs text-slate-400 truncate">{formatRupiah(wallet)} + {formatRupiah(courier)}</p>
+      </div>
+      <p className="font-heading font-bold text-xl shrink-0">{formatRupiah(total)}</p>
+    </div>
+  );
+}
+
+// Penutupan dompet pada hari yang dilihat: isi laporan tutup, tampil langsung.
+function ClosedSection({ shift, formatRupiah }) {
+  const st = shift.stats_json || {};
+  const couriers = Array.isArray(shift.courier_snapshot_json) ? shift.courier_snapshot_json : [];
+  const tone = diffTone(shift.difference);
+  const d = Number(shift.difference) || 0;
+  const badgeText = tone === 'pas' ? 'Pas' : tone === 'minus' ? `Minus ${formatRupiah(d)}` : `Lebih +${formatRupiah(d)}`;
+  const time = (iso) => new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  return (
+    <div className="space-y-3" data-testid="penutupan">
+      <div className="flex items-center gap-2 px-1 min-w-0">
+        <p className="font-heading font-bold text-sm text-slate-800 dark:text-slate-100 truncate">{shift.code}</p>
+        <p className="text-xs text-slate-400 dark:text-slate-500 truncate">{time(shift.opened_at)} – {time(shift.closed_at)}{shift.opened_by_employee_name ? ` • ${shift.opened_by_employee_name}` : ''}</p>
+      </div>
+      <Hero
+        label="Uang di Dompet saat Tutup" hint={`Seharusnya ${formatRupiah(shift.expected_cash)}`} amount={shift.closing_balance} formatRupiah={formatRupiah}
+        badge={<span data-testid="selisih" className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold bg-white ${tone === 'minus' ? 'text-red-600' : tone === 'lebih' ? 'text-emerald-600' : 'text-accent-600'}`}>{badgeText}</span>}
+        rows={[
+          { l: 'Saldo Awal (Modal)', v: st.initialCash ?? 0, sign: '' },
+          { l: 'Penjualan Tunai', v: st.cashSales ?? 0, sign: '+' },
+          { l: 'Pemasukan Lain', v: st.cashIncomes ?? 0, sign: '+' },
+          { l: 'Pengeluaran Kasir', v: st.cashExpensesKasir ?? 0, sign: '−' },
+        ]}
+      />
+      {couriers.length > 0 && (
+        <CourierCard couriers={couriers} formatRupiah={formatRupiah}
+          extra={st.cashExpensesKurir > 0 ? `Sudah termasuk pengeluaran kurir -${formatRupiah(st.cashExpensesKurir)}` : null}
+          note="Hanya catatan saat tutup. Dompet berikutnya mulai dari nol." />
+      )}
+    </div>
+  );
+}
+
 const ShiftView = () => {
   const { formatRupiah, triggerAlert, triggerConfirm } = useAppContext();
   const { currentShift, stats, history, employees, loading, error, reload, openShift, closeShift } = useShiftData();
 
-  const [activeTab, setActiveTab] = useState('aktif');
+  const today = toLocalDateString();
+  const [day, setDay] = useState(today);               // hari yang sedang dilihat ('YYYY-MM-DD' lokal)
+  const [updatedAt, setUpdatedAt] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [isOpenSheet, setIsOpenSheet] = useState(false);    // sheet Buka Dompet
   const [isCloseSheet, setIsCloseSheet] = useState(false);  // sheet Tutup Dompet
   const [initialCashInput, setInitialCashInput] = useState('');
   const [openedBy, setOpenedBy] = useState('');
   const [actualCashInput, setActualCashInput] = useState('');
-  const [report, setReport] = useState(null);       // laporan yang sedang dilihat
+  const [report, setReport] = useState(null);       // laporan yang baru ditutup
   const [busy, setBusy] = useState(false);         // cegah dobel-klik
   // Menutup sheet yang sudah terisi = konfirmasi buang isian (Modal `dirty`).
   const openDirty = useDirty(isOpenSheet, [initialCashInput, openedBy]).dirty;
   const closeDirty = useDirty(isCloseSheet, [actualCashInput]).dirty;
-  const [filterMode, setFilterMode] = useState('hari-ini');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+
+  useEffect(() => { if (!loading && !updatedAt) setUpdatedAt(new Date()); }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isCarriedOver = useMemo(() => {
     if (!currentShift) return false;
@@ -118,10 +246,17 @@ const ShiftView = () => {
     finally { setBusy(false); }
   };
 
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try { await reload(); setUpdatedAt(new Date()); } finally { setRefreshing(false); }
+  };
+
   const handleOpen = () => run(async () => {
     await openShift({ initialCash: initialCashInput, openedByEmployeeId: openedBy });
     setInitialCashInput(''); setOpenedBy('');
     setIsOpenSheet(false);
+    setDay(toLocalDateString());
     showToast('Dompet berhasil dibuka');
   });
 
@@ -136,27 +271,7 @@ const ShiftView = () => {
       }));
   };
 
-  // ── Riwayat: filter + rekap ────────────────────────────────────────
-  const filtered = useMemo(() => {
-    const today = toLocalDateString();
-    const y = new Date(); y.setDate(y.getDate() - 1);
-    const yesterday = toLocalDateString(y);
-    const month = today.slice(0, 7);
-    return history.filter(s => {
-      const day = toLocalDateString(s.closed_at);
-      if (filterMode === 'hari-ini') return day === today;
-      if (filterMode === 'kemarin') return day === yesterday;
-      if (filterMode === 'bulan-ini') return day.startsWith(month);
-      if (filterMode === 'tanggal-terpilih') return (!startDate || day >= startDate) && (!endDate || day <= endDate);
-      return true;
-    });
-  }, [history, filterMode, startDate, endDate]);
-
-  const rekap = useMemo(() => filtered.reduce((a, s) => ({
-    sales: a.sales + (s.stats_json?.cashSales || 0),
-    expected: a.expected + (s.expected_cash || 0),
-    diff: a.diff + (s.difference || 0),
-  }), { sales: 0, expected: 0, diff: 0 }), [filtered]);
+  const closedToday = useMemo(() => closedOnDay(history, day, toLocalDateString), [history, day]);
 
   if (loading) return <div className="flex-1 flex items-center justify-center text-sm text-slate-400 dark:text-slate-500">Memuat dompet...</div>;
   if (error) {
@@ -172,189 +287,84 @@ const ShiftView = () => {
 
   const activeEmployees = employees.filter(e => e.status !== 'resign');
   const couriers = stats?.couriers || [];
-  const saldoAkhir = (stats?.expectedCash ?? 0) + (stats?.totalHeldByCouriers ?? 0);
+  const isToday = day === today;
+  const showLive = isToday && !!currentShift;
+  const toggleShift = () => (currentShift ? setIsCloseSheet(true) : setIsOpenSheet(true));
 
   return (
     <div className="p-4 md:p-6 bg-slate-50 dark:bg-slate-950 flex-1 flex flex-col h-full overflow-y-auto animate-in fade-in slide-in-from-bottom-4 duration-300 ease-out custom-scrollbar relative">
-      {/* Tab: Aktif / Riwayat */}
-      <PillTabs
-        className="mb-6 shrink-0 max-w-md"
-        value={activeTab}
-        onChange={setActiveTab}
-        options={[{ value: 'aktif', label: 'Aktif' }, { value: 'riwayat', label: 'Riwayat' }]}
-      />
-
-      {activeTab === 'aktif' && currentShift && isCarriedOver && (
-        <div className="max-w-4xl mb-6 shrink-0">
-          <div className="bg-red-50 dark:bg-red-500/10 border-2 border-red-100 dark:border-red-500/20 text-red-700 dark:text-red-400 p-4 rounded-2xl flex items-start gap-3">
+      <div className="max-w-3xl w-full space-y-4 pb-10">
+        {currentShift && isCarriedOver && (
+          <div className="bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 text-red-700 dark:text-red-400 p-3.5 rounded-2xl flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
             <div>
-              <p className="font-bold text-sm text-red-700 dark:text-red-300">Dompet Belum Ditutup dari Hari Sebelumnya!</p>
-              <p className="text-xs text-red-600/90 dark:text-red-400/80 mt-0.5">
-                Dibuka sejak {new Date(currentShift.opened_at).toLocaleString('id-ID')}.
+              <p className="font-bold text-sm text-red-700 dark:text-red-300">Dompet belum ditutup dari hari sebelumnya!</p>
+              <p className="text-xs text-red-600/90 dark:text-red-400/80 mt-0.5">Dibuka sejak {new Date(currentShift.opened_at).toLocaleString('id-ID')}.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Status dompet SAAT INI: selalu terlihat, hari apa pun yang sedang dilihat */}
+        <Card padding="sm" data-testid="status-dompet">
+          <div className="flex items-center gap-3">
+            <span className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${currentShift ? 'bg-accent-50 dark:bg-accent-500/10 text-accent-600 dark:text-accent-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500'}`}><Wallet className="w-5 h-5" /></span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="font-heading font-bold text-sm text-slate-800 dark:text-slate-100">Dompet</p>
+                <Badge variant={currentShift ? 'success' : 'neutral'} dot>{currentShift ? 'Terbuka' : 'Belum dibuka'}</Badge>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                {currentShift
+                  ? `${currentShift.code} • sejak ${new Date(currentShift.opened_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}${currentShift.opened_by_employee_name ? ` • ${currentShift.opened_by_employee_name}` : ''}`
+                  : 'Ketuk saklar untuk membuka dompet'}
               </p>
             </div>
+            <WalletSwitch on={!!currentShift} onToggle={toggleShift} disabled={busy} />
           </div>
-        </div>
-      )}
-
-      {activeTab === 'aktif' && (!currentShift ? (
-        <Card variant="elevated" className="max-w-md mx-auto text-center mt-4 mb-8 shrink-0">
-          <div className="w-16 h-16 bg-gradient-to-br from-accent-50 to-accent-100 dark:from-accent-500/10 dark:to-accent-500/15 text-accent-500 dark:text-accent-400 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Clock className="w-8 h-8" />
-          </div>
-          <h3 className="font-heading text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-slate-900 to-slate-600 dark:from-white dark:to-slate-400 mb-2">Dompet Belom Dibuka</h3>
-          <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">Masukkan jumlah uang tunai yang ada di dalam dompet saat ini sebagai modal harian.</p>
-
-          <Button size="full" onClick={() => setIsOpenSheet(true)}>Buka Dompet</Button>
         </Card>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl mb-8 shrink-0 w-full min-w-0">
-          <Card variant="elevated" className="flex flex-col justify-between relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-8 opacity-5 dark:opacity-10"><FileText className="w-32 h-32" /></div>
 
-            <div className="relative z-10">
-              <Badge variant="info" className="uppercase tracking-wider">Dompet Terbuka</Badge>
-              <h3 className="font-heading text-2xl font-bold text-slate-800 dark:text-slate-100 mt-4 mb-1">{currentShift.code}</h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Waktu Buka: {new Date(currentShift.opened_at).toLocaleString('id-ID')}</p>
-              {currentShift.opened_by_employee_name && (
-                <p className="text-sm font-semibold text-accent-600 dark:text-accent-400 mt-1 flex items-center gap-1.5">
-                  <Users className="w-3.5 h-3.5" /> {currentShift.opened_by_employee_name}
-                </p>
-              )}
-              <p className="text-xs font-bold text-slate-400 dark:text-slate-500 tracking-wider uppercase mt-2">Khusus Transaksi Tunai</p>
-            </div>
-
-            <div className="mt-8 space-y-4 relative z-10">
-              <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
-                <span className="text-sm text-slate-500 dark:text-slate-400">Uang Kas Awal</span>
-                <span className="font-bold text-slate-800 dark:text-slate-100">{money(formatRupiah, stats?.initialCash)}</span>
-              </div>
-              <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
-                <span className="text-sm text-slate-500 dark:text-slate-400">Penjualan</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400">+{money(formatRupiah, stats?.cashSales)}</span>
-              </div>
-              <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
-                <span className="text-sm text-slate-500 dark:text-slate-400">Pemasukan Non-Penjualan</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400">+{money(formatRupiah, stats?.cashIncomes)}</span>
-              </div>
-              <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
-                <span className="text-sm text-slate-500 dark:text-slate-400">Pengeluaran Kasir</span>
-                <span className="font-bold text-accent-600 dark:text-accent-400">-{money(formatRupiah, stats?.cashExpensesKasir)}</span>
-              </div>
-              {stats?.cashExpensesKurir > 0 && (
-                <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
-                  <span className="text-sm text-slate-500 dark:text-slate-400">Pengeluaran Kurir</span>
-                  <span className="font-bold text-accent-600 dark:text-accent-400">-{money(formatRupiah, stats?.cashExpensesKurir)}</span>
-                </div>
-              )}
-              <div className="flex justify-between items-center pt-2">
-                <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Saldo Akhir</span>
-                <span className="font-bold text-2xl text-slate-800 dark:text-slate-100">{formatRupiah(saldoAkhir)}</span>
-              </div>
-
-              <div className="mt-2 pt-4 border-t border-dashed border-slate-200 dark:border-slate-800">
-                <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Rincian Posisi Uang</p>
-                <div className="space-y-1.5">
-                  <BreakdownRow label="Kasir (Dompet)" value={stats?.expectedCash ?? 0} colorClass="bg-slate-400" formatRupiah={formatRupiah} />
-                  {couriers.map(c => (
-                    <BreakdownRow key={c.employeeId} label={c.employeeName} value={c.balance} colorClass="bg-sky-400" isDebt={c.balance < 0} formatRupiah={formatRupiah} />
-                  ))}
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          <Card variant="elevated" className="flex flex-col justify-center">
-            <h3 className="font-heading text-xl font-bold text-slate-800 dark:text-slate-100 mb-6 text-center">Saldo Aktual</h3>
-            <Button size="full" onClick={() => setIsCloseSheet(true)}>Hitung &amp; Tutup Dompet</Button>
-          </Card>
-        </div>
-      ))}
-
-      {activeTab === 'riwayat' && (
-        <div className="pb-12">
-          <div className="flex justify-start mb-6">
-            <div className="flex items-center gap-2">
-              <Select title="Periode" value={filterMode} onChange={e => setFilterMode(e.target.value)} className="py-1.5 px-3 text-xs font-bold">
-                <option value="hari-ini">Hari Ini</option>
-                <option value="kemarin">Kemarin</option>
-                <option value="bulan-ini">Bulan Ini</option>
-                <option value="semua">Semua</option>
-                <option value="tanggal-terpilih">Tanggal Terpilih</option>
-              </Select>
-              {filterMode === 'tanggal-terpilih' && (
-                <div className="flex items-center gap-1">
-                  <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} max={endDate || undefined} className="py-1.5 px-2 text-xs font-bold" />
-                  <span className="text-xs text-slate-400">-</span>
-                  <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} min={startDate || undefined} className="py-1.5 px-2 text-xs font-bold" />
-                </div>
-              )}
-            </div>
+        <Card className="space-y-2">
+          <PeriodNav
+            label={dayLabel(day)} labelTestId="dompet-hari"
+            onPrev={() => setDay(shiftDate(day, -1))} onNext={() => setDay(shiftDate(day, 1))} nextDisabled={isToday}
+            prevLabel="Hari sebelumnya" nextLabel="Hari berikutnya"
+            onToday={() => setDay(today)} isCurrent={isToday}
+            picker={{
+              title: 'Pilih Hari', value: day, onChange: setDay, options: dayOptions(today),
+              dateInput: { value: day, max: today, onChange: setDay },
+            }}
+          />
+          <div className="flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
+            <span data-testid="dompet-updated">{updatedAt ? `Diperbarui ${updatedAt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : 'Memuat...'}</span>
+            <button onClick={refresh} disabled={refreshing} className="flex items-center gap-1 font-bold text-accent-600 dark:text-accent-400 disabled:opacity-60"><RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} /> Perbarui</button>
           </div>
+        </Card>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <Card padding="sm" className="flex flex-col justify-center">
-              <p className="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mb-1">Total Dompet Dibuka</p>
-              <h4 className="font-heading text-base md:text-lg font-bold text-slate-800 dark:text-slate-100">{filtered.length} Kali</h4>
-            </Card>
-            <Card padding="sm" className="flex flex-col justify-center">
-              <p className="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mb-1">Total Pendapatan Tunai</p>
-              <h4 className="font-heading text-base md:text-lg font-bold text-emerald-600 dark:text-emerald-400">{formatRupiah(rekap.sales)}</h4>
-            </Card>
-            <Card padding="sm" className="flex flex-col justify-center">
-              <p className="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mb-1">Total Kas Seharusnya</p>
-              <h4 className="font-heading text-base md:text-lg font-bold text-slate-800 dark:text-slate-100">{formatRupiah(rekap.expected)}</h4>
-            </Card>
-            <Card padding="sm" className="flex flex-col justify-center">
-              <p className="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mb-1">Total Selisih</p>
-              <h4 className={`font-heading text-base md:text-lg font-bold ${diffColor(rekap.diff)}`}>{formatRupiah(rekap.diff)}</h4>
-            </Card>
+        {showLive && (
+          <div className="space-y-3" data-testid="dompet-live">
+            <Hero
+              testId="uang-di-dompet" label="Uang di Dompet" hint="Kasir • khusus transaksi tunai" amount={stats?.expectedCash ?? 0} formatRupiah={formatRupiah}
+              rows={[
+                { l: 'Uang Kas Awal', v: stats?.initialCash ?? 0, sign: '' },
+                { l: 'Penjualan', v: stats?.cashSales ?? 0, sign: '+' },
+                { l: 'Pemasukan Lain', v: stats?.cashIncomes ?? 0, sign: '+' },
+                { l: 'Pengeluaran Kasir', v: stats?.cashExpensesKasir ?? 0, sign: '−' },
+              ]}
+            />
+            {couriers.length > 0 && (
+              <CourierCard couriers={couriers} formatRupiah={formatRupiah}
+                extra={stats?.cashExpensesKurir > 0 ? `Sudah termasuk pengeluaran kurir -${formatRupiah(stats.cashExpensesKurir)}` : null} />
+            )}
+            <TotalCash wallet={stats?.expectedCash ?? 0} courier={stats?.totalHeldByCouriers ?? 0} total={stats?.totalCashBisnis ?? 0} formatRupiah={formatRupiah} />
           </div>
+        )}
 
-          <Card padding="none" className="overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950">
-              <h4 className="font-heading font-bold text-slate-800 dark:text-slate-100 text-xs uppercase tracking-wider">Daftar Penutupan Dompet</h4>
-              <span className="text-slate-400 dark:text-slate-500 text-xs font-semibold">{filtered.length} data ditemukan</span>
-            </div>
-            <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[400px] overflow-y-auto custom-scrollbar">
-              {filtered.length === 0 ? (
-                <EmptyState size="sm" icon={<Clock className="w-10 h-10 opacity-30" />} title="Tidak ada riwayat penutupan dompet pada periode ini" />
-              ) : filtered.map(s => {
-                const badgeVariant = s.difference < 0 ? 'danger' : s.difference > 0 ? 'success' : 'neutral';
-                const statusLabel = s.difference < 0 ? 'Minus' : s.difference > 0 ? 'Lebih' : 'Pas (Balance)';
-                return (
-                  <button key={s.id} onClick={() => setReport(s)} className="w-full text-left p-4 hover:bg-slate-50 dark:hover:bg-slate-950/50 transition-colors flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div className="space-y-1 flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-bold text-sm text-slate-800 dark:text-slate-100">{s.code}</span>
-                        <Badge variant={badgeVariant}><span className="uppercase tracking-wider text-xs">{statusLabel}</span></Badge>
-                      </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                        Buka: {new Date(s.opened_at).toLocaleString('id-ID')} | Tutup: {new Date(s.closed_at).toLocaleString('id-ID')}
-                      </p>
-                      {s.opened_by_employee_name && <p className="text-xs text-accent-600 dark:text-accent-400 font-semibold">Kasir: {s.opened_by_employee_name}</p>}
-                      <p className="text-xs text-slate-400 dark:text-slate-500">
-                        Saldo Awal: {formatRupiah(s.stats_json?.initialCash)} | Penjualan Tunai: {formatRupiah(s.stats_json?.cashSales)} | Target Uang: {formatRupiah(s.expected_cash)}
-                      </p>
-                    </div>
-                    <div className="flex items-center justify-between md:justify-end gap-6 border-t md:border-0 pt-2 md:pt-0">
-                      <div className="text-left md:text-right">
-                        <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none mb-1">Uang Aktual</p>
-                        <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">{formatRupiah(s.closing_balance)}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none mb-1">Selisih</p>
-                        <p className={`font-bold text-sm ${diffColor(s.difference)}`}>{s.difference > 0 ? '+' : ''}{formatRupiah(s.difference)}</p>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </Card>
-        </div>
-      )}
+        {closedToday.map(s => <ClosedSection key={s.id} shift={s} formatRupiah={formatRupiah} />)}
+
+        {!showLive && closedToday.length === 0 && (
+          <EmptyState icon={<Wallet className="w-12 h-12" />} title={isToday ? 'Dompet hari ini belum dibuka.' : 'Tidak ada penutupan dompet pada hari ini.'} className="animate-in fade-in duration-300" />
+        )}
+      </div>
 
       <Modal isOpen={isOpenSheet} onClose={() => setIsOpenSheet(false)} dirty={openDirty} sheet size="lg" maxHeight title="Buka Dompet">
         <div className="p-5 pt-2 space-y-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
@@ -383,18 +393,5 @@ const ShiftView = () => {
     </div>
   );
 };
-
-// Baris "Rincian Posisi Uang"
-function BreakdownRow({ label, value, colorClass, isDebt, formatRupiah }) {
-  return (
-    <div className="flex justify-between items-center text-xs">
-      <span className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-        <span className={`w-2 h-2 rounded-full ${colorClass}`} />
-        {label}{isDebt && <span className="text-xs text-red-500 dark:text-red-400 font-bold">(bisnis berutang)</span>}
-      </span>
-      <span className={`font-bold ${isDebt ? 'text-red-500 dark:text-red-400' : 'text-slate-800 dark:text-slate-100'}`}>{formatRupiah(value)}</span>
-    </div>
-  );
-}
 
 export default ShiftView;

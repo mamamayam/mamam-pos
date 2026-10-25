@@ -189,7 +189,6 @@ function MySalary({ employee, minutes, onLock }) {
           <Card className="text-center space-y-2"><p className="text-sm font-semibold text-red-500">Gagal memuat data</p><p className="text-xs text-slate-400">{error}</p>
             <Button onClick={reload} icon={<RefreshCw className="w-4 h-4" />}>Coba Lagi</Button></Card>
         )}
-        {status === 'not-configured' && <Card className="text-center"><p className="text-sm text-slate-500">Data absensi belum tersambung. Hubungi owner.</p></Card>}
         {status === 'error' && (
           <Card className="text-center space-y-2"><p className="text-sm font-semibold text-red-500">Absensi gagal dibaca</p><p className="text-xs text-slate-400">{attendance.error}</p>
             <Button onClick={reload} icon={<RefreshCw className="w-4 h-4" />}>Coba Lagi</Button></Card>

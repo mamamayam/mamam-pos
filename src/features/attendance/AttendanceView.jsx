@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { RefreshCw, Fingerprint, Pencil } from 'lucide-react';
 import { Card, Badge, Button, EmptyState } from '../../components/ui';
 import { useAttendanceDay } from '../../hook/useAttendanceDay';
-import AbsensiSetupCard from '../payroll/AbsensiSetupCard';
 import PeriodNav from '../../components/PeriodNav';
 import { parseIsoDate, formatIsoDate } from '../payroll/payrollEngine';
 import { toLocalDateString } from '../../utils/formatters';
@@ -30,7 +29,7 @@ const longDate = (iso) => { const [y, m, d] = iso.split('-').map(Number); return
 export default function AttendanceView() {
   const today = toLocalDateString();
   const [date, setDate] = useState(today);
-  const { configured, loading, error, board, info, updatedAt, reload, overrideKeys } = useAttendanceDay({ date });
+  const { loading, error, board, info, updatedAt, reload, overrideKeys } = useAttendanceDay({ date });
   const { can } = useAuth();
   const canEdit = can('absensi.edit');
   const [editRow, setEditRow] = useState(null);
@@ -44,7 +43,6 @@ export default function AttendanceView() {
   const warnings = [];
   if (info) {
     if (info.unknownEmployees.length) warnings.push(`Ada absensi dari ${info.unknownEmployees.length} orang yang belum ada di daftar Karyawan: ${info.unknownEmployees.slice(0, 4).map(u => u.name).join(', ')}${info.unknownEmployees.length > 4 ? ', dst' : ''}.`);
-    if (info.withoutExternalId.length) warnings.push(`Belum punya ID Absensi (absennya tidak bisa dicocokkan): ${info.withoutExternalId.join(', ')}.`);
   }
 
   return (
@@ -62,15 +60,11 @@ export default function AttendanceView() {
               dateInput: { value: date, onChange: setDate, label: 'Atau pilih tanggal lain' },
             }}
           />
-          {configured && (
-            <div className="flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
-              <span data-testid="att-updated">{updatedAt ? `Diperbarui ${updatedAt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : 'Memuat...'}</span>
-              <button onClick={reload} className="flex items-center gap-1 font-bold text-accent-600 dark:text-accent-400"><RefreshCw className="w-3 h-3" /> Perbarui</button>
-            </div>
-          )}
+          <div className="flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
+            <span data-testid="att-updated">{updatedAt ? `Diperbarui ${updatedAt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : 'Memuat...'}</span>
+            <button onClick={reload} className="flex items-center gap-1 font-bold text-accent-600 dark:text-accent-400"><RefreshCw className="w-3 h-3" /> Perbarui</button>
+          </div>
         </Card>
-
-        {!configured && <AbsensiSetupCard />}
 
         {error && (
           <Card className="text-center space-y-2 border-2 border-red-200 dark:border-red-500/30">
@@ -78,7 +72,7 @@ export default function AttendanceView() {
             <Button onClick={reload} icon={<RefreshCw className="w-4 h-4" />}>Coba Lagi</Button>
           </Card>
         )}
-        {configured && loading && !board && !error && <div className="text-center text-sm text-slate-400 dark:text-slate-500 py-10">Membaca absensi...</div>}
+        {loading && !board && !error && <div className="text-center text-sm text-slate-400 dark:text-slate-500 py-10">Membaca absensi...</div>}
 
         {board && (
           <>

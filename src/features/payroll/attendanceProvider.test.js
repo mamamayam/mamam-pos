@@ -148,7 +148,7 @@ describe('fetchAttendanceRows (paginasi)', () => {
   it('filter memakai tanggal lokal dateStr pada tabel attendanceLog', async () => {
     const { client, calls } = fakeClient([]);
     await fetchAttendanceRows(client, '2026-09-01', '2026-09-30');
-    expect(calls[0]).toMatchObject({ table: 'attendanceLog', gte: ['payload->>dateStr', '2026-09-01'], lte: ['payload->>dateStr', '2026-09-30'] });
+    expect(calls[0]).toMatchObject({ table: 'attendance_log', gte: ['payload->>dateStr', '2026-09-01'], lte: ['payload->>dateStr', '2026-09-30'] });
   });
   it('error di tengah paginasi dilempar jelas, bukan hasil setengah', async () => {
     const { client } = fakeClient(mk(2500), { failAtPage: 2 });
@@ -158,12 +158,21 @@ describe('fetchAttendanceRows (paginasi)', () => {
 });
 
 describe('loadAttendance', () => {
-  it('memetakan lewat externalId dan melaporkan karyawan tanpa id absensi', async () => {
-    const { client } = fakeClient([row({ id: 'a', type: 'masuk', date: '2026-09-04T01:00:00Z', dateStr: '2026-09-04' })]);
-    const emps = [{ id: 'uuid-1', externalId: 'EMP-1', name: 'Andi', status: 'aktif' }, { id: 'uuid-9', externalId: null, name: 'Manual', status: 'aktif' }, { id: 'uuid-8', externalId: null, name: 'Sudah Resign', status: 'resign' }];
-    const r = await loadAttendance(client, { start: '2026-09-01', end: '2026-09-30' }, emps, { toLocalHHmm: wita });
-    expect(r.logs).toHaveLength(1); expect(r.logs[0].employeeId).toBe('uuid-1');
-    expect(r.withoutExternalId).toEqual(['Manual']);       // resign tidak dilaporkan
+  it('memetakan absen berid lama (externalId EMP-…) DAN absen baru berid uuid C ke karyawan yang sama', async () => {
+    const { client } = fakeClient([
+      row({ id: 'a', type: 'masuk', date: '2026-09-04T01:00:00Z', dateStr: '2026-09-04' }),                              // log lama: EMP-1
+      row({ id: 'b', employeeId: 'uuid-1', type: 'masuk', date: '2026-11-04T01:00:00Z', dateStr: '2026-11-04' }),         // log baru: uuid C
+      row({ id: 'c', employeeId: 'uuid-9', type: 'masuk', date: '2026-11-04T01:05:00Z', dateStr: '2026-11-04' }),         // karyawan baru tanpa externalId
+    ]);
+    const emps = [{ id: 'uuid-1', externalId: 'EMP-1', name: 'Andi', status: 'aktif' }, { id: 'uuid-9', externalId: null, name: 'Baru', status: 'aktif' }];
+    const r = await loadAttendance(client, { start: '2026-09-01', end: '2026-11-30' }, emps, { toLocalHHmm: wita });
+    expect(r.logs.map(l => [l.id, l.employeeId])).toEqual([['a', 'uuid-1'], ['b', 'uuid-1'], ['c', 'uuid-9']]);
+    expect(r.unknownEmployees).toEqual([]);
+  });
+  it('id di log yang tidak cocok dengan karyawan mana pun dilaporkan', async () => {
+    const { client } = fakeClient([row({ id: 'a', employeeId: 'EMP-404', employeeName: 'Hantu', type: 'masuk', date: '2026-09-04T01:00:00Z', dateStr: '2026-09-04' })]);
+    const r = await loadAttendance(client, { start: '2026-09-01', end: '2026-09-30' }, [{ id: 'uuid-1', externalId: 'EMP-1', name: 'Andi', status: 'aktif' }], { toLocalHHmm: wita });
+    expect(r.logs).toEqual([]); expect(r.unknownEmployees).toEqual([{ externalId: 'EMP-404', name: 'Hantu' }]);
   });
 });
 

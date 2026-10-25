@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { absensiClient } from '../lib/absensiClient';
 import { computePayroll } from '../features/payroll/payrollEngine';
 import { loadAttendance } from '../features/payroll/attendanceProvider';
 import { toLocalDateString } from '../utils/formatters';
@@ -33,7 +32,7 @@ const toEngineEmployee = (e) => ({
   id: e.id, wagePerHour: e.wage_per_hour, bonusFullTime: e.bonus_full_time, overtimeRatePer30Min: e.overtime_rate_per_30_min,
 });
 
-export function usePayrollData({ period, attendanceClient = absensiClient }) {
+export function usePayrollData({ period, attendanceClient = supabase }) {
   const [employees, setEmployees] = useState([]);
   const [additions, setAdditions] = useState([]);
   const [pendingAdditions, setPendingAdditions] = useState(0);   // pengajuan Tambahan yang belum diputuskan owner (tidak dihitung di gaji)
@@ -43,12 +42,11 @@ export function usePayrollData({ period, attendanceClient = absensiClient }) {
   const [closingLines, setClosingLines] = useState([]);
   const [overrides, setOverrides] = useState([]);
   const [empList, setEmpList] = useState([]);
-  const [attendance, setAttendance] = useState({ status: attendanceClient ? 'loading' : 'not-configured', data: null, error: null });
+  const [attendance, setAttendance] = useState({ status: 'loading', data: null, error: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const start = period.start, end = period.end, monthKey = period.monthKey;
-  const configured = Boolean(attendanceClient);
 
   const reload = useCallback(async () => {
     try {
@@ -80,7 +78,6 @@ export function usePayrollData({ period, attendanceClient = absensiClient }) {
 
       // Periode tertutup: angka diambil dari foto yang tersimpan, absensi tidak dibaca lagi.
       if (closed) { setAttendance({ status: 'closed', data: null, error: null }); return; }
-      if (!attendanceClient) { setAttendance({ status: 'not-configured', data: null, error: null }); return; }
       setAttendance(prev => ({ status: 'loading', data: prev.data, error: null }));
       try {
         const [data, ovr] = await Promise.all([
@@ -244,7 +241,7 @@ export function usePayrollData({ period, attendanceClient = absensiClient }) {
   };
 
   return {
-    configured, loading, error, attendance, status, isLocked, closing, closeBlockers, results, totals, employees,
+    loading, error, attendance, status, isLocked, closing, closeBlockers, results, totals, employees,
     prepared, overrideKeys: new Set(overrides.map(o => `${o.employeeId}|${o.date}`)),
     reload, deleteAddition, deleteDeduction, updateDeduction, getDeductionPayment, setOpeningBalance, closePeriod, reopenPeriod,
   };

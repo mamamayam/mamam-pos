@@ -1,11 +1,13 @@
 /**
- * attendanceProvider — mengambil log absensi dari sistem absensi dan mengubahnya
- * ke bentuk yang dimengerti payrollEngine (bentuk AttendanceLog milik mamam-kasir).
- * Ini padanan "AttendanceProvider port" di B: sumber absensi TIDAK disalin ke C.
+ * attendanceProvider — mengambil log absensi (tabel `attendance_log` di project C,
+ * ditulis oleh web mamam-absensi) dan mengubahnya ke bentuk yang dimengerti
+ * payrollEngine (bentuk AttendanceLog milik mamam-kasir).
  *
- * Bentuk baris di sistem absensi (tabel attendanceLog, isi di kolom `payload`):
- *   { id, employeeId:'EMP-…', employeeName, type, date:'<waktu UTC ISO>',
+ * Bentuk baris (kolom `payload`):
+ *   { id, employeeId, employeeName, type, date:'<waktu UTC ISO>',
  *     dateStr:'YYYY-MM-DD' (tanggal lokal), photoUrl, location, deletedAt }
+ *   `employeeId` = id karyawan C (uuid) untuk absen baru. Log lama yang disalin dari
+ *   sistem lama masih berisi id 'EMP-…' (disimpan di employees.external_id); keduanya dikenali.
  *   type: masuk | bolong | masuk_lagi | keluar | libur
  *
  * Perbedaan penamaan ke bentuk B: 'keluar' -> 'pulang'; jam 'HH:mm' diambil dari
@@ -14,6 +16,7 @@
  */
 
 export const PAGE_SIZE = 1000;   // batas baris per permintaan PostgREST
+export const ATTENDANCE_TABLE = 'attendance_log';
 
 const TYPE_MAP = { masuk: 'masuk', masuk_lagi: 'masuk_lagi', bolong: 'bolong', keluar: 'pulang', pulang: 'pulang', libur: 'libur' };
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -29,7 +32,7 @@ export function defaultLocalHHmm(iso) {
 /**
  * Ubah baris mentah jadi log siap hitung. FUNGSI MURNI.
  * @param rows  baris { id, payload } (atau payload langsung)
- * @param externalIdToEmployeeId  Map dari id lama ('EMP-…') ke id karyawan di C
+ * @param externalIdToEmployeeId  Map dari id di log (uuid C atau id lama 'EMP-…') ke id karyawan di C
  */
 export function mapAttendanceRows(rows, externalIdToEmployeeId, { toLocalHHmm = defaultLocalHHmm } = {}) {
   const parsed = [];
@@ -111,7 +114,7 @@ export async function fetchAttendanceRows(client, fromDate, toDate) {
   const rows = [];
   for (let start = 0; ; start += PAGE_SIZE) {
     const { data, error } = await client
-      .from('attendanceLog')
+      .from(ATTENDANCE_TABLE)
       .select('id, payload')
       .gte('payload->>dateStr', fromDate)
       .lte('payload->>dateStr', toDate)
@@ -125,11 +128,21 @@ export async function fetchAttendanceRows(client, fromDate, toDate) {
   return rows;
 }
 
+/**
+ * Peta id-di-log -> id karyawan C. Absen baru memakai uuid C; log lama (disalin dari
+ * sistem lama) memakai id 'EMP-…' yang tersimpan di external_id.
+ */
+export function buildEmployeeIdMap(employees) {
+  const map = new Map();
+  for (const e of employees) {
+    if (e.externalId) map.set(String(e.externalId), e.id);
+    map.set(String(e.id), e.id);
+  }
+  return map;
+}
+
 /** Semua langkah: ambil + petakan. `employees` berbentuk hasil useEmployeeData. */
 export async function loadAttendance(client, period, employees, options) {
-  const map = new Map(employees.filter((e) => e.externalId).map((e) => [e.externalId, e.id]));
   const rows = await fetchAttendanceRows(client, period.start, period.end);
-  const result = mapAttendanceRows(rows, map, options);
-  const withoutExternalId = employees.filter((e) => !e.externalId && e.status !== 'resign').map((e) => e.name);
-  return { ...result, withoutExternalId };
+  return mapAttendanceRows(rows, buildEmployeeIdMap(employees), options);
 }

@@ -178,11 +178,6 @@ export default function EmployeeView() {
             <div>
               <Input label="Alamat" variant="muted" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} />
             </div>
-            <div>
-              <Input label="ID Absensi (opsional)" variant="muted" placeholder="Contoh: EMP-1699999999999" value={form.externalId || ''}
-                onChange={e => setForm({ ...form, externalId: e.target.value })} />
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Dipakai untuk mencocokkan absensi dari sistem absensi. Terisi otomatis kalau karyawan diimpor dari mamam-global. Kosongkan untuk karyawan baru yang belum punya.</p>
-            </div>
             <NominalInput label="Upah per Jam (Rp)" variant="muted"
               value={form.hourlyRate || ''} onChange={e => setForm({ ...form, hourlyRate: e.target.value ? Number(e.target.value) : '' })} />
             <NominalInput label="Bonus Full Time (Rp)" variant="muted"

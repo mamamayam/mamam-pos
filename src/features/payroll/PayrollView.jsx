@@ -6,7 +6,6 @@ import { usePayrollData } from '../../hook/usePayrollData';
 import PeriodNav from '../../components/PeriodNav';
 import { weekPeriodForDate, shiftWeek, monthPeriod, parseIsoDate, formatIsoDate } from './payrollEngine';
 import { toLocalDateString } from '../../utils/formatters';
-import AbsensiSetupCard from './AbsensiSetupCard';
 import AttendanceEditSheet from '../attendance/AttendanceEditSheet';
 import { summarizeDay } from '../attendance/dayRules';
 import { useAuth } from '../../auth/AuthContext';
@@ -175,9 +174,7 @@ function OwnerPayroll() {
           />
         </Card>
 
-        {status === 'not-configured' && <AbsensiSetupCard />}
-
-        {loading && status !== 'not-configured' && <div className="text-center text-sm text-slate-400 dark:text-slate-500 py-10">Memuat gaji...</div>}
+        {loading && <div className="text-center text-sm text-slate-400 dark:text-slate-500 py-10">Memuat gaji...</div>}
         {error && (
           <Card className="text-center space-y-2">
             <p className="text-sm font-semibold text-red-500">Gagal memuat data</p><p className="text-xs text-slate-400 max-w-xs mx-auto">{error}</p>

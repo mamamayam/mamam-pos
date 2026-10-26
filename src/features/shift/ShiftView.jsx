@@ -117,10 +117,11 @@ const Ledger = ({ l, v, sign, total, formatRupiah }) => (
 
 const HERO_TONE = {
   accent: 'bg-gradient-to-br from-accent-600 to-accent-500 dark:from-accent-500 dark:to-accent-600 shadow-[0_8px_24px_rgba(var(--color-accent-500),0.25)]',
-  sky: 'bg-gradient-to-br from-sky-600 to-sky-500 dark:from-sky-500 dark:to-sky-600 shadow-[0_8px_24px_rgba(14,165,233,0.25)]',
+  // Kurir: warna tema juga (bukan biru), tapi lebih gelap supaya terbedakan dari kartu dompet.
+  deep: 'bg-gradient-to-br from-accent-800 to-accent-600 dark:from-accent-700 dark:to-accent-500 shadow-[0_8px_24px_rgba(var(--color-accent-700),0.25)]',
 };
 
-// Kartu utama (dompet = warna aksen, kurir = biru muda): nominal besar + Rincian yang dilipat.
+// Kartu utama (dompet = warna tema, kurir = warna tema yang lebih gelap): nominal besar + Rincian yang dilipat.
 function Hero({ label, hint, amount, badge, rows, formatRupiah, testId, tone = 'accent' }) {
   const [openRows, setOpenRows] = useState(false);
   return (
@@ -146,12 +147,12 @@ function Hero({ label, hint, amount, badge, rows, formatRupiah, testId, tone = '
   );
 }
 
-// Uang yang dipegang kurir: kartu yang sama dengan dompet, warna biru muda. Saldo bisa negatif (kurir nombokin).
+// Uang yang dipegang kurir: kartu yang sama dengan dompet, warna tema yang lebih gelap. Saldo bisa negatif (kurir nombokin).
 function CourierCard({ couriers, cashExpensesKurir, formatRupiah }) {
   const total = couriers.reduce((a, c) => a + (Number(c.balance) || 0), 0);
   const names = couriers.map(c => c.employeeName || c.name || 'Kurir').join(', ');
   return (
-    <Hero tone="sky" testId="kartu-kurir" label="Uang di Kurir" hint={names} amount={total} formatRupiah={formatRupiah}
+    <Hero tone="deep" testId="kartu-kurir" label="Uang di Kurir" hint={names} amount={total} formatRupiah={formatRupiah}
       rows={courierRows(couriers, cashExpensesKurir)} />
   );
 }

@@ -52,6 +52,11 @@ describe('ShiftView — Dompet satu halaman', () => {
     expect(html).toContain('Rp 1.585.000');
     expect(html.indexOf('Uang di Dompet')).toBeLessThan(html.indexOf('Uang di Kurir'));
     expect(html.indexOf('Uang di Kurir')).toBeLessThan(html.indexOf('Total Cash'));
+    // Kartu kurir = pola yang sama dengan dompet (nominal besar + dropdown Rincian), cuma beda warna.
+    const kurir = html.slice(html.indexOf('data-testid="kartu-kurir"'));
+    expect(kurir).toContain('Rincian');
+    expect(kurir).toContain('from-sky-600');
+    expect(kurir).toContain('Andi');
   });
 
   it('tanpa uang di kurir: kartu kurir tidak tampil, Total Cash tetap', () => {
@@ -84,7 +89,8 @@ describe('ShiftView — Dompet satu halaman', () => {
     expect(html).toContain('Rp 1.985.000');
     expect(html).toContain('Minus');
     expect(html).toContain('Rp 180.000');
-    expect(html).toContain('Hanya catatan saat tutup');
+    expect(html).not.toContain('Hanya catatan saat tutup');
+    expect(html).not.toContain('Sudah termasuk');
     expect(html).not.toContain('Dompet hari ini belum dibuka.');
   });
 

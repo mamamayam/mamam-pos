@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Wallet, AlertTriangle, RefreshCw, Bike, ChevronDown } from 'lucide-react';
+import { Wallet, AlertTriangle, RefreshCw, ChevronDown } from 'lucide-react';
 import { Button, Card, NominalInput, Select, EmptyState, Badge, Modal } from '../../components/ui';
 import PeriodNav from '../../components/PeriodNav';
 import useDirty from '../../hook/useDirty';
@@ -8,7 +8,7 @@ import { useAppContext } from '../../context/AppContext';
 import { useShiftData } from '../../hook/useShiftData';
 import { toLocalDateString } from '../../utils/formatters';
 import { dayLabel, dayOptions, shiftDate } from '../reports/reportsMath';
-import { closedOnDay, diffTone } from './shiftMath';
+import { closedOnDay, diffTone, walletRows, courierRows } from './shiftMath';
 
 /**
  * ShiftView — Dompet (buka/tutup kas). SATU halaman, bergaya Absensi (navigasi hari), tanpa tab Riwayat:
@@ -107,24 +107,29 @@ function WalletSwitch({ on, onToggle, disabled }) {
   );
 }
 
-// Satu baris rincian (tanda + / −) di dalam kartu utama.
-const Ledger = ({ l, v, sign, formatRupiah }) => (
-  <div className="flex justify-between items-center text-xs gap-3">
-    <span className="flex items-center gap-2 min-w-0"><span className="w-3 text-center opacity-70">{sign}</span><span className="truncate">{l}</span></span>
+// Satu baris rincian di dalam kartu utama. `total` = baris jumlah (tebal, diberi garis di atasnya).
+const Ledger = ({ l, v, sign, total, formatRupiah }) => (
+  <div className={`flex justify-between items-center text-xs gap-3 ${total ? 'border-t border-white/25 pt-1.5 mt-1.5 text-[13px]' : ''}`}>
+    <span className="flex items-center gap-2 min-w-0"><span className="w-3 text-center opacity-70">{sign}</span><span className={`truncate ${total ? 'font-bold' : ''}`}>{l}</span></span>
     <span className="font-bold tabular-nums">{formatRupiah(v)}</span>
   </div>
 );
 
-// Kartu utama: HANYA uang di dompet (kasir). Rincian asal angkanya dilipat.
-function Hero({ label, hint, amount, badge, rows, formatRupiah, testId }) {
+const HERO_TONE = {
+  accent: 'bg-gradient-to-br from-accent-600 to-accent-500 dark:from-accent-500 dark:to-accent-600 shadow-[0_8px_24px_rgba(var(--color-accent-500),0.25)]',
+  sky: 'bg-gradient-to-br from-sky-600 to-sky-500 dark:from-sky-500 dark:to-sky-600 shadow-[0_8px_24px_rgba(14,165,233,0.25)]',
+};
+
+// Kartu utama (dompet = warna aksen, kurir = biru muda): nominal besar + Rincian yang dilipat.
+function Hero({ label, hint, amount, badge, rows, formatRupiah, testId, tone = 'accent' }) {
   const [openRows, setOpenRows] = useState(false);
   return (
-    <div data-testid={testId} className="rounded-3xl p-5 text-white bg-gradient-to-br from-accent-600 to-accent-500 dark:from-accent-500 dark:to-accent-600 shadow-[0_8px_24px_rgba(var(--color-accent-500),0.25)]">
+    <div data-testid={testId} className={`rounded-3xl p-5 text-white ${HERO_TONE[tone]}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-bold tracking-wider uppercase opacity-80">{label}</p>
           <p className="font-heading font-bold text-4xl mt-1 tracking-tight">{formatRupiah(amount)}</p>
-          <p className="text-xs opacity-80 mt-1">{hint}</p>
+          {hint && <p className="text-xs opacity-80 mt-1">{hint}</p>}
         </div>
         {badge}
       </div>
@@ -141,29 +146,13 @@ function Hero({ label, hint, amount, badge, rows, formatRupiah, testId }) {
   );
 }
 
-// Uang yang dipegang kurir: warna sekunder (biru muda), jelas bukan bagian uang dompet. Saldo bisa negatif (kurir nombokin).
-function CourierCard({ couriers, note, extra, formatRupiah }) {
+// Uang yang dipegang kurir: kartu yang sama dengan dompet, warna biru muda. Saldo bisa negatif (kurir nombokin).
+function CourierCard({ couriers, cashExpensesKurir, formatRupiah }) {
   const total = couriers.reduce((a, c) => a + (Number(c.balance) || 0), 0);
-  const nameOf = (c) => c.employeeName || c.name || 'Kurir';
+  const names = couriers.map(c => c.employeeName || c.name || 'Kurir').join(', ');
   return (
-    <div data-testid="kartu-kurir" className="rounded-2xl p-4 bg-sky-50 dark:bg-sky-500/10 border border-sky-100 dark:border-sky-500/20">
-      <div className="flex items-center justify-between gap-3">
-        <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-sky-700 dark:text-sky-300"><Bike className="w-4 h-4" />Uang di Kurir</p>
-        <p className="font-heading font-bold text-lg text-sky-700 dark:text-sky-300">{formatRupiah(total)}</p>
-      </div>
-      <div className="mt-2 space-y-1">
-        {couriers.length > 1
-          ? couriers.map(c => (
-            <div key={c.employeeId || nameOf(c)} className="flex justify-between text-xs text-sky-700/80 dark:text-sky-300/80">
-              <span>{nameOf(c)}{c.balance < 0 && <span className="font-bold text-red-500 dark:text-red-400"> (bisnis berutang)</span>}</span>
-              <span className="font-bold">{formatRupiah(c.balance)}</span>
-            </div>
-          ))
-          : <p className="text-xs text-sky-700/80 dark:text-sky-300/80">{nameOf(couriers[0])}{couriers[0].balance < 0 && <span className="font-bold text-red-500 dark:text-red-400"> (bisnis berutang)</span>}</p>}
-        {extra && <p className="text-xs text-sky-700/80 dark:text-sky-300/80">{extra}</p>}
-        {note && <p className="text-xs italic text-sky-700/60 dark:text-sky-300/60">{note}</p>}
-      </div>
-    </div>
+    <Hero tone="sky" testId="kartu-kurir" label="Uang di Kurir" hint={names} amount={total} formatRupiah={formatRupiah}
+      rows={courierRows(couriers, cashExpensesKurir)} />
   );
 }
 
@@ -196,17 +185,10 @@ function ClosedSection({ shift, formatRupiah }) {
       <Hero
         label="Uang di Dompet saat Tutup" hint={`Seharusnya ${formatRupiah(shift.expected_cash)}`} amount={shift.closing_balance} formatRupiah={formatRupiah}
         badge={<span data-testid="selisih" className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold bg-white ${tone === 'minus' ? 'text-red-600' : tone === 'lebih' ? 'text-emerald-600' : 'text-accent-600'}`}>{badgeText}</span>}
-        rows={[
-          { l: 'Saldo Awal (Modal)', v: st.initialCash ?? 0, sign: '' },
-          { l: 'Penjualan Tunai', v: st.cashSales ?? 0, sign: '+' },
-          { l: 'Pemasukan Lain', v: st.cashIncomes ?? 0, sign: '+' },
-          { l: 'Pengeluaran Kasir', v: st.cashExpensesKasir ?? 0, sign: '−' },
-        ]}
+        rows={walletRows(st, 'Saldo Awal (Modal)')}
       />
       {couriers.length > 0 && (
-        <CourierCard couriers={couriers} formatRupiah={formatRupiah}
-          extra={st.cashExpensesKurir > 0 ? `Sudah termasuk pengeluaran kurir -${formatRupiah(st.cashExpensesKurir)}` : null}
-          note="Hanya catatan saat tutup. Dompet berikutnya mulai dari nol." />
+        <CourierCard couriers={couriers} cashExpensesKurir={st.cashExpensesKurir} formatRupiah={formatRupiah} />
       )}
     </div>
   );
@@ -344,16 +326,10 @@ const ShiftView = () => {
           <div className="space-y-3" data-testid="dompet-live">
             <Hero
               testId="uang-di-dompet" label="Uang di Dompet" hint="Kasir • khusus transaksi tunai" amount={stats?.expectedCash ?? 0} formatRupiah={formatRupiah}
-              rows={[
-                { l: 'Uang Kas Awal', v: stats?.initialCash ?? 0, sign: '' },
-                { l: 'Penjualan', v: stats?.cashSales ?? 0, sign: '+' },
-                { l: 'Pemasukan Lain', v: stats?.cashIncomes ?? 0, sign: '+' },
-                { l: 'Pengeluaran Kasir', v: stats?.cashExpensesKasir ?? 0, sign: '−' },
-              ]}
+              rows={walletRows(stats)}
             />
             {couriers.length > 0 && (
-              <CourierCard couriers={couriers} formatRupiah={formatRupiah}
-                extra={stats?.cashExpensesKurir > 0 ? `Sudah termasuk pengeluaran kurir -${formatRupiah(stats.cashExpensesKurir)}` : null} />
+              <CourierCard couriers={couriers} cashExpensesKurir={stats?.cashExpensesKurir} formatRupiah={formatRupiah} />
             )}
             <TotalCash wallet={stats?.expectedCash ?? 0} courier={stats?.totalHeldByCouriers ?? 0} total={stats?.totalCashBisnis ?? 0} formatRupiah={formatRupiah} />
           </div>

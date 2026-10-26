@@ -122,3 +122,31 @@ export function closedOnDay(history, day, dayOf) {
 
 /** Nada selisih tutup: 'minus' | 'lebih' | 'pas'. */
 export const diffTone = (d) => (Number(d) < 0 ? 'minus' : Number(d) > 0 ? 'lebih' : 'pas');
+
+// Rincian dompet: pemasukan per sumber, Total Pemasukan, Pengeluaran, Total Saldo Dompet. Angka dari stats, rumus tidak berubah.
+export function walletRows(st, saldoAwalLabel = 'Uang Kas Awal') {
+  const awal = Number(st?.initialCash) || 0;
+  const jual = Number(st?.cashSales) || 0;
+  const lain = Number(st?.cashIncomes) || 0;
+  const keluar = Number(st?.cashExpensesKasir) || 0;
+  return [
+    { l: saldoAwalLabel, v: awal, sign: '' },
+    { l: 'Penjualan Tunai', v: jual, sign: '+' },
+    { l: 'Pemasukan Lain', v: lain, sign: '+' },
+    { l: 'Total Pemasukan', v: awal + jual + lain, sign: '', total: true },
+    { l: 'Pengeluaran Kasir', v: keluar, sign: '−' },
+    { l: 'Total Saldo Dompet', v: awal + jual + lain - keluar, sign: '', total: true },
+  ];
+}
+
+// Rincian kurir, pola sama. Pemasukan kurir = saldo + pengeluaran kurir (saldo = masuk − keluar), jadi cukup dari snapshot.
+export function courierRows(couriers, cashExpensesKurir) {
+  const saldo = couriers.reduce((a, c) => a + (Number(c.balance) || 0), 0);
+  const keluar = Number(cashExpensesKurir) || 0;
+  return [
+    { l: 'Penjualan Dipegang Kurir', v: saldo + keluar, sign: '' },
+    { l: 'Total Pemasukan', v: saldo + keluar, sign: '', total: true },
+    { l: 'Pengeluaran Kurir', v: keluar, sign: '−' },
+    { l: 'Total Saldo Kurir', v: saldo, sign: '', total: true },
+  ];
+}

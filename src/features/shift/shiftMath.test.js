@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { closedOnDay, diffTone, computeShiftStats, walletRows, courierRows } from './shiftMath';
+import { closedOnDay, diffTone, computeShiftStats, walletRows, courierRows, dayTotalCash } from './shiftMath';
 
 // Hari lokal sederhana untuk tes: ambil 10 karakter pertama ('YYYY-MM-DD').
 const dayOf = (iso) => String(iso).slice(0, 10);
@@ -101,5 +101,21 @@ describe('courierRows (rincian Uang di Kurir)', () => {
     const rows = courierRows(real.couriers, real.cashExpensesKurir);
     expect(rows[3].v).toBe(real.totalHeldByCouriers);
     expect(rows[1].v).toBe(150000);
+  });
+});
+
+describe('dayTotalCash (Total Cash hari itu)', () => {
+  const closed = (bal, couriers) => ({ closing_balance: bal, courier_snapshot_json: couriers });
+  it('dompet terbuka hari ini: pakai totalCashBisnis', () => {
+    expect(dayTotalCash({ live: true, stats: { totalCashBisnis: 359000 } })).toBe(359000);
+  });
+  it('hari tutup: uang aktual + saldo kurir', () => {
+    expect(dayTotalCash({ live: false, closed: [closed(172000, [{ balance: 187000 }])] })).toBe(359000);
+  });
+  it('kurir bisa negatif, dan banyak penutupan dijumlah', () => {
+    expect(dayTotalCash({ live: false, closed: [closed(100000, [{ balance: -20000 }]), closed(50000, null)] })).toBe(130000);
+  });
+  it('tanpa data = null (bukan Rp 0)', () => {
+    expect(dayTotalCash({ live: false, closed: [] })).toBeNull();
   });
 });

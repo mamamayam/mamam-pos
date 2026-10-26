@@ -8,7 +8,7 @@ import { useAppContext } from '../../context/AppContext';
 import { useShiftData } from '../../hook/useShiftData';
 import { toLocalDateString } from '../../utils/formatters';
 import { dayLabel, dayOptions, shiftDate } from '../reports/reportsMath';
-import { closedOnDay, diffTone, walletRows, courierRows } from './shiftMath';
+import { closedOnDay, diffTone, walletRows, courierRows, dayTotalCash } from './shiftMath';
 
 /**
  * ShiftView — Dompet (buka/tutup kas). SATU halaman, bergaya Absensi (navigasi hari), tanpa tab Riwayat:
@@ -280,10 +280,19 @@ const ShiftView = () => {
   const isToday = day === today;
   const showLive = isToday && !!currentShift;
   const toggleShift = () => (currentShift ? setIsCloseSheet(true) : setIsOpenSheet(true));
+  const dayCash = dayTotalCash({ live: showLive, stats, closed: closedToday });
 
   return (
     <div className="p-4 md:p-6 bg-slate-50 dark:bg-slate-950 flex-1 flex flex-col h-full overflow-y-auto animate-in fade-in slide-in-from-bottom-4 duration-300 ease-out custom-scrollbar relative">
       <div className="max-w-3xl w-full space-y-4 pb-10">
+        {/* Total Cash hari yang dilihat (dompet + kurir), satu baris, paling atas */}
+        {dayCash !== null && (
+          <div data-testid="total-cash-hari" className="rounded-2xl px-4 py-3 bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-between gap-3">
+            <span className="text-xs font-bold tracking-wider uppercase">Total Cash{isToday ? ' Hari Ini' : ''}</span>
+            <span className="font-heading font-bold text-lg shrink-0">{formatRupiah(dayCash)}</span>
+          </div>
+        )}
+
         {currentShift && isCarriedOver && (
           <div className="bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 text-red-700 dark:text-red-400 p-3.5 rounded-2xl flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />

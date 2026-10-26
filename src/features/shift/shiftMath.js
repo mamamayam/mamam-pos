@@ -150,3 +150,18 @@ export function courierRows(couriers, cashExpensesKurir) {
     { l: 'Total Saldo Kurir', v: saldo, sign: '', total: true },
   ];
 }
+
+/**
+ * Total Cash pada satu hari = uang di dompet + uang di kurir.
+ * Hari ini dengan dompet terbuka: angka langsung (`totalCashBisnis`).
+ * Selain itu: jumlah dari penutupan hari itu (uang aktual saat tutup + snapshot saldo kurir).
+ * null = tidak ada data (jangan tampilkan Rp 0 yang menyesatkan).
+ */
+export function dayTotalCash({ live, stats, closed = [] }) {
+  if (live) return Number(stats?.totalCashBisnis) || 0;
+  if (!closed.length) return null;
+  return closed.reduce((sum, s) => {
+    const couriers = Array.isArray(s.courier_snapshot_json) ? s.courier_snapshot_json : [];
+    return sum + (Number(s.closing_balance) || 0) + couriers.reduce((a, c) => a + (Number(c.balance) || 0), 0);
+  }, 0);
+}

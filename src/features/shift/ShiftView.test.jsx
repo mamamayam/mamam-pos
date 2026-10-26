@@ -51,13 +51,27 @@ describe('ShiftView — Dompet satu halaman', () => {
     expect(html).toContain('Total Cash');
     expect(html).toContain('Rp 1.585.000');
     expect(html.indexOf('Uang di Dompet')).toBeLessThan(html.indexOf('Uang di Kurir'));
-    expect(html.indexOf('Uang di Kurir')).toBeLessThan(html.indexOf('Total Cash'));
+    expect(html.indexOf('Uang di Kurir')).toBeLessThan(html.indexOf('data-testid="total-cash"'));
     // Kartu kurir = pola yang sama dengan dompet (nominal besar + dropdown Rincian), cuma beda warna.
     const kurir = html.slice(html.indexOf('data-testid="kartu-kurir"'));
     expect(kurir).toContain('Rincian');
     expect(kurir).toContain('bg-accent-100');
     expect(kurir).not.toContain('sky-');
     expect(kurir).toContain('Andi');
+  });
+
+  it('Total Cash hari itu ada paling atas (dompet + kurir), satu baris', () => {
+    data.currentShift = openShift; data.stats = stats;
+    const html = render();
+    const top = html.indexOf('data-testid="total-cash-hari"');
+    expect(top).toBeGreaterThan(-1);
+    expect(top).toBeLessThan(html.indexOf('data-testid="status-dompet"'));
+    expect(html.slice(top, html.indexOf('data-testid="status-dompet"'))).toContain('Total Cash Hari Ini');
+    expect(html.slice(top, html.indexOf('data-testid="status-dompet"'))).toContain('Rp 1.585.000');
+  });
+
+  it('Total Cash tidak tampil kalau tidak ada data hari itu', () => {
+    expect(render()).not.toContain('data-testid="total-cash-hari"');
   });
 
   it('tanpa uang di kurir: kartu kurir tidak tampil, Total Cash tetap', () => {
@@ -85,6 +99,8 @@ describe('ShiftView — Dompet satu halaman', () => {
     }];
     const html = render();
     expect(html).toContain('data-testid="penutupan"');
+    // Total Cash hari itu = uang aktual saat tutup + saldo kurir
+    expect(html.slice(html.indexOf('data-testid="total-cash-hari"'), html.indexOf('data-testid="status-dompet"'))).toContain('Rp 2.165.000');
     expect(html).toContain('DOMPET-BBBB2222');
     expect(html).toContain('Uang di Dompet saat Tutup');
     expect(html).toContain('Rp 1.985.000');

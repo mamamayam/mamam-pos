@@ -82,6 +82,8 @@ export default function ExpenseFormSheet({ isOpen, onClose, editing = null, data
     [employees]
   );
 
+  const showHolder = paymentMethod === 'Tunai' && couriers.length > 0;
+
   const handleSave = () => run(async () => {
     const holder = paymentMethod === 'Tunai' && cashHolderId !== 'kasir' ? couriers.find(c => c.id === cashHolderId) : null;
     await saveExpense({
@@ -103,30 +105,37 @@ export default function ExpenseFormSheet({ isOpen, onClose, editing = null, data
     <>
       <Modal isOpen={isOpen} onClose={onClose} dirty={dirty} sheet size="lg" maxHeight title={editing ? 'Edit Pengeluaran' : 'Tambah Pengeluaran'}>
         <div className="p-5 pt-2 space-y-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-          <div className="grid grid-cols-2 gap-4 items-start">
-            <CategorySelect value={category} onChange={setCategory} options={storeExpenseCategories(categories)} onManage={() => setIsCategoryModalOpen(true)} />
-            <Select label="Sumber Dana" value={paymentMethod}
-              onChange={e => { setPaymentMethod(e.target.value); if (e.target.value === 'Non-Tunai') setCashHolderId('kasir'); }}>
-              <option value="Tunai">Tunai</option>
-              <option value="Non-Tunai">Non-Tunai</option>
-            </Select>
-            <NominalInput label="Jumlah" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" />
-            <Input type="date" label="Tanggal Transaksi" value={dateInput} onChange={e => setDateInput(e.target.value)} />
-          </div>
-
-          {paymentMethod === 'Tunai' && couriers.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Dibayar Pakai Uang Siapa?</label>
-              <Select title="Dibayar Pakai Uang Siapa?" value={cashHolderId} onChange={e => setCashHolderId(e.target.value)}>
-                <option value="kasir">Dompet</option>
-                {couriers.map(c => <option key={c.id} value={c.id}>{c.name} (Kurir)</option>)}
-              </Select>
-            </div>
-          )}
+          {/* Urutan mengikuti kebiasaan mengisi: kategori -> toko -> detail belanjaan -> jumlah,
+              lalu Sumber Dana dan Sumber Uang berdampingan (satu konteks), tanggal terakhir. */}
+          <CategorySelect value={category} onChange={setCategory} options={storeExpenseCategories(categories)} onManage={() => setIsCategoryModalOpen(true)} />
 
           <Input label="Nama Toko/Supplier" value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Opsional" />
 
           <BulletListInput label="Detail" value={detailItems} onChange={setDetailItems} placeholder="Opsional, mis. Ayam 5 kg" />
+
+          <div className="grid grid-cols-2 gap-4 items-start">
+            <NominalInput label="Jumlah" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" />
+            <Input type="date" label="Tanggal Transaksi" value={dateInput} onChange={e => setDateInput(e.target.value)} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 items-end">
+            <div className={showHolder ? '' : 'col-span-2'}>
+              <Select label="Sumber Dana" value={paymentMethod}
+                onChange={e => { setPaymentMethod(e.target.value); if (e.target.value === 'Non-Tunai') setCashHolderId('kasir'); }}>
+                <option value="Tunai">Tunai</option>
+                <option value="Non-Tunai">Non-Tunai</option>
+              </Select>
+            </div>
+            {showHolder && (
+              <div>
+                <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Uang Siapa?</label>
+                <Select title="Dibayar Pakai Uang Siapa?" value={cashHolderId} onChange={e => setCashHolderId(e.target.value)}>
+                  <option value="kasir">Dompet</option>
+                  {couriers.map(c => <option key={c.id} value={c.id}>{c.name} (Kurir)</option>)}
+                </Select>
+              </div>
+            )}
+          </div>
 
           <Button onClick={handleSave} disabled={busy} size="full" className="mt-2">
             {busy ? 'Menyimpan...' : editing ? 'Perbarui Data' : 'Simpan Data'}

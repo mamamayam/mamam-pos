@@ -285,14 +285,6 @@ const ShiftView = () => {
   return (
     <div className="p-4 md:p-6 bg-slate-50 dark:bg-slate-950 flex-1 flex flex-col h-full overflow-y-auto animate-in fade-in slide-in-from-bottom-4 duration-300 ease-out custom-scrollbar relative">
       <div className="max-w-3xl w-full space-y-4 pb-10">
-        {/* Total Cash hari yang dilihat (dompet + kurir), satu baris, paling atas */}
-        {dayCash !== null && (
-          <div data-testid="total-cash-hari" className="rounded-2xl px-4 py-3 bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-between gap-3">
-            <span className="text-xs font-bold tracking-wider uppercase">Total Cash{isToday ? ' Hari Ini' : ''}</span>
-            <span className="font-heading font-bold text-lg shrink-0">{formatRupiah(dayCash)}</span>
-          </div>
-        )}
-
         {currentShift && isCarriedOver && (
           <div className="bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 text-red-700 dark:text-red-400 p-3.5 rounded-2xl flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
@@ -356,6 +348,15 @@ const ShiftView = () => {
 
         {!showLive && closedToday.length === 0 && (
           <EmptyState icon={<Wallet className="w-12 h-12" />} title={isToday ? 'Dompet hari ini belum dibuka.' : 'Tidak ada penutupan dompet pada hari ini.'} className="animate-in fade-in duration-300" />
+        )}
+
+        {/* Total Cash hari yang dilihat (dompet + kurir), satu baris abu-abu, paling bawah.
+            Hari ini + dompet terbuka sudah punya kartu Total Cash hitam (angka sama), jadi tidak diulang. */}
+        {dayCash !== null && !showLive && (
+          <div data-testid="total-cash-hari" className="rounded-2xl px-4 py-3 bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-between gap-3">
+            <span className="text-xs font-bold tracking-wider uppercase">Total Cash{isToday ? ' Hari Ini' : ''}</span>
+            <span className="font-heading font-bold text-lg shrink-0">{formatRupiah(dayCash)}</span>
+          </div>
         )}
       </div>
 

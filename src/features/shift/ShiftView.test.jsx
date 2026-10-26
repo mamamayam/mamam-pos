@@ -60,14 +60,11 @@ describe('ShiftView — Dompet satu halaman', () => {
     expect(kurir).toContain('Andi');
   });
 
-  it('Total Cash hari itu ada paling atas (dompet + kurir), satu baris', () => {
+  it('dompet terbuka hari ini: Total Cash hitam saja di bawah, kartu abu-abu tidak diulang', () => {
     data.currentShift = openShift; data.stats = stats;
     const html = render();
-    const top = html.indexOf('data-testid="total-cash-hari"');
-    expect(top).toBeGreaterThan(-1);
-    expect(top).toBeLessThan(html.indexOf('data-testid="status-dompet"'));
-    expect(html.slice(top, html.indexOf('data-testid="status-dompet"'))).toContain('Total Cash Hari Ini');
-    expect(html.slice(top, html.indexOf('data-testid="status-dompet"'))).toContain('Rp 1.585.000');
+    expect(html).toContain('data-testid="total-cash"');
+    expect(html).not.toContain('data-testid="total-cash-hari"');
   });
 
   it('Total Cash tidak tampil kalau tidak ada data hari itu', () => {
@@ -100,7 +97,9 @@ describe('ShiftView — Dompet satu halaman', () => {
     const html = render();
     expect(html).toContain('data-testid="penutupan"');
     // Total Cash hari itu = uang aktual saat tutup + saldo kurir
-    expect(html.slice(html.indexOf('data-testid="total-cash-hari"'), html.indexOf('data-testid="status-dompet"'))).toContain('Rp 2.165.000');
+    const grey = html.indexOf('data-testid="total-cash-hari"');
+    expect(grey).toBeGreaterThan(html.indexOf('data-testid="penutupan"'));   // paling bawah, setelah kartu penutupan
+    expect(html.slice(grey)).toContain('Rp 2.165.000');
     expect(html).toContain('DOMPET-BBBB2222');
     expect(html).toContain('Uang di Dompet saat Tutup');
     expect(html).toContain('Rp 1.985.000');

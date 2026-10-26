@@ -85,7 +85,9 @@ describe('Catatan Hari Ini — pengajuan ditolak dan diedit', () => {
     quick.feed = [add({ key: 'e', status: 'disetujui', edited: true }), add({ key: 'f', status: 'disetujui', edited: false, source: { id: 'f' } })];
     const html = renderToString(<QuickEntrySection />).replace(/<!-- -->/g, '');
     expect((html.match(/data-testid="badge-diedit"/g) || []).length).toBe(1);
-    expect(html).toContain('Diedit');
+    expect(html).toContain('aria-label="Diedit"');   // ikon (EditedMark) berlabel, bukan teks badge
+    expect(html).not.toMatch(/>\s*Diedit\s*</);       // tidak ada teks "Diedit" yang tampil
+    expect(html).not.toContain('bg-blue-50');         // bukan badge biru lagi
     expect(html).toContain('Disetujui');
   });
   it('menunggu + diedit: badge Menunggu dan Diedit; Potongan/Pengeluaran tidak punya badge Diedit', () => {

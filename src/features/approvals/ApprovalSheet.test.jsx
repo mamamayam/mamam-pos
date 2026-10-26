@@ -65,7 +65,11 @@ describe('ApprovalSheet', () => {
   });
   it('Tambahan yang sudah diedit owner diberi tanda "Diedit owner"', () => {
     state.add = [{ ...addReq, editedAt: '2026-10-16T05:00:00Z' }];
-    expect(render()).toContain('data-testid="pengajuan-diedit"');
+    const html = render();
+    expect(html).toContain('data-testid="pengajuan-diedit"');
+    expect(html).toContain('aria-label="Diedit owner"');
+    expect(html).not.toMatch(/>\s*·?\s*Diedit owner\s*</);   // ikon saja, tanpa teks tampil
+    expect(html).not.toContain('text-sky-');
     state.add = [addReq];
     expect(render()).not.toContain('pengajuan-diedit');
   });

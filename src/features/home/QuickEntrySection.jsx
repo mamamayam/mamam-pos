@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Plus, Minus, ShoppingBag, Users, Clock, Wallet, Pencil, ChevronRight } from 'lucide-react';
-import { Badge, Button, EmptyState, PillTabs } from '../../components/ui';
+import { Badge, Button, EditedMark, EmptyState, PillTabs } from '../../components/ui';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../auth/AuthContext';
 import { useQuickEntries } from '../../hook/useQuickEntries';
@@ -177,8 +177,13 @@ export default function QuickEntrySection({ onChanged }) {
                 {rejected
                   ? <p className="font-bold text-sm text-slate-400 dark:text-slate-500" data-testid="nominal-ditolak">{`${sign}${formatRupiah(0)}`}</p>
                   : <p className={`font-bold text-sm ${masked ? 'text-slate-400' : amt}`}>{masked ? MASK : `${sign}${formatRupiah(item.amount)}`}</p>}
-                {badge && <Badge variant={badge[0]} dot>{badge[1]}</Badge>}
-                {item.kind === 'tambah' && item.edited && <span data-testid="badge-diedit"><Badge variant="info">Diedit</Badge></span>}
+                {(badge || (item.kind === 'tambah' && item.edited)) && (
+                  <div className="flex items-center gap-1.5">
+                    {/* Diedit = ikon samar di samping status (bukan teks berwarna) */}
+                    {item.kind === 'tambah' && item.edited && <EditedMark label="Diedit" data-testid="badge-diedit" />}
+                    {badge && <Badge variant={badge[0]} dot>{badge[1]}</Badge>}
+                  </div>
+                )}
                 {canEdit && <Pencil className="w-3 h-3 text-slate-300 dark:text-slate-600" aria-hidden="true" />}
               </div>
             </div>

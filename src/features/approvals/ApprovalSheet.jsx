@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Check, X, Trash2, Plus, ClipboardCheck, Receipt, Pencil } from 'lucide-react';
-import { Modal, Button, Input, EmptyState, PillTabs } from '../../components/ui';
+import { Modal, Button, Input, EditedMark, EmptyState, PillTabs } from '../../components/ui';
 import { useAppContext } from '../../context/AppContext';
 import { usePendingDeleteRequests, putuskanHapusTransaksi, usePendingExpenseDeleteRequests, putuskanHapusPengeluaran } from '../../hook/useDeleteRequests';
 import { usePendingAdditions, decideAddition } from '../../hook/usePendingAdditions';
@@ -17,7 +17,7 @@ import { detailSubRows } from '../payroll/additionDetail';
  *                      Pengeluaran karyawan (potongan) yang dihapus ikut menghapus potongan gajinya.
  *  - Tambahan        : pengajuan Tambahan gaji karyawan dari staf (dulu kartu di Beranda). Setuju = masuk hitungan gaji.
  *                      Owner bisa MENGUBAH isi pengajuan dulu (tombol Ubah = form Tambahan yang sama dalam mode ubah,
- *                      QuickAdjustmentSheet `editing`); status tetap menunggu, kartu diberi tanda "Diedit owner".
+ *                      QuickAdjustmentSheet `editing`); status tetap menunggu, kartu diberi ikon samar (EditedMark, label "Diedit owner").
  * Dibuka dari tile Persetujuan di menu slide-up dan dari banner di Beranda. Badge jumlahnya di BottomNav
  * (usePendingApprovals). Keputusan memuat ulang daftar dan memberi sinyal ke layar lain (notifyApprovalsChanged).
  */
@@ -183,7 +183,7 @@ export default function ApprovalSheet({ isOpen, onClose }) {
                         ))}
                       </ul>
                     )}
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Dicatat {r.requestedBy || 'staf'} · untuk {r.date}{r.editedAt && <span className="font-bold text-sky-600 dark:text-sky-400" data-testid="pengajuan-diedit"> · Diedit owner</span>}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Dicatat {r.requestedBy || 'staf'} · untuk {r.date}{r.editedAt && <EditedMark size="sm" label="Diedit owner" data-testid="pengajuan-diedit" className="ml-1.5 align-text-bottom" />}</p>
                   </div>
                   <p className="font-bold text-sm text-emerald-600 dark:text-emerald-400 shrink-0">+{formatRupiah(r.amount)}</p>
                 </div>

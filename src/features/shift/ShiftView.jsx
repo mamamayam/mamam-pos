@@ -108,24 +108,31 @@ function WalletSwitch({ on, onToggle, disabled }) {
 }
 
 // Satu baris rincian di dalam kartu utama. `total` = baris jumlah (tebal, diberi garis di atasnya).
-const Ledger = ({ l, v, sign, total, formatRupiah }) => (
-  <div className={`flex justify-between items-center text-xs gap-3 ${total ? 'border-t border-white/25 pt-1.5 mt-1.5 text-[13px]' : ''}`}>
+const Ledger = ({ l, v, sign, total, line, formatRupiah }) => (
+  <div className={`flex justify-between items-center text-xs gap-3 ${total ? `border-t ${line} pt-1.5 mt-1.5 text-[13px]` : ''}`}>
     <span className="flex items-center gap-2 min-w-0"><span className="w-3 text-center opacity-70">{sign}</span><span className={`truncate ${total ? 'font-bold' : ''}`}>{l}</span></span>
     <span className="font-bold tabular-nums">{formatRupiah(v)}</span>
   </div>
 );
 
+// Dompet = oranye tema penuh (teks putih). Kurir = oranye tema yang muda/lembut (teks gelap), bukan biru.
 const HERO_TONE = {
-  accent: 'bg-gradient-to-br from-accent-600 to-accent-500 dark:from-accent-500 dark:to-accent-600 shadow-[0_8px_24px_rgba(var(--color-accent-500),0.25)]',
-  // Kurir: warna tema juga (bukan biru), tapi lebih gelap supaya terbedakan dari kartu dompet.
-  deep: 'bg-gradient-to-br from-accent-800 to-accent-600 dark:from-accent-700 dark:to-accent-500 shadow-[0_8px_24px_rgba(var(--color-accent-700),0.25)]',
+  accent: {
+    card: 'text-white bg-gradient-to-br from-accent-600 to-accent-500 dark:from-accent-500 dark:to-accent-600 shadow-[0_8px_24px_rgba(var(--color-accent-500),0.25)]',
+    btn: 'bg-white/15', panel: 'bg-white/10', line: 'border-white/25',
+  },
+  soft: {
+    card: 'text-accent-900 dark:text-accent-100 bg-accent-100 dark:bg-accent-500/15 border border-accent-200 dark:border-accent-500/25',
+    btn: 'bg-accent-200/70 dark:bg-accent-500/20', panel: 'bg-accent-200/40 dark:bg-accent-500/10', line: 'border-accent-300/70 dark:border-accent-500/30',
+  },
 };
 
-// Kartu utama (dompet = warna tema, kurir = warna tema yang lebih gelap): nominal besar + Rincian yang dilipat.
+// Kartu utama: nominal besar + Rincian yang dilipat. Dompet dan kurir memakai komponen yang SAMA, beda `tone`.
 function Hero({ label, hint, amount, badge, rows, formatRupiah, testId, tone = 'accent' }) {
   const [openRows, setOpenRows] = useState(false);
+  const t = HERO_TONE[tone];
   return (
-    <div data-testid={testId} className={`rounded-3xl p-5 text-white ${HERO_TONE[tone]}`}>
+    <div data-testid={testId} className={`rounded-3xl p-5 ${t.card}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-bold tracking-wider uppercase opacity-80">{label}</p>
@@ -135,24 +142,24 @@ function Hero({ label, hint, amount, badge, rows, formatRupiah, testId, tone = '
         {badge}
       </div>
       <button type="button" onClick={() => setOpenRows(v => !v)} aria-expanded={openRows}
-        className="mt-4 w-full flex items-center justify-between rounded-xl bg-white/15 px-3 py-2 text-xs font-bold active:scale-[0.98] transition-all">
+        className={`mt-4 w-full flex items-center justify-between rounded-xl ${t.btn} px-3 py-2 text-xs font-bold active:scale-[0.98] transition-all`}>
         <span>Rincian</span><ChevronDown className={`w-4 h-4 transition-transform duration-300 ${openRows ? 'rotate-180' : ''}`} />
       </button>
       {openRows && (
-        <div className="mt-2 rounded-xl bg-white/10 px-3 py-2.5 space-y-1.5 animate-in fade-in duration-300">
-          {rows.map(r => <Ledger key={r.l} {...r} formatRupiah={formatRupiah} />)}
+        <div className={`mt-2 rounded-xl ${t.panel} px-3 py-2.5 space-y-1.5 animate-in fade-in duration-300`}>
+          {rows.map(r => <Ledger key={r.l} {...r} line={t.line} formatRupiah={formatRupiah} />)}
         </div>
       )}
     </div>
   );
 }
 
-// Uang yang dipegang kurir: kartu yang sama dengan dompet, warna tema yang lebih gelap. Saldo bisa negatif (kurir nombokin).
+// Uang yang dipegang kurir: kartu yang sama dengan dompet, oranye muda. Saldo bisa negatif (kurir nombokin).
 function CourierCard({ couriers, cashExpensesKurir, formatRupiah }) {
   const total = couriers.reduce((a, c) => a + (Number(c.balance) || 0), 0);
   const names = couriers.map(c => c.employeeName || c.name || 'Kurir').join(', ');
   return (
-    <Hero tone="deep" testId="kartu-kurir" label="Uang di Kurir" hint={names} amount={total} formatRupiah={formatRupiah}
+    <Hero tone="soft" testId="kartu-kurir" label="Uang di Kurir" hint={names} amount={total} formatRupiah={formatRupiah}
       rows={courierRows(couriers, cashExpensesKurir)} />
   );
 }

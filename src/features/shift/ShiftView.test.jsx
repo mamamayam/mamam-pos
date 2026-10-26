@@ -55,7 +55,7 @@ describe('ShiftView — Dompet satu halaman', () => {
     // Kartu kurir = pola yang sama dengan dompet (nominal besar + dropdown Rincian), cuma beda warna.
     const kurir = html.slice(html.indexOf('data-testid="kartu-kurir"'));
     expect(kurir).toContain('Rincian');
-    expect(kurir).toContain('from-accent-800');
+    expect(kurir).toContain('bg-accent-100');
     expect(kurir).not.toContain('sky-');
     expect(kurir).toContain('Andi');
   });

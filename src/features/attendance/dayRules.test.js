@@ -83,8 +83,8 @@ describe('libur otomatis', () => {
   it('hanya status aktif; cuti/freelance/resign dilewati', () => {
     for (const status of ['cuti', 'freelance', 'resign']) expect(prep([], [emp('a', { status })], T, 12 * 60, [], period).autoLiburCount).toBe(0);
   });
-  it('tanpa ID absensi tidak ditebak libur (absennya memang tak bisa dicocokkan)', () => {
-    expect(prep([], [emp('a', { externalId: null })], T, 12 * 60, [], period).autoLiburCount).toBe(0);
+  it('karyawan baru tanpa ID absensi lama tetap dapat libur otomatis (absennya memakai id karyawan sendiri)', () => {
+    expect(prep([], [emp('a', { externalId: null })], T, 12 * 60, [], period).autoLiburCount).toBeGreaterThan(0);
   });
   it('bentuk baris DB (start_date/external_id) juga dikenali', () => {
     const r = prep([], [{ id: 'a', status: 'aktif', external_id: 'EMP-a', start_date: '2026-10-05' }], T, 12 * 60, [], period);

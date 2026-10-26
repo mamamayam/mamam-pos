@@ -1,0 +1,451 @@
+From 620466319bc37817c408988f4469e1382ba20ed5 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 16 Oct 2026 19:38:37 +0000
+Subject: [PATCH] feat: skrip ambil data lengkap dari Supabase app lama +
+ gabung tanpa duplikat (untuk migrasi penjualan)
+
+---
+ .gitignore                        |   4 +
+ docs/migrasi-dari-a.md            |  18 +++
+ scripts/ambil-dari-supabase-a.mjs |   6 +
+ scripts/migrasi/ambil-a.mjs       | 216 ++++++++++++++++++++++++++++++
+ scripts/migrasi/ambil-a.test.mjs  | 147 ++++++++++++++++++++
+ 5 files changed, 391 insertions(+)
+ create mode 100644 scripts/ambil-dari-supabase-a.mjs
+ create mode 100644 scripts/migrasi/ambil-a.mjs
+ create mode 100644 scripts/migrasi/ambil-a.test.mjs
+
+diff --git a/.gitignore b/.gitignore
+index 350cf7e..c8c2eb2 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -11,6 +11,10 @@ dist
+ # JANGAN masuk git. Simpan di laptop saja, jangan di-commit / di-upload.
+ # Backup & ekspor dari app lama (A)
+ mamam-ayam-backup*.json
++# Hasil skrip ambil-dari-supabase-a & file pelengkap (berisi data transaksi/pelanggan)
++hasil-gabungan*.json
++pelengkap-dari-excel.json
++pengeluaran-gabungan.json
+ backup*.json
+ # Log migrasi (dipakai skrip --batalkan, cukup disimpan lokal)
+ migrasi-log-*.json
+diff --git a/docs/migrasi-dari-a.md b/docs/migrasi-dari-a.md
+index 23461ae..a2f640c 100644
+--- a/docs/migrasi-dari-a.md
++++ b/docs/migrasi-dari-a.md
+@@ -51,6 +51,24 @@ Boleh dijalankan berulang. Yang sudah ada di C dilewati, tidak ditimpa, tidak di
+ - Pemasukan lain ikut dipindah, tapi layar Pengeluaran di C hanya menampilkan pengeluaran. Angkanya tetap dipakai hitungan Dompet.
+ - Lakukan migrasi riwayat **sebelum** membuka Dompet baru di C, atau pastikan backup diambil sebelum Dompet C dibuka. Kalau tidak, skrip memperingatkan.
+ 
++## Kalau ekspor dari HP ketinggalan: ambil langsung dari Supabase A
++
++Ekspor JSON dari satu HP bisa kurang lengkap (HP lain belum sinkron). Tabel Supabase app lama berisi
++gabungan semua perangkat, jadi bisa dipakai sebagai sumber utama. Skrip `scripts/ambil-dari-supabase-a.mjs`
++membaca tabel itu (HANYA membaca), menggabungkannya dengan file backup yang sudah ada per id (tanpa duplikat),
++lalu menulis satu file JSON untuk skrip migrasi di atas.
++
++1. Tambahkan ke `.env.local` (project **A**, kunci anon-nya saja, bukan service_role):
++   `A_SUPABASE_URL=https://xxxx.supabase.co` dan `A_SUPABASE_ANON_KEY=eyJ...`
++2. `node scripts/ambil-dari-supabase-a.mjs --gabung "C:\\path\\backup.json"` (tabel bawaan: transaksi; tambah
++   `--tabel salesHistory,expenses` bila perlu. Tabel `customers` di A hanya bisa dibaca user yang login, jadi pelanggan
++   diambil dari file gabung). Hasilnya `hasil-gabungan-<waktu>.json`.
++3. Jalankan skrip migrasi dengan file itu: simulasi dulu, baru `--riwayat --apply`.
++
++Catatan: transaksi yang hanya ada di file gabung (tidak ada di Supabase) tidak punya rincian item bila file itu
++berasal dari Excel; skrip menghitung dan memberi tahu jumlahnya. Karyawan dan pelanggan di file gabung dipakai
++untuk menyambungkan pemegang kas kurir dan pelanggan pada transaksi.
++
+ ## Membatalkan
+ 
+ Setiap penulisan dicatat di `migrasi-log-<tanggal>.json` (di folder tempat skrip dijalankan). Simpan file itu.
+diff --git a/scripts/ambil-dari-supabase-a.mjs b/scripts/ambil-dari-supabase-a.mjs
+new file mode 100644
+index 0000000..fc26646
+--- /dev/null
++++ b/scripts/ambil-dari-supabase-a.mjs
+@@ -0,0 +1,6 @@
++#!/usr/bin/env node
++// Titik masuk: ambil data lengkap dari Supabase app lama (A) dan gabungkan dengan backup yang ada.
++// Logikanya ada di scripts/migrasi/ambil-a.mjs. Bantuan: node scripts/ambil-dari-supabase-a.mjs --help
++import { run } from './migrasi/ambil-a.mjs';
++
++process.exitCode = await run(process.argv.slice(2));
+diff --git a/scripts/migrasi/ambil-a.mjs b/scripts/migrasi/ambil-a.mjs
+new file mode 100644
+index 0000000..d4cac92
+--- /dev/null
++++ b/scripts/migrasi/ambil-a.mjs
+@@ -0,0 +1,216 @@
++/**
++ * ambil-a.mjs — ambil data LENGKAP dari database Supabase app lama (A / mamam-global) dan gabungkan
++ * dengan file backup yang sudah ada, tanpa duplikat. Hasilnya berupa file JSON yang bisa langsung
++ * dipakai scripts/migrasi-dari-a.mjs.
++ *
++ * Kenapa ada: Export JSON dari satu HP bisa ketinggalan (HP lain belum sinkron / ekspor lama),
++ * sedangkan tabel Supabase A berisi gabungan semua perangkat.
++ *
++ * Aturan keselamatan:
++ *  - HANYA membaca (GET). Tidak ada tulis ke A maupun C.
++ *  - Menolak kunci rahasia (service_role / sb_secret_), dan menolak kalau alamat A sama dengan C.
++ *  - Kunci tidak pernah dicetak. File hasil tidak menimpa file yang sudah ada.
++ */
++import fs from 'node:fs';
++import path from 'node:path';
++import { parseEnv } from './cli.mjs';
++
++export const TABEL_A = ['salesHistory', 'customers', 'expenses', 'incomes', 'shiftHistory'];
++const BAWAAN = ['salesHistory'];
++const PAGE = 1000;
++
++export const HELP = `
++Ambil data lengkap dari Supabase app lama (A) lalu gabungkan dengan backup yang sudah ada.
++
++Isi .env.local (di folder mamam-pos) dengan alamat & kunci "anon" project A (ada di .env app lama):
++  A_SUPABASE_URL=https://xxxxxxxx.supabase.co
++  A_SUPABASE_ANON_KEY=eyJ...
++
++Pakai:
++  node scripts/ambil-dari-supabase-a.mjs --gabung "C:\\\\path\\\\backup.json"
++  node scripts/migrasi-dari-a.mjs hasil-gabungan-XXXX.json --riwayat          (simulasi dulu)
++  node scripts/migrasi-dari-a.mjs hasil-gabungan-XXXX.json --riwayat --apply
++
++Pilihan:
++  --gabung <file>   backup JSON yang mau digabung (mis. ekspor dari app / pelengkap-dari-excel.json)
++  --tabel <daftar>  tabel yang diambil, dipisah koma. Bawaan: ${BAWAAN.join(',')}
++                    Pilihan: ${TABEL_A.join(', ')}
++                    (catatan: tabel customers di A hanya boleh dibaca user yang login, jadi kunci anon
++                    mendapat daftar kosong; pelanggan diambil dari file gabung)
++  --lewati <id,id>  id data yang TIDAK boleh ikut (mis. data uji coba), dibuang dari Supabase maupun file gabung
++  --keluar <file>   nama file hasil (bawaan: hasil-gabungan-<tanggal>.json; tidak menimpa file lama)
++  --env <file>      pakai file env selain .env.local
++  --help            tampilkan bantuan ini
++
++Aturan gabung: id yang sama dianggap SATU data (tidak digandakan). Isi dari Supabase dipakai; kolom
++yang kosong di sana dilengkapi dari file gabungan. Yang dihapus di salah satu sisi tetap dianggap dihapus.
++`;
++
++const cleanUrl = (u) => String(u || '').trim().replace(/\/rest\/v1\/?$/i, '').replace(/\/+$/, '');
++const hostOf = (u) => { try { return new URL(u).host; } catch { return ''; } };
++const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
++
++function keyKind(key) {
++  const k = String(key || '').trim();
++  if (k.startsWith('sb_secret_')) return 'secret';
++  if (k.startsWith('sb_publishable_')) return 'publishable';
++  const parts = k.split('.');
++  if (parts.length === 3) {
++    try {
++      const role = JSON.parse(Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')).role;
++      if (role === 'anon') return 'anon';
++      if (role === 'service_role') return 'secret';
++    } catch { /* bukan JWT */ }
++  }
++  return 'unknown';
++}
++
++export function parseArgs(argv) {
++  const o = { gabung: null, keluar: null, tabel: [...BAWAAN], lewati: [], envFile: null, help: false };
++  for (let i = 0; i < argv.length; i++) {
++    const a = argv[i];
++    const val = () => { const v = argv[++i]; if (!v || v.startsWith('--')) throw new Error(`${a} perlu nilai.`); return v; };
++    if (a === '--help' || a === '-h') o.help = true;
++    else if (a === '--gabung') o.gabung = val();
++    else if (a === '--keluar') o.keluar = val();
++    else if (a === '--env') o.envFile = val();
++    else if (a === '--lewati') o.lewati = val().split(',').map((x) => x.trim()).filter(Boolean);
++    else if (a === '--tabel') {
++      o.tabel = val().split(',').map((s) => s.trim()).filter(Boolean);
++      const salah = o.tabel.filter((t) => !TABEL_A.includes(t));
++      if (salah.length) throw new Error(`Tabel tidak dikenal: ${salah.join(', ')}. Pilihan: ${TABEL_A.join(', ')}.`);
++      if (o.tabel.length === 0) throw new Error('--tabel kosong.');
++    } else throw new Error(`Pilihan tidak dikenal: ${a}. Lihat --help.`);
++  }
++  return o;
++}
++
++/** Baris tabel A ({ id, payload, deleted_at }) -> data seperti isi backup JSON. */
++export function rowToRecord(row) {
++  const payload = isObj(row?.payload) ? row.payload : {};
++  const deletedAt = payload.deletedAt ?? row?.deleted_at ?? null;
++  return { ...payload, id: row?.id ?? payload.id ?? null, deletedAt };
++}
++
++const kosong = (v) => v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0);
++
++/**
++ * Gabungkan daftar dari Supabase (dipakai sebagai utama) dengan daftar dari file backup, per id.
++ * Mengembalikan { rows, stats }.
++ */
++export function mergeRecords(fetched, base, { cekNilai = ['total', 'amount'] } = {}) {
++  const baseList = Array.isArray(base) ? base.filter(isObj) : [];
++  const byId = new Map();
++  const order = [];
++  const stats = { dariSupabase: 0, hanyaDiFile: 0, keduanya: 0, dilengkapi: 0, bedaNilai: [], tanpaId: 0 };
++
++  for (const r of fetched) {
++    if (!isObj(r) || r.id === null || r.id === undefined || r.id === '') { stats.tanpaId += 1; continue; }
++    if (byId.has(r.id)) continue;
++    byId.set(r.id, { ...r });
++    order.push(r.id);
++    stats.dariSupabase += 1;
++  }
++  const hanyaFile = [];
++  for (const b of baseList) {
++    const id = b.id;
++    if (id === null || id === undefined || id === '') { hanyaFile.push(b); stats.tanpaId += 1; continue; }
++    const cur = byId.get(id);
++    if (!cur) { byId.set(id, { ...b }); order.push(id); stats.hanyaDiFile += 1; continue; }
++    stats.keduanya += 1;
++    let diisi = false;
++    for (const [k, v] of Object.entries(b)) {
++      if (k === 'deletedAt') { if (kosong(cur.deletedAt) && !kosong(v)) { cur.deletedAt = v; diisi = true; } continue; }
++      if (kosong(cur[k]) && !kosong(v)) { cur[k] = v; diisi = true; }
++    }
++    if (diisi) stats.dilengkapi += 1;
++    for (const f of cekNilai) {
++      if (f in b && f in cur && Number(b[f]) !== Number(cur[f])) { stats.bedaNilai.push(`${id} (${f}: file ${b[f]} / Supabase ${cur[f]})`); break; }
++    }
++  }
++  return { rows: [...order.map((id) => byId.get(id)), ...hanyaFile], stats };
++}
++
++/** Ambil semua baris satu tabel (hanya GET, per 1000 baris). */
++export async function fetchTable({ url, key, table, fetchImpl = fetch }) {
++  const out = [];
++  for (let offset = 0; ; offset += PAGE) {
++    const endpoint = `${url}/rest/v1/${encodeURIComponent(table)}?select=id,payload,deleted_at&order=id.asc&limit=${PAGE}&offset=${offset}`;
++    let res;
++    try { res = await fetchImpl(endpoint, { method: 'GET', headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: 'application/json' } }); }
++    catch (err) { throw new Error(`Tidak bisa menghubungi A untuk tabel ${table}: ${err.message}`); }
++    if (!res.ok) {
++      const hint = res.status === 401 || res.status === 403 ? ' (kunci salah, atau tabel ini tidak boleh dibaca kunci anon)' : res.status === 404 ? ' (tabel tidak ditemukan)' : '';
++      throw new Error(`Tabel ${table} gagal dibaca: HTTP ${res.status}${hint}`);
++    }
++    const page = await res.json();
++    if (!Array.isArray(page)) throw new Error(`Tabel ${table}: jawaban A bukan daftar.`);
++    out.push(...page);
++    if (page.length < PAGE) break;
++  }
++  return out;
++}
++
++function loadSource(envFile, explicit, env) {
++  const fromFile = fs.existsSync(envFile) ? parseEnv(fs.readFileSync(envFile, 'utf8')) : (explicit ? (() => { throw new Error(`File env tidak ditemukan: ${envFile}`); })() : {});
++  const get = (k) => String(fromFile[k] ?? env[k] ?? '').trim();
++  const url = cleanUrl(get('A_SUPABASE_URL'));
++  const key = get('A_SUPABASE_ANON_KEY');
++  if (!url || !key) throw new Error(`Isi A_SUPABASE_URL dan A_SUPABASE_ANON_KEY (project A) di ${envFile} atau di environment. Lihat --help.`);
++  if (!/^https?:\/\//i.test(url)) throw new Error('A_SUPABASE_URL harus berupa alamat https://… (tanpa /rest/v1/).');
++  if (keyKind(key) === 'secret') throw new Error('Kunci A adalah kunci RAHASIA (service_role/secret). Pakai kunci "anon"/"publishable" saja.');
++  const c = cleanUrl(get('VITE_SUPABASE_URL'));
++  if (c && hostOf(c) === hostOf(url)) throw new Error('A_SUPABASE_URL sama dengan VITE_SUPABASE_URL (project C). Yang diisi harus project A (app lama).');
++  return { url, key };
++}
++
++const LABEL = { salesHistory: 'transaksi', customers: 'pelanggan', expenses: 'pengeluaran', incomes: 'pemasukan lain', shiftHistory: 'shift' };
++
++export async function run(argv, { fetchImpl = fetch, env = process.env, cwd = process.cwd(), out = (s) => console.log(s) } = {}) {
++  let args;
++  try { args = parseArgs(argv); } catch (e) { out(`Gagal: ${e.message}`); return 1; }
++  if (args.help) { out(HELP); return 0; }
++  try {
++    const envFile = path.resolve(cwd, args.envFile ?? '.env.local');
++    const { url, key } = loadSource(envFile, Boolean(args.envFile), env);
++
++    let base = {};
++    if (args.gabung) {
++      const f = path.resolve(cwd, args.gabung);
++      if (!fs.existsSync(f) || !fs.statSync(f).isFile()) throw new Error(`File gabung tidak ditemukan: ${f}`);
++      try { base = JSON.parse(fs.readFileSync(f, 'utf8').replace(/^\uFEFF/, '')); }
++      catch (e) { throw new Error(`File gabung bukan JSON yang valid (${e.message}).`); }
++      if (!isObj(base)) throw new Error('File gabung harus berupa objek JSON backup (bukan daftar).');
++    }
++    const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
++    const outFile = path.resolve(cwd, args.keluar ?? `hasil-gabungan-${stamp}.json`);
++    if (fs.existsSync(outFile)) throw new Error(`File hasil sudah ada: ${outFile}. Pilih nama lain dengan --keluar (file lama tidak ditimpa).`);
++
++    const result = { ...base };
++    const lines = ['Ambil dari Supabase A (hanya membaca)…'];
++    for (const table of args.tabel) {
++      const buang = new Set(args.lewati);
++      const dibuang = (r) => buang.has(String(r?.id));
++      const rows = (await fetchTable({ url, key, table, fetchImpl })).map(rowToRecord).filter((r) => !dibuang(r));
++      const baseRows = Array.isArray(base[table]) ? base[table].filter((r) => !dibuang(r)) : base[table];
++      const { rows: merged, stats } = mergeRecords(rows, baseRows);
++      result[table] = merged;
++      lines.push(`• ${LABEL[table]}: ${stats.dariSupabase} dari Supabase, ${stats.hanyaDiFile} hanya di file gabung, ${stats.keduanya} ada di keduanya (${stats.dilengkapi} dilengkapi dari file) → ${merged.length} data tanpa duplikat id`);
++      if (buang.size) lines.push(`  ${[...buang].length} id diminta dilewati (--lewati).`);
++      if (stats.dariSupabase === 0) lines.push(`  PERHATIAN: Supabase mengembalikan 0 baris untuk ${LABEL[table]}. Kalau tabelnya seharusnya berisi, kemungkinan kunci anon diblokir pengaman database (RLS) dan hanya bisa membaca daftar kosong. Isi tabel ini dari file gabung saja.`);
++      if (stats.tanpaId) lines.push(`  ${stats.tanpaId} baris tanpa id dibiarkan apa adanya (tidak bisa dicek duplikatnya).`);
++      if (stats.bedaNilai.length) lines.push(`  ${stats.bedaNilai.length} id yang nilainya beda antara file dan Supabase (dipakai nilai Supabase): ${stats.bedaNilai.slice(0, 5).join('; ')}${stats.bedaNilai.length > 5 ? '; …' : ''}`);
++      if (table === 'salesHistory') {
++        const tanpaItem = merged.filter((r) => !r.deletedAt && (!Array.isArray(r.items) || r.items.length === 0)).length;
++        if (tanpaItem) lines.push(`  PERHATIAN: ${tanpaItem} transaksi tidak punya rincian item (omzet tetap ikut, tapi tidak muncul di laporan per menu).`);
++      }
++    }
++    fs.writeFileSync(outFile, JSON.stringify(result), { flag: 'wx' });
++    lines.push(`Selesai. File: ${outFile}`, 'Langkah berikutnya: jalankan scripts/migrasi-dari-a.mjs dengan file ini (simulasi dulu, lalu --apply).');
++    out(lines.join('\n'));
++    return 0;
++  } catch (e) {
++    out(`Gagal: ${e.message}`);
++    return 1;
++  }
++}
+diff --git a/scripts/migrasi/ambil-a.test.mjs b/scripts/migrasi/ambil-a.test.mjs
+new file mode 100644
+index 0000000..2820b8a
+--- /dev/null
++++ b/scripts/migrasi/ambil-a.test.mjs
+@@ -0,0 +1,147 @@
++import { describe, it, expect, beforeEach, afterEach } from 'vitest';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import { parseArgs, rowToRecord, mergeRecords, fetchTable, run } from './ambil-a.mjs';
++
++const ANON = 'eyJhbGciOiJIUzI1NiJ9.' + Buffer.from(JSON.stringify({ role: 'anon' })).toString('base64url') + '.sig';
++const SERVICE = 'eyJhbGciOiJIUzI1NiJ9.' + Buffer.from(JSON.stringify({ role: 'service_role' })).toString('base64url') + '.sig';
++
++const sale = (id, total, extra = {}) => ({ id, payload: { id, total, date: '2026-10-01T03:00:00.000Z', items: [{ name: 'Ayam', qty: 1, price: total }], ...extra }, deleted_at: null });
++
++/** fetch palsu: meniru PostgREST (limit/offset) dan mencatat semua permintaan. */
++function fakeA(tables) {
++  const calls = [];
++  const impl = async (url, init) => {
++    calls.push({ url: String(url), method: init?.method });
++    const u = new URL(url);
++    const table = decodeURIComponent(u.pathname.split('/').pop());
++    if (!(table in tables)) return { ok: false, status: 404, json: async () => ({}) };
++    const limit = Number(u.searchParams.get('limit')); const offset = Number(u.searchParams.get('offset'));
++    return { ok: true, status: 200, json: async () => tables[table].slice(offset, offset + limit) };
++  };
++  return { impl, calls };
++}
++
++describe('rowToRecord', () => {
++  it('menyatukan id baris, isi payload, dan kolom deleted_at', () => {
++    expect(rowToRecord({ id: 'ORD-1', payload: { total: 5 }, deleted_at: '2026-10-02' })).toEqual({ total: 5, id: 'ORD-1', deletedAt: '2026-10-02' });
++    expect(rowToRecord({ id: 'ORD-2', payload: { total: 5, deletedAt: 'x' }, deleted_at: null }).deletedAt).toBe('x');
++    expect(rowToRecord({ id: 'ORD-3', payload: null }).deletedAt).toBeNull();
++  });
++});
++
++describe('mergeRecords', () => {
++  it('tidak menggandakan id yang sama dan menambah yang hanya ada di file', () => {
++    const { rows, stats } = mergeRecords([{ id: 'a', total: 1 }, { id: 'b', total: 2 }], [{ id: 'b', total: 2 }, { id: 'c', total: 3 }]);
++    expect(rows.map((r) => r.id)).toEqual(['a', 'b', 'c']);
++    expect(stats).toMatchObject({ dariSupabase: 2, hanyaDiFile: 1, keduanya: 1 });
++  });
++  it('Supabase dipakai, kolom kosong dilengkapi dari file, dan beda nilai dicatat', () => {
++    const { rows, stats } = mergeRecords([{ id: 'a', total: 10, items: [], note: '' }], [{ id: 'a', total: 12, items: [{ n: 1 }], note: 'x' }]);
++    expect(rows[0]).toMatchObject({ total: 10, items: [{ n: 1 }], note: 'x' });
++    expect(stats.dilengkapi).toBe(1);
++    expect(stats.bedaNilai).toHaveLength(1);
++  });
++  it('yang dihapus di salah satu sisi tetap dianggap dihapus', () => {
++    const { rows } = mergeRecords([{ id: 'a', deletedAt: null }], [{ id: 'a', deletedAt: '2026-10-01' }]);
++    expect(rows[0].deletedAt).toBe('2026-10-01');
++  });
++  it('baris tanpa id tidak dibuang dan tidak ikut dicek duplikat', () => {
++    const { rows, stats } = mergeRecords([{ total: 1 }], [{ total: 2 }, { total: 2 }]);
++    expect(rows).toHaveLength(2);   // 1 dari file x2 tanpa id (yang dari Supabase tanpa id dilewati)
++    expect(stats.tanpaId).toBe(3);
++  });
++  it('tidak mengubah daftar masukan', () => {
++    const f = [{ id: 'a', items: [] }]; const b = [{ id: 'a', items: [1] }];
++    mergeRecords(f, b);
++    expect(f[0].items).toEqual([]);
++  });
++});
++
++describe('fetchTable', () => {
++  it('mengambil semua halaman (1000 per halaman) dan hanya memakai GET', async () => {
++    const rows = Array.from({ length: 2300 }, (_, i) => sale(`ORD-${i}`, 1));
++    const { impl, calls } = fakeA({ salesHistory: rows });
++    const got = await fetchTable({ url: 'https://a.supabase.co', key: ANON, table: 'salesHistory', fetchImpl: impl });
++    expect(got).toHaveLength(2300);
++    expect(calls).toHaveLength(3);
++    expect(calls.every((c) => c.method === 'GET')).toBe(true);
++  });
++  it('melempar pesan jelas untuk 401 dan 404 tanpa membocorkan kunci', async () => {
++    const f401 = async () => ({ ok: false, status: 401, json: async () => ({}) });
++    await expect(fetchTable({ url: 'https://a.supabase.co', key: ANON, table: 'customers', fetchImpl: f401 })).rejects.toThrow(/HTTP 401.*kunci/);
++    const { impl } = fakeA({});
++    const err = await fetchTable({ url: 'https://a.supabase.co', key: ANON, table: 'customers', fetchImpl: impl }).catch((e) => e);
++    expect(err.message).toMatch(/HTTP 404/);
++    expect(err.message).not.toContain(ANON);
++  });
++});
++
++describe('parseArgs', () => {
++  it('bawaan: hanya transaksi', () => expect(parseArgs([]).tabel).toEqual(['salesHistory']));
++  it('menolak tabel/pilihan yang tidak dikenal', () => {
++    expect(() => parseArgs(['--tabel', 'users'])).toThrow(/tidak dikenal/);
++    expect(() => parseArgs(['--aneh'])).toThrow(/tidak dikenal/);
++    expect(() => parseArgs(['--gabung'])).toThrow(/perlu nilai/);
++    expect(parseArgs(['--lewati', 'a, b']).lewati).toEqual(['a', 'b']);
++  });
++});
++
++describe('run', () => {
++  let dir; let logs; const out = (s) => logs.push(s);
++  beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ambil-a-')); logs = []; });
++  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
++  const env = (extra = '') => fs.writeFileSync(path.join(dir, '.env.local'), `A_SUPABASE_URL=https://aaaa.supabase.co\nA_SUPABASE_ANON_KEY=${ANON}\n${extra}`);
++
++  it('mengambil, menggabung dengan file, dan menulis hasil tanpa mencetak kunci', async () => {
++    env();
++    fs.writeFileSync(path.join(dir, 'base.json'), JSON.stringify({ menus: [{ id: 'm1' }], salesHistory: [{ id: 'ORD-2', total: 20 }, { id: 'ORD-9', total: 90 }] }));
++    const { impl } = fakeA({ salesHistory: [sale('ORD-1', 10), sale('ORD-2', 20)], customers: [{ id: 'CUST-1', payload: { name: 'Mila' }, deleted_at: null }] });
++    const code = await run(['--gabung', 'base.json', '--keluar', 'hasil.json', '--tabel', 'salesHistory,customers'], { fetchImpl: impl, env: {}, cwd: dir, out });
++    expect(code).toBe(0);
++    const res = JSON.parse(fs.readFileSync(path.join(dir, 'hasil.json'), 'utf8'));
++    expect(res.menus).toEqual([{ id: 'm1' }]);                              // bagian lain dari file gabung dipertahankan
++    expect(res.salesHistory.map((r) => r.id).sort()).toEqual(['ORD-1', 'ORD-2', 'ORD-9']);
++    expect(res.customers[0]).toMatchObject({ id: 'CUST-1', name: 'Mila' });
++    const text = logs.join('\n');
++    expect(text).toContain('PERHATIAN: 1 transaksi tidak punya rincian item');   // ORD-9 hanya ada di file, tanpa item
++    expect(text).not.toContain(ANON);
++  });
++  it('memperingatkan kalau Supabase mengembalikan 0 baris (kemungkinan diblokir RLS)', async () => {
++    env();
++    const { impl } = fakeA({ salesHistory: [] });
++    expect(await run(['--keluar', 'h.json'], { fetchImpl: impl, env: {}, cwd: dir, out })).toBe(0);
++    expect(logs.join('\n')).toMatch(/0 baris.*RLS/);
++  });
++  it('--lewati membuang id tertentu dari Supabase dan dari file gabung', async () => {
++    env();
++    fs.writeFileSync(path.join(dir, 'base.json'), JSON.stringify({ salesHistory: [{ id: 'ORD-9', total: 9 }, { id: 'ORD-2', total: 20 }] }));
++    const { impl } = fakeA({ salesHistory: [sale('ORD-1', 10), sale('ORD-2', 20), sale('ORD-3', 30)] });
++    expect(await run(['--gabung', 'base.json', '--keluar', 'h.json', '--lewati', 'ORD-2, ORD-9'], { fetchImpl: impl, env: {}, cwd: dir, out })).toBe(0);
++    const res = JSON.parse(fs.readFileSync(path.join(dir, 'h.json'), 'utf8'));
++    expect(res.salesHistory.map((r) => r.id).sort()).toEqual(['ORD-1', 'ORD-3']);
++  });
++  it('menolak kunci rahasia dan alamat yang sama dengan project C', async () => {
++    fs.writeFileSync(path.join(dir, '.env.local'), `A_SUPABASE_URL=https://aaaa.supabase.co\nA_SUPABASE_ANON_KEY=${SERVICE}\n`);
++    expect(await run([], { fetchImpl: fakeA({}).impl, env: {}, cwd: dir, out })).toBe(1);
++    expect(logs.join('\n')).toMatch(/RAHASIA/);
++    logs = []; env('VITE_SUPABASE_URL=https://aaaa.supabase.co\n');
++    expect(await run([], { fetchImpl: fakeA({}).impl, env: {}, cwd: dir, out })).toBe(1);
++    expect(logs.join('\n')).toMatch(/sama dengan VITE_SUPABASE_URL/);
++  });
++  it('tidak menimpa file hasil yang sudah ada dan tidak menghubungi A sebelum itu', async () => {
++    env(); fs.writeFileSync(path.join(dir, 'hasil.json'), 'lama');
++    const { impl, calls } = fakeA({ salesHistory: [], customers: [] });
++    expect(await run(['--keluar', 'hasil.json'], { fetchImpl: impl, env: {}, cwd: dir, out })).toBe(1);
++    expect(fs.readFileSync(path.join(dir, 'hasil.json'), 'utf8')).toBe('lama');
++    expect(calls).toHaveLength(0);
++  });
++  it('gagal dengan pesan jelas kalau env belum diisi, dan tidak menulis apa pun kalau pengambilan gagal', async () => {
++    expect(await run([], { fetchImpl: fakeA({}).impl, env: {}, cwd: dir, out })).toBe(1);
++    expect(logs.join('\n')).toMatch(/A_SUPABASE_URL/);
++    env(); logs = [];
++    expect(await run(['--keluar', 'x.json'], { fetchImpl: fakeA({}).impl, env: {}, cwd: dir, out })).toBe(1);   // tabel 404
++    expect(fs.existsSync(path.join(dir, 'x.json'))).toBe(false);
++  });
++});
+-- 
+2.43.0
+

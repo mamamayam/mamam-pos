@@ -78,7 +78,7 @@ export function applyOverrides(logs, overrides) {
 
 /**
  * Pulang otomatis + libur otomatis.
- * @param employees  karyawan (boleh bentuk UI atau baris DB: startDate/start_date, externalId/external_id)
+ * @param employees  karyawan (boleh bentuk UI atau baris DB: startDate/start_date)
  * @param period     { start, end } rentang yang sedang dilihat (inklusif)
  */
 export function applyAutoRules(logs, employees, period, today, nowMinutes) {
@@ -105,12 +105,11 @@ export function applyAutoRules(logs, employees, period, today, nowMinutes) {
     autoPulangCount++;
   }
 
-  // b. libur otomatis — hanya karyawan aktif yang absennya bisa dicocokkan
+  // b. libur otomatis — karyawan aktif tanpa catatan apa pun (dibatasi tanggal mulai kerja)
   const floor = addDays(effToday, -LIBUR_LOOKBACK_DAYS);
   const last = addDays(effToday, -1);
   for (const e of employees || []) {
     if (e.status !== 'aktif') continue;
-    if (!(e.externalId ?? e.external_id)) continue;
     const startDate = String(e.startDate ?? e.start_date ?? '').slice(0, 10);
     let from = period.start > floor ? period.start : floor;
     if (startDate && startDate > from) from = startDate;

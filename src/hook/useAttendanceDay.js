@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { absensiClient } from '../lib/absensiClient';
 import { loadAttendance } from '../features/payroll/attendanceProvider';
 import { buildAttendanceBoard } from '../features/attendance/attendanceBoard';
 import { toLocalDateString } from '../utils/formatters';
@@ -8,13 +7,13 @@ import { prepareLogs, nowMinutesOf } from '../features/attendance/dayRules';
 import { fetchOverrides } from './attendanceOverrides';
 
 /**
- * useAttendanceDay — papan absensi satu hari, BACA-SAJA dari sistem absensi.
+ * useAttendanceDay — papan absensi satu hari, BACA-SAJA dari tabel attendance_log (ditulis web mamam-absensi).
  * "Real time" = dibaca langsung tiap layar dibuka + diperbarui otomatis tiap
  * `pollMs` selama layar terbuka dan tab terlihat (tanpa langganan realtime,
  * supaya tidak ada state lokal yang bisa basi). Pembaruan berikutnya berjalan
  * diam-diam: daftar tidak berkedip jadi "memuat".
  */
-export function useAttendanceDay({ date, attendanceClient = absensiClient, pollMs = 60000 }) {
+export function useAttendanceDay({ date, attendanceClient = supabase, pollMs = 60000 }) {
   const [employees, setEmployees] = useState([]);
   const [data, setData] = useState(null);
   const [overrides, setOverrides] = useState([]);
@@ -22,7 +21,6 @@ export function useAttendanceDay({ date, attendanceClient = absensiClient, pollM
   const [error, setError] = useState(null);
   const [updatedAt, setUpdatedAt] = useState(null);
   const alive = useRef(true);
-  const configured = Boolean(attendanceClient);
 
   const reload = useCallback(async () => {
     try {
@@ -31,15 +29,13 @@ export function useAttendanceDay({ date, attendanceClient = absensiClient, pollM
       const list = (emps.data || []).map(e => ({ id: e.id, name: e.name, role: e.role, status: e.status, externalId: e.external_id || null, startDate: e.start_date ? String(e.start_date).slice(0, 10) : '' }));
       if (!alive.current) return;
       setEmployees(list);
-      if (attendanceClient) {
-        const [result, ovr] = await Promise.all([
-          loadAttendance(attendanceClient, { start: date, end: date }, list),
-          fetchOverrides(date, date).catch(() => []),   // koreksi gagal dibaca: tampilkan absensi apa adanya
-        ]);
-        if (!alive.current) return;
-        setData(result); setOverrides(ovr);
-        setUpdatedAt(new Date());
-      }
+      const [result, ovr] = await Promise.all([
+        loadAttendance(attendanceClient, { start: date, end: date }, list),
+        fetchOverrides(date, date).catch(() => []),   // koreksi gagal dibaca: tampilkan absensi apa adanya
+      ]);
+      if (!alive.current) return;
+      setData(result); setOverrides(ovr);
+      setUpdatedAt(new Date());
       setError(null);
     } catch (e) {
       if (alive.current) setError(e.message);
@@ -51,10 +47,10 @@ export function useAttendanceDay({ date, attendanceClient = absensiClient, pollM
   useEffect(() => { alive.current = true; setLoading(true); reload(); return () => { alive.current = false; }; }, [reload]);
 
   useEffect(() => {
-    if (!pollMs || !configured) return undefined;
+    if (!pollMs) return undefined;
     const id = setInterval(() => { if (document.visibilityState !== 'hidden') reload(); }, pollMs);
     return () => clearInterval(id);
-  }, [pollMs, configured, reload]);
+  }, [pollMs, reload]);
 
   const today = toLocalDateString();
   const prepared = useMemo(
@@ -66,5 +62,5 @@ export function useAttendanceDay({ date, attendanceClient = absensiClient, pollM
     [employees, prepared, date],
   );
 
-  return { configured, loading, error, board, info: data, updatedAt, reload, overrideKeys: new Set(overrides.map(o => `${o.employeeId}|${o.date}`)) };
+  return { loading, error, board, info: data, updatedAt, reload, overrideKeys: new Set(overrides.map(o => `${o.employeeId}|${o.date}`)) };
 }

@@ -1,0 +1,75 @@
+From 9a6a8974a41ec3fe7cab652c716c9e01cab46cda Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 17 Oct 2026 09:08:53 +0000
+Subject: [PATCH] fix: migrasi mengenali transaksi lama di C lewat nomor ORD
+ (id acak) agar tidak dobel
+
+---
+ scripts/migrasi/postgrest.mjs      |  2 +-
+ scripts/migrasi/transform.mjs      |  5 ++++-
+ scripts/migrasi/transform.test.mjs | 13 +++++++++++++
+ 3 files changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/scripts/migrasi/postgrest.mjs b/scripts/migrasi/postgrest.mjs
+index 9b750c6..d3b6789 100644
+--- a/scripts/migrasi/postgrest.mjs
++++ b/scripts/migrasi/postgrest.mjs
+@@ -100,7 +100,7 @@ export const EXISTING_READ = {
+ };
+ export const EXISTING_READ_HISTORY = {
+   expense_categories: ['id,name,sort_order', 'id'],
+-  transactions: ['id', 'id'],
++  transactions: ['id,display_number', 'id'],
+   expenses: ['id', 'id'],
+   shifts: ['id,opened_at,closed_at', 'id'],
+ };
+diff --git a/scripts/migrasi/transform.mjs b/scripts/migrasi/transform.mjs
+index 2211883..27c098d 100644
+--- a/scripts/migrasi/transform.mjs
++++ b/scripts/migrasi/transform.mjs
+@@ -400,6 +400,9 @@ export function buildPlan(backup, existing = {}, { withHistory = false } = {}) {
+     const salesRaw = arr(backup.salesHistory);
+     read.salesHistory = salesRaw.length;
+     const exTx = new Set(ex.transactions.map((t) => t.id));
++    // Transaksi lama yang pernah masuk ke C lewat cara lain bisa punya id acak (bukan turunan id lama),
++    // tapi nomor ORD-nya (display_number) tetap sama dengan id lama -> dianggap sudah ada, jangan dimasukkan lagi.
++    const exTxDisplay = new Set(ex.transactions.map((t) => t.display_number).filter(Boolean));
+     const seenOrder = new Set();
+     let pointDiscountOrders = 0;
+     let mismatch = 0;
+@@ -419,7 +422,7 @@ export function buildPlan(backup, existing = {}, { withHistory = false } = {}) {
+       if (total === null || total < 0) { skip('Transaksi', aid, 'total tidak valid'); continue; }
+ 
+       const txId = uuid5(`order:${aid}`);
+-      if (exTx.has(txId)) { bump('transactions', 'sudahAda'); continue; }
++      if (exTx.has(txId) || exTxDisplay.has(aid)) { bump('transactions', 'sudahAda'); continue; }
+ 
+       const items = arr(o.items).filter(isObj);
+       const subtotal = finite(o.subtotal) ?? items.reduce((s, it) => s + int(it.price, 0) * int(it.qty, 0), 0);
+diff --git a/scripts/migrasi/transform.test.mjs b/scripts/migrasi/transform.test.mjs
+index 5c581b8..47a7e7b 100644
+--- a/scripts/migrasi/transform.test.mjs
++++ b/scripts/migrasi/transform.test.mjs
+@@ -168,6 +168,19 @@ describe('aman diulang dan tidak menimpa', () => {
+     const skippedTx = partial.transactions[0].id;
+     expect(rowsOf(p, 'transaction_items').every((i) => i.transaction_id !== skippedTx)).toBe(true);
+   });
++
++  it('transaksi yang sudah ada di C dengan id ACAK tapi nomor ORD-nya sama juga dilewati (tidak dobel)', () => {
++    // meniru C: transaksi lama masuk lewat cara lain, id-nya bukan uuid5 dari id lama
++    const existing = { transactions: [{ id: 'bdcce701-67d5-4320-8263-0664076747ed', display_number: 'ORD-AAAA0001' }] };
++    const p = buildPlan(makeBackup(), existing, { withHistory: true });
++    expect(p.stats.transactions.sudahAda).toBe(1);
++    expect(rowsOf(p, 'transactions').map((t) => t.display_number)).not.toContain('ORD-AAAA0001');
++    expect(rowsOf(p, 'transactions')).toHaveLength(3);
++    // itemnya pun tidak dimasukkan lagi, jadi transaksi lama itu tidak mendapat item ganda
++    const all = buildPlan(makeBackup(), {}, { withHistory: true });
++    const orphanTx = all.inserts.find((g) => g.table === 'transactions').rows.find((t) => t.display_number === 'ORD-AAAA0001').id;
++    expect(rowsOf(p, 'transaction_items').every((i) => i.transaction_id !== orphanTx)).toBe(true);
++  });
+ });
+ 
+ describe('riwayat', () => {
+-- 
+2.43.0
+

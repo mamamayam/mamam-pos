@@ -9,7 +9,7 @@ Pemilik repo: Mamam. Bahasa kerja: **Indonesia** (teks tampilan, komentar kode, 
   `mamam-global`. Kasir, Dompet/Shift, Pelanggan, Pengeluaran, Karyawan, Absensi, Riwayat, Laporan, Penggajian, Menu.
 - Stack: React 19 + Vite + Tailwind 4, Supabase (Postgres), PWA tulis tangan (`public/sw.js`, tanpa VitePWA). Dites dengan Vitest.
 - **Online-first**: data langsung ke Supabase. Service worker hanya menyimpan cangkang app, **tidak pernah data**.
-- Absensi dibaca (baca-saja) dari project Supabase terpisah; kunci ada di `.env.local` (lihat `.env.example`), jangan pernah menaruh kunci di repo atau chat.
+- **Absensi satu project dengan POS** (migrasi 020, keputusan pemilik 26 Okt 2026: mamam-global dimatikan total): web absensi (repo `mamam-absensi`) menulis log ke tabel `attendance_log` di project C dan membaca daftar karyawan dari fungsi `absen_daftar_karyawan()`. mamam-pos hanya MEMBACA `attendance_log` (koreksi owner tetap di `attendance_overrides`). **Karyawan diurus di satu tempat: layar Karyawan mamam-pos.** Absen baru memakai id karyawan C (uuid); log lama berid `EMP-…` dikenali lewat `employees.external_id` (`buildEmployeeIdMap` di `attendanceProvider.js`), jadi karyawan baru tidak butuh `external_id`. Lupa pulang dan libur otomatis tetap dihitung saat dibaca (`dayRules.js`), tidak ada cron. Langkah pindah dan cutover: `docs/migrasi-absensi.md`. Jangan menaruh kunci di repo atau chat.
 - Skema database: `supabase/schema.sql` + `supabase/migrations/NNN_*.sql` (dijalankan manual di SQL Editor, aman diulang).
 
 ## Cara kerja dengan pemilik (PENTING)

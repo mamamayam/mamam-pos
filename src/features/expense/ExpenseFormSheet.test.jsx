@@ -22,6 +22,13 @@ describe('urutan form Pengeluaran', () => {
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
+  it('Sumber Dana berupa toggle Tunai / Non-Tunai (PillTabs), bukan dropdown', () => {
+    const html = render([]);
+    expect(html).toContain('role="tablist"');
+    expect(html).toMatch(/role="tab"[^>]*aria-selected="true"[^>]*>Tunai</);
+    expect(html).toContain('>Non-Tunai<');
+    expect(html).not.toContain('<option value="Non-Tunai"');
+  });
   it('tanpa kurir: tidak ada pilihan Uang Siapa?', () => {
     expect(render([])).not.toContain('Uang Siapa?');
   });

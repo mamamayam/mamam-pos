@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Input, NominalInput, Select, Button, Modal, BulletListInput } from '../../components/ui';
+import { Input, NominalInput, Select, Button, Modal, BulletListInput, PillTabs } from '../../components/ui';
 import CategoryModal from '../../components/CategoryModal';
 import CategorySelect from '../../components/CategorySelect';
 import { storeExpenseCategories } from './expenseCategories';
@@ -120,11 +120,13 @@ export default function ExpenseFormSheet({ isOpen, onClose, editing = null, data
 
           <div className="grid grid-cols-2 gap-4 items-end">
             <div className={showHolder ? '' : 'col-span-2'}>
-              <Select label="Sumber Dana" value={paymentMethod}
-                onChange={e => { setPaymentMethod(e.target.value); if (e.target.value === 'Non-Tunai') setCashHolderId('kasir'); }}>
-                <option value="Tunai">Tunai</option>
-                <option value="Non-Tunai">Non-Tunai</option>
-              </Select>
+              <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Sumber Dana</label>
+              {/* Toggle kecil (PillTabs sm, sama dengan Catat Potongan); kotak setinggi field supaya baris sejajar dengan Uang Siapa? */}
+              <div className="h-[46px] flex items-center">
+                <PillTabs size="sm" className="w-full" value={paymentMethod}
+                  onChange={v => { setPaymentMethod(v); if (v === 'Non-Tunai') setCashHolderId('kasir'); }}
+                  options={[{ value: 'Tunai', label: 'Tunai' }, { value: 'Non-Tunai', label: 'Non-Tunai' }]} />
+              </div>
             </div>
             {showHolder && (
               <div>

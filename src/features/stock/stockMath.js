@@ -142,6 +142,24 @@ export function daySummary(master, dayCounts = []) {
   return countByStatus(stockRows(master, filled).filter((r) => r.qty !== null));
 }
 
+/**
+ * Isi satu hari riwayat: item yang punya angka, dikelompokkan per kategori (urutan master).
+ * Status memakai batas menipis item yang berlaku sekarang. Item tanpa angka hari itu dilewati dan dihitung di `kosong`.
+ */
+export function dayItems(master, dayCounts = []) {
+  const filled = {};
+  for (const c of dayCounts) {
+    if (c.qty !== null && c.qty !== undefined) filled[c.item_id] = { qty: Number(c.qty) };
+  }
+  const rows = stockRows(master, filled);
+  const groups = [];
+  for (const category of master) {
+    const list = rows.filter((r) => r.category.id === category.id && r.qty !== null);
+    if (list.length) groups.push({ category, rows: list });
+  }
+  return { groups, kosong: rows.filter((r) => r.qty === null).length };
+}
+
 /** "2026-10-25" -> "Min, 25 Okt" (tanggal apa adanya, tanpa geser zona waktu). */
 export function dayLabel(day) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(day || ''));

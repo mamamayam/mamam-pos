@@ -6,6 +6,7 @@ import { renderToString } from 'react-dom/server';
 vi.mock('../../components/ui', async (orig) => ({ ...(await orig()), Modal: () => null }));
 vi.mock('../../context/AppContext', () => ({ useAppContext: () => ({ triggerConfirm: () => {}, triggerAlert: () => {} }) }));
 const auth = { owner: true };
+const history = { rows: [] };
 vi.mock('../../auth/AuthContext', () => ({ useAuth: () => ({ can: (p) => (p === 'stok.kelola' ? auth.owner : false) }) }));
 
 const item = (id, o = {}) => ({ id, category_id: 'c1', name: id.toUpperCase(), unit: 'pcs', min_qty: 0, required: true, ...o });
@@ -21,12 +22,13 @@ const stock = {
 };
 vi.mock('../../hook/useStockData', () => ({
   useStockData: () => stock,
-  useStockHistory: () => ({ rows: [], loading: false, error: '', reload: () => {} }),
+  useStockHistory: () => ({ rows: history.rows, loading: false, error: '', reload: () => {} }),
 }));
 
 import StockFill from './StockFill';
 import StockSummary from './StockSummary';
 import StockView from './StockView';
+import StockHistory from './StockHistory';
 
 // SSR menyisipkan <!-- --> di antara teks bersebelahan; dibuang supaya teks bisa dicocokkan utuh.
 const clean = (html) => html.replace(/<!-- -->/g, '');
@@ -80,12 +82,12 @@ describe('StockFill (tab Isi)', () => {
 });
 
 describe('StockSummary (tab Ringkasan)', () => {
-  it('menghitung Habis / Menipis dan perlu dibeli dari stok tersimpan', () => {
+  it('menghitung Habis / Menipis dari stok tersimpan; kartu Perlu Dibeli sudah dihapus', () => {
     const latest = { a: { qty: 0, day: '2026-10-25', saved_by: 'Dewi' }, b: { qty: 2 }, d: { qty: 9 } };   // a habis, b menipis (<= 2), d aman
     const html = clean(renderToString(<StockSummary master={master} latest={latest} />));
-    expect(html).toMatch(/data-testid="stok-perlu-dibeli"[^>]*>2 item</);
-    expect(html).toContain('1 habis');
-    expect(html).toContain('1 menipis');
+    expect(html).not.toContain('PERLU DIBELI');
+    expect(html).toMatch(/HABIS[\s\S]{0,200}?1 item/);
+    expect(html).toMatch(/MENIPIS[\s\S]{0,200}?1 item/);
     expect(html).toContain('Terakhir disimpan Min, 25 Okt · Dewi');
   });
   it('baris aksi menyebut filter aktif dan jumlah item yang akan disalin', () => {
@@ -116,5 +118,18 @@ describe('StockView', () => {
     Object.assign(stock, { ready: false, error: 'Stok Belanja belum aktif: jalankan migrasi' });
     expect(renderToString(<StockView />)).toContain('belum aktif');
     Object.assign(stock, { ready: true, error: '' });
+  });
+});
+
+describe('StockHistory (tab Riwayat)', () => {
+  it('tiap hari tampil sebagai baris yang bisa diketuk, dengan hitungan status', () => {
+    history.rows = [{ day: '2026-10-25', saved_by: 'Dewi', saved_at: '2026-10-25T12:00:00Z', counts: [{ item_id: 'a', qty: 0 }, { item_id: 'b', qty: 2 }, { item_id: 'd', qty: 9 }] }];
+    const html = clean(renderToString(<StockHistory master={master} enabled />));
+    expect(html).toContain('Min, 25 Okt');
+    expect(html).toContain('1 habis');
+    expect(html).toContain('1 menipis');
+    expect(html).toContain('1 aman');
+    expect(html).toMatch(/<(button|div)[^>]*role="button"|<button/);   // Card dengan onClick = bisa diketuk
+    history.rows = [];
   });
 });

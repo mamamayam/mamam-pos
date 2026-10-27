@@ -24,7 +24,6 @@ export default function StockSummary({ master, latest }) {
   const rows = useMemo(() => stockRows(master, latest), [master, latest]);
   const counts = useMemo(() => countByStatus(rows), [rows]);
   const shown = useMemo(() => sortByStatus(filterRows(rows, filter)), [rows, filter]);
-  const need = counts.habis + counts.menipis;
 
   const lastRow = rows.filter((r) => r.day).sort((a, b) => (a.day < b.day ? 1 : -1))[0];
 
@@ -48,12 +47,6 @@ export default function StockSummary({ master, latest }) {
       <p className="text-xs font-medium text-slate-400 dark:text-slate-500">
         {lastRow ? `Terakhir disimpan ${dayLabel(lastRow.day)}${lastRow.savedBy ? ` · ${lastRow.savedBy}` : ''}` : 'Belum ada hasil stok yang disimpan'}
       </p>
-
-      <Card variant="dark" padding="md">
-        <p className="text-xs text-slate-400 font-bold tracking-wide">PERLU DIBELI</p>
-        <p className="font-heading text-2xl font-bold" data-testid="stok-perlu-dibeli">{need} item</p>
-        <p className="text-xs text-slate-400">{counts.habis} habis · {counts.menipis} menipis</p>
-      </Card>
 
       <div className="grid grid-cols-2 gap-2">
         {TILES.map((t) => (

@@ -119,7 +119,7 @@ export default function ExpenseFormSheet({ isOpen, onClose, editing = null, data
           </div>
 
           <div className="grid grid-cols-2 gap-4 items-end">
-            <div className={showHolder ? '' : 'col-span-2'}>
+            <div>
               <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Sumber Dana</label>
               {/* Toggle kecil (PillTabs sm, sama dengan Catat Potongan); kotak setinggi field supaya baris sejajar dengan Uang Siapa? */}
               <div className="h-[46px] flex items-center">

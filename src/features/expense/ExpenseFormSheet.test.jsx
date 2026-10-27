@@ -29,6 +29,9 @@ describe('urutan form Pengeluaran', () => {
     expect(html).toContain('>Non-Tunai<');
     expect(html).not.toContain('<option value="Non-Tunai"');
   });
+  it('toggle Sumber Dana tetap setengah lebar (tidak melebar) walau Uang Siapa? tidak tampil', () => {
+    expect(render([])).not.toContain('col-span-2');
+  });
   it('tanpa kurir: tidak ada pilihan Uang Siapa?', () => {
     expect(render([])).not.toContain('Uang Siapa?');
   });

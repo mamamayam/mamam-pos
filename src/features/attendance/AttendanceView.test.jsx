@@ -1,0 +1,25 @@
+import { describe, it, expect, vi } from 'vitest';
+import { renderToString } from 'react-dom/server';
+
+// Hook dipalsukan; yang diuji: penanda "diedit owner" di kartu Absensi berupa ikon samar, bukan teks biru.
+const board = { rows: [] };
+vi.mock('../../hook/useAttendanceDay', () => ({ useAttendanceDay: () => ({ loading: false, error: null, board, info: null, updatedAt: new Date(2026, 9, 27, 5, 33), reload: () => {}, overrideKeys: [] }) }));
+vi.mock('../../auth/AuthContext', () => ({ useAuth: () => ({ can: () => true }) }));
+vi.mock('./AttendanceEditSheet', () => ({ default: () => null }));
+
+import AttendanceView from './AttendanceView';
+
+const row = (name, over = {}) => ({ employee: { id: name, name, role: 'kasir' }, status: 'sudahPulang', masuk: '08:44', pulang: '19:48', bolongs: [], workedMinutes: 600, overtimeMinutes: 48, ...over });
+const render = () => renderToString(<AttendanceView />).replace(/<!-- -->/g, '');
+
+describe('Absensi — penanda diedit owner', () => {
+  it('yang diedit: ikon samar berlabel; teks "diedit owner" biru sudah tidak ada', () => {
+    board.rows = [row('Nurlaila', { edited: true }), row('Shafiya')];
+    const html = render();
+    expect(html).toContain('data-testid="diedit-Nurlaila"');
+    expect(html).toContain('aria-label="Diedit owner"');
+    expect(html).not.toContain('data-testid="diedit-Shafiya"');
+    expect(html).not.toMatch(/>\s*diedit owner\s*</);
+    expect(html).not.toContain('text-sky-');
+  });
+});

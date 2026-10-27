@@ -50,6 +50,16 @@ describe('PayrollReport (render awal)', () => {
   const clocks = { '2026-10-07': { masuk: '09:41', pulang: '19:35', stuck: null } };
   const withClocks = (p = payroll()) => buildPayrollReport(p, { formatRupiah, clocks });
 
+  it('hari yang diedit owner diberi ikon samar, bukan teks biru', () => {
+    const base = { report: withClocks(), isLocked: false, formatRupiah, initialOpen: ALL, onEditDay: () => {}, onEditDeduction: () => {}, onDeleteItem: () => {}, canEditOpening: true, openingForm: { kind: null, amount: '' }, onOpeningChange: () => {}, onSaveOpening: () => {}, busy: false, onShare: () => {} };
+    const html = renderToString(<PayrollReport {...base} dayFlags={() => ({ edited: true })} />);
+    expect(html).toContain('data-testid="day-diedit"');
+    expect(html).toContain('aria-label="Diedit owner"');
+    expect(html).not.toMatch(/>\s*diedit\s*</);
+    expect(html).not.toContain('text-sky-');
+    expect(renderToString(<PayrollReport {...base} dayFlags={() => ({})} />)).not.toContain('day-diedit');
+  });
+
   it('terbuka: tabel Keterangan | Pemasukan (+) | Pengeluaran (-), jam kerja, upah harian, kasbon di tanggalnya', () => {
     const html = renderToString(
       <PayrollReport report={withClocks()} isLocked={false} formatRupiah={formatRupiah} dayFlags={() => ({})} initialOpen={ALL}

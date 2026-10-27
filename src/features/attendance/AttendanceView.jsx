@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { RefreshCw, Fingerprint, Pencil } from 'lucide-react';
-import { Card, Badge, Button, EmptyState } from '../../components/ui';
+import { Card, Badge, Button, EditedMark, EmptyState } from '../../components/ui';
 import { useAttendanceDay } from '../../hook/useAttendanceDay';
 import PeriodNav from '../../components/PeriodNav';
 import { parseIsoDate, formatIsoDate } from '../payroll/payrollEngine';
@@ -92,6 +92,7 @@ export default function AttendanceView() {
                     <p className="text-xs text-slate-400 capitalize">{r.employee.role}</p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
+                    {r.edited && <EditedMark label="Diedit owner" data-testid={`diedit-${r.employee.name}`} />}
                     <Badge size="sm" variant={STATUS[r.status].variant}>{STATUS[r.status].label}</Badge>
                     {canEdit && <button type="button" aria-label={`Edit absen ${r.employee.name}`} data-testid={`edit-${r.employee.name}`} onClick={() => setEditRow(r)} className="p-1.5 rounded-lg text-slate-400 hover:text-accent-600 active:scale-90 transition-all"><Pencil className="w-3.5 h-3.5" /></button>}
                   </div>
@@ -117,7 +118,6 @@ export default function AttendanceView() {
                   </div>
                 )}
                 {r.autoLibur && <p className="text-xs text-slate-400 mt-1.5">libur otomatis (tidak ada absen)</p>}
-                {r.edited && <p className="text-xs text-sky-600 dark:text-sky-400 mt-1.5">diedit owner</p>}
               </div>
             ))}
           </>

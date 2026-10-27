@@ -1,6 +1,6 @@
 import { useState, Fragment } from 'react';
 import { ChevronRight, ChevronDown, Pencil, Trash2, Share2, Lock } from 'lucide-react';
-import { Badge, Button, NominalInput, PillTabs } from '../../components/ui';
+import { Badge, Button, EditedMark, NominalInput, PillTabs } from '../../components/ui';
 import { fmtDay, fmtHM, STATUS_LABEL, STATUS_VARIANT } from './payrollReport';
 import { detailSubRows } from './additionDetail';
 
@@ -109,7 +109,7 @@ export default function PayrollReport({
                       <b className="text-slate-700 dark:text-slate-200">{fmtDay(d.date)}</b>
                       {d.timeRange && <span className="text-slate-400">{d.timeRange}</span>}
                       {flags.auto && <span className="text-slate-400">otomatis</span>}
-                      {flags.edited && <span className="text-sky-600">diedit</span>}
+                      {flags.edited && <EditedMark size="sm" label="Diedit owner" data-testid="day-diedit" />}
                       {d.row?.effectiveFromBolong && <span className="text-amber-600">bolong dianggap pulang</span>}
                       {d.row && <Badge size="sm" variant={STATUS_VARIANT[d.row.status]}>{STATUS_LABEL[d.row.status]}</Badge>}
                       {d.row && !isLocked && (

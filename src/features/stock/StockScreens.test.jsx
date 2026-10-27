@@ -88,7 +88,7 @@ describe('StockSummary (tab Ringkasan)', () => {
     expect(html).not.toContain('PERLU DIBELI');
     expect(html).toMatch(/HABIS[\s\S]{0,200}?1 item/);
     expect(html).toMatch(/MENIPIS[\s\S]{0,200}?1 item/);
-    expect(html).toContain('Terakhir disimpan Min, 25 Okt · Dewi');
+    expect(html).not.toContain('Terakhir disimpan');
   });
   it('baris aksi menyebut filter aktif dan jumlah item yang akan disalin', () => {
     const latest = { a: { qty: 0 }, b: { qty: 2 }, d: { qty: 9 } };

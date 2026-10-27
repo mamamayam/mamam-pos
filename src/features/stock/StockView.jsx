@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { ClipboardList } from 'lucide-react';
-import { PageHeader, PillTabs, Alert, Button } from '../../components/ui';
+import { PillTabs, Alert, Button } from '../../components/ui';
 import { useAuth } from '../../auth/AuthContext';
 import { useStockData } from '../../hook/useStockData';
-import { stockRows, countByStatus } from './stockMath';
 import StockFill from './StockFill';
 import StockSummary from './StockSummary';
 import StockManage from './StockManage';
@@ -29,9 +27,6 @@ export default function StockView() {
   const [tab, setTab] = useState('ringkasan');
   const active = manage ? tab : 'isi';
 
-  const need = (() => { const c = countByStatus(stockRows(stock.master, stock.latest)); return c.habis + c.menipis; })();
-  const subtitle = manage ? `${stock.master.reduce((n, c) => n + c.items.length, 0)} item · ${need} perlu dibeli` : 'Isi stok hari ini';
-
   let body;
   if (stock.loading) body = <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-10">Memuat...</p>;
   else if (!stock.ready) body = <Alert type="banner" variant="warning" className="!text-left !font-medium">{stock.error}</Alert>;
@@ -50,7 +45,6 @@ export default function StockView() {
   return (
     <div className="p-4 md:p-6 bg-slate-50 dark:bg-slate-950 flex-1 flex flex-col h-full overflow-y-auto animate-in fade-in slide-in-from-bottom-4 duration-300 ease-out">
       <div className="max-w-3xl w-full space-y-4 pb-10">
-        <PageHeader icon={<ClipboardList className="w-6 h-6" />} title="Stok Belanja" subtitle={subtitle} />
         {manage && <PillTabs options={OWNER_TABS} value={active} onChange={setTab} />}
         {body}
       </div>

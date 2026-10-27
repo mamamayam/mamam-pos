@@ -44,10 +44,6 @@ export default function StockSummary({ master, latest }) {
 
   return (
     <div className="space-y-3" data-testid="stok-ringkasan">
-      <p className="text-xs font-medium text-slate-400 dark:text-slate-500">
-        {lastRow ? `Terakhir disimpan ${dayLabel(lastRow.day)}${lastRow.savedBy ? ` · ${lastRow.savedBy}` : ''}` : 'Belum ada hasil stok yang disimpan'}
-      </p>
-
       <div className="grid grid-cols-2 gap-2">
         {TILES.map((t) => (
           <button

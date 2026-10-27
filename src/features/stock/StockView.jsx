@@ -3,6 +3,7 @@ import { PillTabs, Alert, Button } from '../../components/ui';
 import { useAuth } from '../../auth/AuthContext';
 import { useStockData } from '../../hook/useStockData';
 import StockFill from './StockFill';
+import BypassCard from './BypassCard';
 import StockManage from './StockManage';
 import StockHistory from './StockHistory';
 
@@ -10,11 +11,11 @@ import StockHistory from './StockHistory';
  * StockView — Stok Belanja (menggantikan Stock List di web absensi). Hasil TIDAK dikirim ke WhatsApp: tersimpan
  * di aplikasi, owner memantau hasil tiap hari di Riwayat (status habis/menipis per item), dan menyimpan hasil membuka "Absen Pulang" di web absensi.
  *  - Staf (tanpa izin `stok.kelola`): hanya tab Isi.
- *  - Owner: Riwayat (tab pertama, terbuka lebih dulu), Isi (+ kode bypass), Kelola.
+ *  - Owner: Riwayat (tab pertama, terbuka lebih dulu), Bypass (hanya kode bypass), Kelola. Owner tidak mengisi checklist.
  */
 const OWNER_TABS = [
   { value: 'riwayat', label: 'Riwayat' },
-  { value: 'isi', label: 'Isi' },
+  { value: 'bypass', label: 'Bypass' },
   { value: 'kelola', label: 'Kelola' },
 ];
 
@@ -35,7 +36,8 @@ export default function StockView() {
         <Button variant="secondary" size="full" onClick={stock.reload}>Coba lagi</Button>
       </div>
     );
-  } else if (active === 'isi') body = <StockFill stock={stock} manage={manage} />;
+  } else if (active === 'isi') body = <StockFill stock={stock} />;
+  else if (active === 'bypass') body = <BypassCard />;
   else if (active === 'kelola') body = <StockManage stock={stock} />;
   else body = <StockHistory master={stock.master} enabled />;
 

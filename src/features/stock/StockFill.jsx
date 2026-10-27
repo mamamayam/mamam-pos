@@ -1,22 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, Check, Lock, Unlock, Minus, Plus, Save, RotateCcw } from 'lucide-react';
-import { Card, Badge, Button, Input, Modal, EmptyState } from '../../components/ui';
-import { useAppContext } from '../../context/AppContext';
-import useDirty from '../../hook/useDirty';
+import { ChevronDown, ChevronUp, Check, Lock, Unlock, Minus, Plus, Save, ExternalLink, UserRound } from 'lucide-react';
+import { Card, Button, Input, Modal, EmptyState } from '../../components/ui';
 import { showToast } from '../../lib/toast';
-import BypassCard from './BypassCard';
+import { cleanName, validName, readPengisi, savePengisi } from './stockPengisi';
+import { ABSENSI_URL } from './stockLinks';
 import {
-  parseQty, formatQty, categoryProgress, categoryReady, gatingCategories, saveCheck, stockStatus, STATUS_META,
+  parseQty, formatQty, categoryProgress, categoryReady, gatingCategories, saveCheck,
 } from './stockMath';
 
 /**
- * StockFill — tab Isi (semua peran): isian stok HARI INI per kategori. Staf hanya mengisi; owner juga melihat
- * kode bypass dan bisa membuka kembali hasil yang sudah disimpan. Setelah semua kategori selesai dan hasil
- * DISIMPAN, gate Absen Pulang di web absensi terbuka (hasil tetap di aplikasi, tidak dikirim ke WhatsApp).
+ * StockFill — tab Isi (khusus staf): isian stok HARI INI per kategori. Owner tidak mengisi (tab Bypass dan Riwayat).
+ * Sebelum mengisi, pengisi MENGETIK namanya dulu (bukan otomatis dari siapa yang membuka Dompet; lihat stockPengisi.js).
+ * Setelah semua kategori selesai dan hasil DISIMPAN, gate Absen Pulang di web absensi terbuka (hasil tetap di
+ * aplikasi, tidak dikirim ke WhatsApp) dan muncul tautan ke web absensi.
  */
-const NAME_KEY = 'mamam-pos-stok-pengisi';
-const readName = () => { try { return window.localStorage.getItem(NAME_KEY) || ''; } catch { return ''; } };
-const rememberName = (v) => { try { window.localStorage.setItem(NAME_KEY, v); } catch { /* diblokir: abaikan */ } };
 const LBL = 'text-slate-400 dark:text-slate-500';
 const STEP_BTN = 'w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center active:scale-95 disabled:opacity-40';
 
@@ -66,44 +63,57 @@ function QtyRow({ item, count, ro, setCount, persist }) {
   );
 }
 
-function SaveSheet({ open, onClose, onConfirm, master, counts, manage }) {
-  const [name, setName] = useState(readName);
+function SaveSheet({ open, onClose, onConfirm, master, counts, pengisi }) {
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (open) setName(readName()); }, [open]);
-  const { dirty } = useDirty(open, [name]);
-
-  const filledItems = master.flatMap((c) => c.items).filter((i) => counts[i.id]?.qty !== null && counts[i.id]?.qty !== undefined);
-  const tally = { habis: 0, menipis: 0 };
-  for (const i of filledItems) { const s = stockStatus(counts[i.id].qty, i.min_qty); if (s in tally) tally[s] += 1; }
-  const clean = name.trim();
+  const filled = master.flatMap((c) => c.items).filter((i) => counts[i.id]?.qty !== null && counts[i.id]?.qty !== undefined).length;
 
   const submit = async () => {
-    if (clean.length < 2 || busy) return;
+    if (busy) return;
     setBusy(true);
-    try { await onConfirm(clean); rememberName(clean); } finally { setBusy(false); }
+    try { await onConfirm(); } finally { setBusy(false); }
   };
 
   return (
-    <Modal isOpen={open} onClose={onClose} sheet size="md" dirty={dirty && !busy}>
+    <Modal isOpen={open} onClose={onClose} sheet size="md">
       <div className="p-5 space-y-4" data-testid="stok-simpan-sheet">
         <div>
           <p className="font-heading font-bold text-slate-900 dark:text-slate-50 mb-1">Simpan hasil stok?</p>
-          <p className="text-sm text-slate-600 dark:text-slate-300">{filledItems.length} item terisi di {master.length} kategori. Setelah disimpan, isian terkunci dan Absen Pulang terbuka.</p>
-          {manage && <div className="flex gap-2 mt-3"><Badge variant="danger">{tally.habis} habis</Badge><Badge variant="warning">{tally.menipis} menipis</Badge></div>}
+          <p className="text-sm text-slate-600 dark:text-slate-300">{filled} item terisi di {master.length} kategori, diisi oleh <b>{pengisi}</b>. Setelah disimpan, isian terkunci dan Absen Pulang terbuka.</p>
         </div>
-        <Input label="Diisi oleh" placeholder="Nama pengisi" value={name} onChange={(e) => setName(e.target.value)} />
         <div className="grid grid-cols-2 gap-2">
           <Button variant="secondary" onClick={onClose} disabled={busy}>Periksa lagi</Button>
-          <Button onClick={submit} disabled={clean.length < 2 || busy} icon={<Save className="w-4 h-4" />}>{busy ? 'Menyimpan...' : 'Simpan'}</Button>
+          <Button onClick={submit} disabled={busy} icon={<Save className="w-4 h-4" />}>{busy ? 'Menyimpan...' : 'Simpan'}</Button>
         </div>
       </div>
     </Modal>
   );
 }
 
-export default function StockFill({ stock, manage }) {
-  const { triggerConfirm } = useAppContext();
-  const { master, counts, doneIds, locked, day } = stock;
+/** Kartu "siapa yang mengisi": wajib diisi (diketik) sebelum kategori tampil. */
+function PengisiCard({ initial, onSubmit }) {
+  const [text, setText] = useState(initial);
+  return (
+    <Card padding="md" className="space-y-3" data-testid="stok-pengisi-form">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-accent-50 dark:bg-accent-500/10 text-accent-600 dark:text-accent-400 flex items-center justify-center"><UserRound className="w-5 h-5" /></div>
+        <div className="min-w-0">
+          <p className="font-heading text-sm font-bold text-slate-900 dark:text-slate-50">Siapa yang mengisi stok hari ini?</p>
+          <p className={`text-xs ${LBL}`}>Ketik nama yang melakukan checklist, bisa beda dengan yang buka dompet.</p>
+        </div>
+      </div>
+      <form onSubmit={(e) => { e.preventDefault(); if (validName(text)) onSubmit(cleanName(text)); }} className="space-y-3">
+        <Input label="Nama pengisi" placeholder="Ketik nama" value={text} onChange={(e) => setText(e.target.value)} />
+        <Button type="submit" size="full" disabled={!validName(text)}>Mulai Isi</Button>
+      </form>
+    </Card>
+  );
+}
+
+export default function StockFill({ stock }) {
+  const { master, counts, doneIds, locked, day, today } = stock;
+  const [pengisi, setPengisi] = useState(() => readPengisi(today));
+  const [draft, setDraft] = useState('');                 // isi awal kolom nama saat "Ganti"
+  useEffect(() => { setPengisi(readPengisi(today)); setDraft(''); }, [today]);   // ganti hari bisnis = tanya lagi
   const [openId, setOpenId] = useState(undefined);       // undefined = otomatis buka kategori pertama yang belum selesai
   const [sheet, setSheet] = useState(false);
 
@@ -123,14 +133,15 @@ export default function StockFill({ stock, manage }) {
     } catch (e) { toastError(e); }
   };
   const reopen = async (c) => { try { await stock.finishCategory(c.id, false); setOpenId(c.id); } catch (e) { toastError(e); } };
-  const doSave = async (by) => {
-    try { await stock.save(by); setSheet(false); showToast('Tersimpan — Absen Pulang terbuka'); }
+  const doSave = async () => {
+    try { await stock.save(pengisi); setSheet(false); showToast('Tersimpan — Absen Pulang terbuka'); }
     catch (e) { toastError(e); throw e; }
   };
-  const askReopenDay = () => triggerConfirm('Buka kembali hasil hari ini? Absen Pulang akan terkunci lagi sampai disimpan ulang.', () => stock.reopenDay().then(() => showToast('Dibuka kembali')).catch(toastError));
+  const setName = (n) => { savePengisi(today, n); setPengisi(n); };
+  const changeName = () => { setDraft(pengisi); savePengisi(today, ''); setPengisi(''); };
 
   if (!master.length) {
-    return <EmptyState title="Belum ada item stok" description={manage ? 'Tambahkan kategori dan item di tab Kelola.' : 'Minta owner menambahkan item stok.'} />;
+    return <EmptyState title="Belum ada item stok" description="Minta owner menambahkan item stok." />;
   }
 
   return (
@@ -144,18 +155,32 @@ export default function StockFill({ stock, manage }) {
             <p className="font-heading text-sm font-bold text-slate-900 dark:text-slate-50" data-testid="stok-gate-judul">{locked ? 'Absen pulang terbuka' : 'Absen pulang terkunci'}</p>
             <p className={`text-xs ${LBL}`}>{locked ? `Disimpan${day?.saved_by ? ` oleh ${day.saved_by}` : ''}` : `${doneCount}/${gating.length} kategori selesai · simpan hasil untuk membuka`}</p>
           </div>
-          {locked && manage && <Button variant="secondary" size="sm" onClick={askReopenDay} icon={<RotateCcw className="w-4 h-4" />}>Buka</Button>}
         </div>
         <div className="h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 mt-3 overflow-hidden">
           <div className={`h-full rounded-full ${locked ? 'bg-emerald-500' : 'bg-gradient-to-r from-accent-600 to-accent-500'}`} style={{ width: `${locked ? 100 : pct}%` }} />
         </div>
       </Card>
 
-      {manage && <BypassCard />}
+      {locked && (
+        <div className="text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 rounded-2xl px-3.5 py-3 space-y-1" data-testid="stok-selesai">
+          <p className="flex items-center gap-2"><Check className="w-4 h-4 shrink-0" /> Stok sudah selesai diisi.</p>
+          <a href={ABSENSI_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-bold underline" data-testid="stok-link-absen">
+            Isi absen pulang sekarang <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+          <p className="font-normal opacity-80">Isian terkunci sampai ganti hari.</p>
+        </div>
+      )}
 
-      {locked && <p className="flex items-center gap-2 text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 rounded-2xl px-3.5 py-3"><Check className="w-4 h-4 shrink-0" /> Isian terkunci sampai ganti hari.</p>}
+      {!locked && !pengisi && <PengisiCard key={draft} initial={draft} onSubmit={setName} />}
 
-      {master.map((c) => {
+      {!locked && pengisi && (
+        <div className="flex items-center justify-between gap-2 px-1 text-xs" data-testid="stok-pengisi">
+          <p className={LBL}>Diisi oleh <span className="font-bold text-slate-700 dark:text-slate-200">{pengisi}</span></p>
+          <button type="button" onClick={changeName} className="font-semibold text-accent-600 dark:text-accent-400 underline">Ganti</button>
+        </div>
+      )}
+
+      {(locked || pengisi) && master.map((c) => {
         const done = doneIds.includes(c.id), ro = locked || done, isOpen = open === c.id;
         const { filled, total } = categoryProgress(c, counts);
         return (
@@ -183,14 +208,14 @@ export default function StockFill({ stock, manage }) {
         );
       })}
 
-      {!locked && (
+      {!locked && pengisi && (
         <div className="sticky bottom-0 -mx-4 px-4 py-3 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur border-t border-slate-100 dark:border-slate-900">
           <Button size="full" disabled={!check.ok} onClick={() => setSheet(true)} icon={<Save className="w-4 h-4" />} data-testid="stok-simpan">Simpan Hasil Stok</Button>
           {!check.ok && <p className={`text-xs text-center mt-1.5 ${LBL}`}>{check.reason}</p>}
         </div>
       )}
 
-      <SaveSheet open={sheet} onClose={() => setSheet(false)} onConfirm={doSave} master={master} counts={counts} manage={manage} />
+      <SaveSheet open={sheet} onClose={() => setSheet(false)} onConfirm={doSave} master={master} counts={counts} pengisi={pengisi} />
     </div>
   );
 }

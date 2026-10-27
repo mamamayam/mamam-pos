@@ -7,6 +7,8 @@ vi.mock('../../components/ui', async (orig) => ({ ...(await orig()), Modal: () =
 vi.mock('../../context/AppContext', () => ({ useAppContext: () => ({ triggerConfirm: () => {}, triggerAlert: () => {} }) }));
 const auth = { owner: true };
 const history = { rows: [] };
+const pengisiState = { name: '' };
+vi.mock('./stockPengisi', async (orig) => ({ ...(await orig()), readPengisi: () => pengisiState.name }));
 vi.mock('../../auth/AuthContext', () => ({ useAuth: () => ({ can: (p) => (p === 'stok.kelola' ? auth.owner : false) }) }));
 
 const item = (id, o = {}) => ({ id, category_id: 'c1', name: id.toUpperCase(), unit: 'pcs', min_qty: 0, required: true, ...o });
@@ -28,6 +30,8 @@ vi.mock('../../hook/useStockData', () => ({
 import StockFill from './StockFill';
 import StockView from './StockView';
 import StockHistory from './StockHistory';
+import BypassCard from './BypassCard';
+import { ABSENSI_URL } from './stockLinks';
 
 // SSR menyisipkan <!-- --> di antara teks bersebelahan; dibuang supaya teks bisa dicocokkan utuh.
 const clean = (html) => html.replace(/<!-- -->/g, '');
@@ -39,61 +43,92 @@ beforeEach(() => {
   auth.owner = true;
   vi.stubEnv('VITE_STOCK_BYPASS_SECRET', '3132333435363738393031323334353637383930');
   Object.assign(stock, { day: null, counts: {}, latest: {}, locked: false, doneIds: [] });
+  pengisiState.name = '';
 });
 
-describe('StockFill (tab Isi)', () => {
-  it('staf: hanya mengisi, tanpa kartu kode bypass', () => {
-    const html = renderToString(<StockFill stock={stock} manage={false} />);
-    expect(html).toContain('data-testid="stok-isi"');
+describe('StockFill (tab Isi, khusus staf)', () => {
+  it('sebelum nama pengisi diketik: hanya kartu nama, kategori dan tombol Simpan belum tampil', () => {
+    const html = clean(renderToString(<StockFill stock={stock} />));
+    expect(html).toContain('data-testid="stok-pengisi-form"');
+    expect(html).toContain('Siapa yang mengisi stok hari ini?');
+    expect(html).not.toContain('data-testid="stok-kategori-');
+    expect(html).not.toContain('data-testid="stok-simpan"');
     expect(html).not.toContain('data-testid="bypass-card"');
   });
-  it('owner: ada kartu kode bypass', () => {
-    expect(renderToString(<StockFill stock={stock} manage />)).toContain('data-testid="bypass-card"');
-  });
-  it('owner tanpa rahasia terpasang: petunjuk, bukan kode', () => {
-    vi.stubEnv('VITE_STOCK_BYPASS_SECRET', '');
-    const html = renderToString(<StockFill stock={stock} manage />);
-    expect(html).not.toContain('data-testid="bypass-card"');
-    expect(html).toContain('Kode bypass belum diatur');
+  it('setelah nama diketik: kategori tampil dengan nama pengisi dan tombol Ganti', () => {
+    pengisiState.name = 'Dewi';
+    const html = clean(renderToString(<StockFill stock={stock} />));
+    expect(html).not.toContain('data-testid="stok-pengisi-form"');
+    expect(html).toContain('data-testid="stok-kategori-c1"');
+    expect(html).toMatch(/Diisi oleh <span[^>]*>Dewi</);
+    expect(html).toContain('>Ganti<');
   });
   it('gate terkunci sebelum disimpan dan Simpan nonaktif dengan alasannya', () => {
-    const html = renderToString(<StockFill stock={stock} manage={false} />);
+    pengisiState.name = 'Dewi';
+    const html = renderToString(<StockFill stock={stock} />);
     expect(html).toContain('Absen pulang terkunci');
     expect(saveBtn(html)).not.toBe('');
     expect(isDisabled(saveBtn(html))).toBe(true);
     expect(html).toContain('kategori belum ditandai selesai');
   });
   it('semua kategori selesai dan terisi: Simpan aktif', () => {
+    pengisiState.name = 'Dewi';
     Object.assign(stock, { doneIds: ['c1', 'c2'], counts: { a: { qty: 1 }, b: { qty: 0 }, d: { qty: 4 } } });
-    const tag = saveBtn(renderToString(<StockFill stock={stock} manage={false} />));
+    const tag = saveBtn(renderToString(<StockFill stock={stock} />));
     expect(tag).not.toBe('');
     expect(isDisabled(tag)).toBe(false);
   });
-  it('sudah disimpan: gate terbuka, tanpa tombol Simpan; hanya owner melihat tombol Buka', () => {
+  it('sudah disimpan: gate terbuka, tanpa tombol Simpan dan tanpa kartu nama, dengan tautan ke web absensi', () => {
     Object.assign(stock, { locked: true, day: { saved_by: 'Dewi', saved_at: '2026-10-26T12:00:00Z' }, doneIds: ['c1', 'c2'] });
-    const staff = clean(renderToString(<StockFill stock={stock} manage={false} />));
-    expect(staff).toContain('Absen pulang terbuka');
-    expect(staff).toContain('oleh Dewi');
-    expect(staff).not.toContain('stok-simpan');
-    expect(staff).not.toContain('>Buka<');
-    expect(renderToString(<StockFill stock={stock} manage />)).toContain('>Buka<');
+    const html = clean(renderToString(<StockFill stock={stock} />));
+    expect(html).toContain('Absen pulang terbuka');
+    expect(html).toContain('oleh Dewi');
+    expect(html).toContain('Stok sudah selesai diisi.');
+    expect(html).toMatch(new RegExp(`<a href="${ABSENSI_URL.replace(/[.]/g, '\\.')}"[^>]*data-testid="stok-link-absen"`));
+    expect(html).toContain('Isi absen pulang sekarang');
+    expect(html).not.toContain('stok-simpan');
+    expect(html).not.toContain('stok-pengisi-form');
+    expect(html).not.toContain('>Buka<');
+  });
+  it('tautan absensi tidak muncul sebelum stok disimpan', () => {
+    pengisiState.name = 'Dewi';
+    expect(renderToString(<StockFill stock={stock} />)).not.toContain('stok-link-absen');
+  });
+});
+
+describe('BypassCard (tab Bypass, owner)', () => {
+  it('hanya kode: tanpa lencana "Hanya owner" dan tanpa kalimat penjelasan', () => {
+    const html = clean(renderToString(<BypassCard />));
+    expect(html).toContain('data-testid="bypass-card"');
+    expect(html).toContain('Kode Bypass Absen Pulang');
+    expect(html).not.toContain('Hanya owner');
+    expect(html).not.toContain('Beri kode');
+    expect(html).toMatch(/Berganti dalam \d+ detik\./);
+  });
+  it('tanpa rahasia terpasang: petunjuk, bukan kode', () => {
+    vi.stubEnv('VITE_STOCK_BYPASS_SECRET', '');
+    const html = renderToString(<BypassCard />);
+    expect(html).not.toContain('data-testid="bypass-card"');
+    expect(html).toContain('Kode bypass belum diatur');
   });
 });
 
 describe('StockView', () => {
   it('staf: langsung tab Isi tanpa tab lain', () => {
     auth.owner = false;
+    pengisiState.name = 'Dewi';
     const html = renderToString(<StockView />);
     expect(html).toContain('data-testid="stok-isi"');
     expect(html).not.toContain('Riwayat');
     expect(html).not.toContain('Kelola');
   });
-  it('owner: tiga tab, Riwayat paling depan dan langsung terbuka (tanpa tab Ringkasan)', () => {
+  it('owner: tiga tab (Riwayat, Bypass, Kelola), Riwayat paling depan dan langsung terbuka; tanpa tab Isi', () => {
     history.rows = [];
     const html = renderToString(<StockView />);
-    for (const t of ['Riwayat', 'Isi', 'Kelola']) expect(html).toContain(t);
+    for (const t of ['Riwayat', 'Bypass', 'Kelola']) expect(html).toContain(t);
+    expect(html).not.toContain('>Isi<');
     expect(html).not.toContain('Ringkasan');
-    expect(html.indexOf('Riwayat')).toBeLessThan(html.indexOf('>Isi<'));
+    expect(html.indexOf('Riwayat')).toBeLessThan(html.indexOf('>Bypass<'));
     expect(html).toContain('Belum ada riwayat');
   });
   it('migrasi belum dijalankan: petunjuk', () => {

@@ -6,7 +6,7 @@ import { bypassSecret, isValidSecret, totpCode, secondsLeft, groupCode, STEP_SEC
 
 /**
  * BypassCard — kode 6 digit (ganti tiap 30 detik) untuk membuka Absen Pulang di web absensi TANPA mengisi
- * Stok Belanja. Hanya dirender untuk owner (izin `stok.kelola`, dicek oleh pemanggil). Rahasianya
+ * Stok Belanja. Hanya dirender untuk owner (izin `stok.kelola`, dicek oleh pemanggil) di tab Bypass. Rahasianya
  * VITE_STOCK_BYPASS_SECRET harus sama dengan tabel stock_secret di database (lihat migrasi 020).
  */
 export default function BypassCard() {
@@ -51,7 +51,6 @@ export default function BypassCard() {
       <div className="flex items-center gap-2 mb-2">
         <KeyRound className="w-4 h-4 text-accent-400" />
         <p className="text-xs font-bold">Kode Bypass Absen Pulang</p>
-        <span className="ml-auto text-[10px] font-bold bg-white/10 px-2 py-0.5 rounded-full">Hanya owner</span>
       </div>
       <div className="flex items-center justify-between">
         <p className="font-heading text-3xl font-bold tracking-[0.15em] tabular-nums" data-testid="bypass-kode">{err ? '------' : groupCode(code) || '------'}</p>
@@ -63,7 +62,7 @@ export default function BypassCard() {
         <div className="h-full bg-gradient-to-r from-accent-600 to-accent-500 transition-[width] duration-1000 ease-linear" style={{ width: `${(left / STEP_SECONDS) * 100}%` }} />
       </div>
       <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-        {err || `Berganti dalam ${left} detik. Beri kode ke karyawan: mereka bisa absen pulang tanpa mengisi Stok Belanja.`}
+        {err || `Berganti dalam ${left} detik.`}
       </p>
     </Card>
   );

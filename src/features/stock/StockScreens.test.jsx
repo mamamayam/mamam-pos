@@ -104,13 +104,12 @@ describe('StockView', () => {
 });
 
 describe('StockHistory (tab Riwayat)', () => {
-  it('tiap hari tampil sebagai baris yang bisa diketuk, dengan hitungan status', () => {
+  it('tiap hari tampil sebagai satu baris ringkas yang bisa diketuk, tanpa badge habis/menipis/aman', () => {
     history.rows = [{ day: '2026-10-25', saved_by: 'Dewi', saved_at: '2026-10-25T12:00:00Z', counts: [{ item_id: 'a', qty: 0 }, { item_id: 'b', qty: 2 }, { item_id: 'd', qty: 9 }] }];
     const html = clean(renderToString(<StockHistory master={master} enabled />));
     expect(html).toContain('Min, 25 Okt');
-    expect(html).toContain('1 habis');
-    expect(html).toContain('1 menipis');
-    expect(html).toContain('1 aman');
+    expect(html).toContain('Dewi');
+    expect(html).not.toMatch(/\d+ (habis|menipis|aman)/);
     expect(html).toMatch(/<(button|div)[^>]*role="button"|<button/);   // Card dengan onClick = bisa diketuk
     history.rows = [];
   });

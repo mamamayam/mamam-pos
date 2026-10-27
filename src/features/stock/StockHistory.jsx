@@ -58,7 +58,7 @@ function DaySheet({ day, master, onClose }) {
   );
 }
 
-/** StockHistory — tab Riwayat (owner): hari-hari yang sudah disimpan, siapa yang mengisi, dan hitungan Habis/Menipis. Ketuk satu hari untuk melihat isinya. */
+/** StockHistory — tab Riwayat (owner): hari-hari yang sudah disimpan dan siapa yang mengisi (satu baris ringkas per hari). Ketuk satu hari untuk melihat isinya. */
 export default function StockHistory({ master, enabled }) {
   const { rows, loading, error, reload } = useStockHistory(enabled);
   const [openDay, setOpenDay] = useState(null);
@@ -74,7 +74,7 @@ export default function StockHistory({ master, enabled }) {
   return (
     <div className="space-y-2" data-testid="stok-riwayat">
       {list.map((r) => (
-        <Card key={r.day} padding="md" onClick={() => setOpenDay(r.day)}>
+        <Card key={r.day} padding="sm" onClick={() => setOpenDay(r.day)}>
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{dayLabel(r.day)}</p>
             <div className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
@@ -82,16 +82,11 @@ export default function StockHistory({ master, enabled }) {
               <ChevronRight className="w-4 h-4" />
             </div>
           </div>
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            <Badge variant="danger">{r.summary.habis} habis</Badge>
-            <Badge variant="warning">{r.summary.menipis} menipis</Badge>
-            <Badge variant="success">{r.summary.aman} aman</Badge>
-          </div>
         </Card>
       ))}
       <Button variant="secondary" size="sm" className="w-full" onClick={reload} icon={<RefreshCw className="w-4 h-4" />}>Muat ulang</Button>
       <DaySheet key={openDay || 'tutup'} day={list.find((r) => r.day === openDay) || null} master={master} onClose={() => setOpenDay(null)} />
-      <p className="text-xs text-center text-slate-400 dark:text-slate-500">Hitungan memakai batas menipis item yang berlaku sekarang.</p>
+      <p className="text-xs text-center text-slate-400 dark:text-slate-500">Status di detail memakai batas menipis item yang berlaku sekarang.</p>
     </div>
   );
 }

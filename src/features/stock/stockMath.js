@@ -160,6 +160,14 @@ export function dayItems(master, dayCounts = []) {
   return { groups, kosong: rows.filter((r) => r.qty === null).length };
 }
 
+/** Saring hasil `dayItems(...).groups` menurut status ('semua' = apa adanya). Kategori yang jadi kosong dibuang; kategori tetap jadi pengelompokan. */
+export function filterDayGroups(groups, filter = 'semua') {
+  if (filter === 'semua') return groups;
+  return groups
+    .map((g) => ({ ...g, rows: g.rows.filter((r) => r.status === filter) }))
+    .filter((g) => g.rows.length > 0);
+}
+
 /** "2026-10-25" -> "Min, 25 Okt" (tanggal apa adanya, tanpa geser zona waktu). */
 export function dayLabel(day) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(day || ''));

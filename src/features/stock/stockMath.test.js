@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  businessDate, stockStatus, parseQty, formatQty, stockRows, sortByStatus, countByStatus, filterRows, shareText, dayItems,
+  businessDate, stockStatus, parseQty, formatQty, stockRows, sortByStatus, countByStatus, filterRows, shareText, dayItems, filterDayGroups,
   itemOk, dayLabel, categoryProgress, categoryReady, gatingCategories, saveCheck, moveId, daySummary,
 } from './stockMath';
 
@@ -142,4 +142,16 @@ describe('dayItems (isi satu hari di Riwayat)', () => {
   it('hari tanpa angka: tidak ada kelompok', () => {
     expect(dayItems(master, []).groups).toEqual([]);
   });
+});
+
+describe('filterDayGroups (filter di detail Riwayat)', () => {
+  const { groups } = dayItems(master, [{ item_id: 'a', qty: 0 }, { item_id: 'b', qty: 2 }, { item_id: 'c', qty: 9 }, { item_id: 'd', qty: 10 }]);
+  it('semua = apa adanya', () => expect(filterDayGroups(groups, 'semua')).toBe(groups));
+  it('hanya item berstatus itu, tetap per kategori; kategori kosong dibuang', () => {
+    const habis = filterDayGroups(groups, 'habis');
+    expect(habis.map((g) => [g.category.name, g.rows.map((r) => r.item.id)])).toEqual([['Minuman', ['a']]]);
+    const aman = filterDayGroups(groups, 'aman');
+    expect(aman.map((g) => [g.category.name, g.rows.map((r) => r.item.id)])).toEqual([['Minuman', ['c']], ['Kulkas', ['d']]]);
+  });
+  it('tidak ada yang cocok: kosong', () => expect(filterDayGroups(groups, 'belum')).toEqual([]));
 });

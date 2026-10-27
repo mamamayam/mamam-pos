@@ -2,22 +2,37 @@ import { useMemo, useState } from 'react';
 import { RefreshCw, ChevronRight } from 'lucide-react';
 import { Card, Badge, Alert, Button, EmptyState, Modal } from '../../components/ui';
 import { useStockHistory } from '../../hook/useStockData';
-import { daySummary, dayItems, dayLabel, formatQty, STATUS_META } from './stockMath';
+import { daySummary, dayItems, filterDayGroups, dayLabel, formatQty, STATUS_META } from './stockMath';
 
 const time = (iso) => { try { return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(':', '.'); } catch { return ''; } };
 
 /** Isi satu hari: tiap item beserta jumlah dan statusnya, dikelompokkan per kategori. Hanya baca. */
+const FILTERS = [
+  { key: 'semua', label: 'semua', variant: 'neutral' },
+  { key: 'habis', label: 'habis', variant: 'danger' },
+  { key: 'menipis', label: 'menipis', variant: 'warning' },
+  { key: 'aman', label: 'aman', variant: 'success' },
+];
+
 function DaySheet({ day, master, onClose }) {
-  const { groups, kosong } = useMemo(() => (day ? dayItems(master, day.counts) : { groups: [], kosong: 0 }), [day, master]);
+  const [filter, setFilter] = useState('semua');   // DaySheet dipasang ulang (key) tiap hari dibuka, jadi selalu mulai dari Semua
+  const { groups: all, kosong } = useMemo(() => (day ? dayItems(master, day.counts) : { groups: [], kosong: 0 }), [day, master]);
+  const groups = useMemo(() => filterDayGroups(all, filter), [all, filter]);
   return (
     <Modal isOpen={!!day} onClose={onClose} sheet size="lg" maxHeight title={day ? dayLabel(day.day) : ''}>
       {day && (
         <div className="p-5 pt-2 space-y-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]" data-testid="stok-riwayat-detail">
           <p className="text-xs text-slate-500 dark:text-slate-400">Disimpan {day.saved_by ? `oleh ${day.saved_by} ` : ''}pukul {time(day.saved_at)}</p>
-          <div className="flex flex-wrap gap-1.5">
-            <Badge variant="danger">{day.summary.habis} habis</Badge>
-            <Badge variant="warning">{day.summary.menipis} menipis</Badge>
-            <Badge variant="success">{day.summary.aman} aman</Badge>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Saring menurut status">
+            {FILTERS.map((f) => {
+              const n = f.key === 'semua' ? day.summary.habis + day.summary.menipis + day.summary.aman : day.summary[f.key];
+              const active = filter === f.key;
+              return (
+                <button key={f.key} type="button" aria-pressed={active} data-testid={`stok-filter-${f.key}`} onClick={() => setFilter(f.key)} className="rounded-full active:scale-95 transition-transform">
+                  <Badge variant={f.variant} size="md" className={active ? 'ring-2 ring-current' : 'opacity-60'}>{n} {f.label}</Badge>
+                </button>
+              );
+            })}
           </div>
           {groups.map((g) => (
             <div key={g.category.id}>
@@ -35,8 +50,8 @@ function DaySheet({ day, master, onClose }) {
               </Card>
             </div>
           ))}
-          {groups.length === 0 && <p className="text-center text-sm text-slate-400 py-6">Tidak ada angka yang tersimpan pada hari ini.</p>}
-          {kosong > 0 && groups.length > 0 && <p className="text-xs text-center text-slate-400 dark:text-slate-500">{kosong} item lain tidak diisi hari itu.</p>}
+          {groups.length === 0 && <p className="text-center text-sm text-slate-400 py-6">{filter === 'semua' ? 'Tidak ada angka yang tersimpan pada hari ini.' : `Tidak ada item yang ${FILTERS.find((f) => f.key === filter).label} pada hari ini.`}</p>}
+          {filter === 'semua' && kosong > 0 && groups.length > 0 && <p className="text-xs text-center text-slate-400 dark:text-slate-500">{kosong} item lain tidak diisi hari itu.</p>}
         </div>
       )}
     </Modal>
@@ -75,7 +90,7 @@ export default function StockHistory({ master, enabled }) {
         </Card>
       ))}
       <Button variant="secondary" size="sm" className="w-full" onClick={reload} icon={<RefreshCw className="w-4 h-4" />}>Muat ulang</Button>
-      <DaySheet day={list.find((r) => r.day === openDay) || null} master={master} onClose={() => setOpenDay(null)} />
+      <DaySheet key={openDay || 'tutup'} day={list.find((r) => r.day === openDay) || null} master={master} onClose={() => setOpenDay(null)} />
       <p className="text-xs text-center text-slate-400 dark:text-slate-500">Hitungan memakai batas menipis item yang berlaku sekarang.</p>
     </div>
   );

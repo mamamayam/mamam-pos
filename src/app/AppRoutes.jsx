@@ -28,6 +28,7 @@ const PayrollView    = lazy(() => import('../features/payroll/PayrollView'));
 const ReportsView    = lazy(() => import('../features/reports/ReportsView'));
 const RiwayatView    = lazy(() => import('../features/history/RiwayatView'));
 const SettingsView   = lazy(() => import('../features/settings/SettingsView'));
+const StockView      = lazy(() => import('../features/stock/StockView'));
 
 export const VIEWS = {
     beranda:     HomeView,
@@ -42,6 +43,7 @@ export const VIEWS = {
     laporan:     ReportsView,
     riwayat:     RiwayatView,
     pengaturan:  SettingsView,
+    'stok-belanja': StockView,
 };
 
 // Setelah deploy baru, berkas halaman lama hilang dari server; aplikasi yang masih terbuka dari

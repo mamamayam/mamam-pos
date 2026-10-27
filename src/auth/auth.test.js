@@ -169,6 +169,12 @@ describe('izin', () => {
     for (const v of ['karyawan', 'pengaturan', 'laporan']) { expect(canOpenView('staff', v)).toBe(false); expect(canOpenView('owner', v)).toBe(true); }
     for (const v of ['beranda', 'kasir', 'dompet', 'pelanggan', 'pengeluaran', 'absensi', 'penggajian', 'riwayat', 'menu']) { expect(canOpenView('staff', v)).toBe(true); expect(canOpenView('owner', v)).toBe(true); }
   });
+  it('Stok Belanja: layarnya terbuka untuk staf (mengisi), tapi kelola/ringkasan/kode bypass hanya owner', () => {
+    expect(canOpenView('staff', 'stok-belanja')).toBe(true);
+    expect(canOpenView('owner', 'stok-belanja')).toBe(true);
+    expect(can('staff', 'stok.kelola')).toBe(false);
+    expect(can('owner', 'stok.kelola')).toBe(true);
+  });
   it('Manajemen Menu terbuka untuk staf, tapi HPP dan hapus hanya owner', () => {
     expect(canOpenView('staff', 'menu')).toBe(true);
     for (const p of ['menu.hpp', 'menu.hapus']) { expect(can('staff', p)).toBe(false); expect(can('owner', p)).toBe(true); }

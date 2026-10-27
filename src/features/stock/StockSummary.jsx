@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Copy, PackageCheck } from 'lucide-react';
+import { Copy, Share2, PackageCheck } from 'lucide-react';
 import { Card, Badge, Button, EmptyState } from '../../components/ui';
 import { showToast } from '../../lib/toast';
-import { stockRows, sortByStatus, countByStatus, buyListText, formatQty, dayLabel, STATUS_META } from './stockMath';
+import { stockRows, sortByStatus, countByStatus, filterRows, shareText, formatQty, dayLabel, FILTER_LABEL, STATUS_META } from './stockMath';
 
 /**
- * StockSummary — tab Ringkasan (owner): stok terakhir yang TERSIMPAN per item, status Habis / Menipis / Aman,
- * dan daftar yang perlu dibeli. Status dihitung dari batas menipis (min_qty) tiap item, diatur di tab Kelola.
+ * StockSummary — tab Ringkasan (owner): stok terakhir yang TERSIMPAN per item, status Habis / Menipis / Aman.
+ * Status dihitung dari batas menipis (min_qty) tiap item, diatur di tab Kelola.
+ * Tombol Salin/Bagikan mengikuti filter yang sedang dipilih (Menipis = hanya yang menipis, dst; Semua = semua item).
  */
 const TILES = [
   { key: 'semua', label: 'SEMUA' },
@@ -22,14 +23,20 @@ export default function StockSummary({ master, latest }) {
   const [filter, setFilter] = useState('semua');
   const rows = useMemo(() => stockRows(master, latest), [master, latest]);
   const counts = useMemo(() => countByStatus(rows), [rows]);
-  const shown = useMemo(() => sortByStatus(rows).filter((r) => filter === 'semua' || r.status === filter), [rows, filter]);
+  const shown = useMemo(() => sortByStatus(filterRows(rows, filter)), [rows, filter]);
   const need = counts.habis + counts.menipis;
 
   const lastRow = rows.filter((r) => r.day).sort((a, b) => (a.day < b.day ? 1 : -1))[0];
 
+  const text = () => shareText(rows, filter, dayLabel(lastRow?.day));
   const copyList = async () => {
-    try { await navigator.clipboard.writeText(buyListText(rows, dayLabel(lastRow?.day))); showToast('Daftar belanja disalin'); }
+    try { await navigator.clipboard.writeText(text()); showToast(`Daftar ${FILTER_LABEL[filter].toLowerCase()} disalin`); }
     catch { showToast('Gagal menyalin daftar', { type: 'error' }); }
+  };
+  const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+  const shareList = async () => {
+    try { await navigator.share({ title: 'Stok Belanja', text: text() }); }
+    catch (e) { if (e?.name !== 'AbortError') showToast('Gagal membagikan daftar', { type: 'error' }); }   // AbortError = pengguna menutup menu bagikan
   };
 
   if (!rows.length) {
@@ -42,13 +49,10 @@ export default function StockSummary({ master, latest }) {
         {lastRow ? `Terakhir disimpan ${dayLabel(lastRow.day)}${lastRow.savedBy ? ` · ${lastRow.savedBy}` : ''}` : 'Belum ada hasil stok yang disimpan'}
       </p>
 
-      <Card variant="dark" padding="md" className="flex items-center gap-3">
-        <div className="flex-1 min-w-0">
-          <p className="text-xs text-slate-400 font-bold tracking-wide">PERLU DIBELI</p>
-          <p className="font-heading text-2xl font-bold" data-testid="stok-perlu-dibeli">{need} item</p>
-          <p className="text-xs text-slate-400">{counts.habis} habis · {counts.menipis} menipis</p>
-        </div>
-        <Button variant="secondary" size="sm" onClick={copyList} disabled={!need} icon={<Copy className="w-4 h-4" />}>Salin daftar</Button>
+      <Card variant="dark" padding="md">
+        <p className="text-xs text-slate-400 font-bold tracking-wide">PERLU DIBELI</p>
+        <p className="font-heading text-2xl font-bold" data-testid="stok-perlu-dibeli">{need} item</p>
+        <p className="text-xs text-slate-400">{counts.habis} habis · {counts.menipis} menipis</p>
       </Card>
 
       <div className="grid grid-cols-2 gap-2">
@@ -61,6 +65,14 @@ export default function StockSummary({ master, latest }) {
             <p className="font-heading font-bold text-sm mt-0.5">{t.key === 'semua' ? rows.length : counts[t.key]} item</p>
           </button>
         ))}
+      </div>
+
+      <div className="flex items-center justify-between gap-2" data-testid="stok-aksi-daftar">
+        <p className="text-xs font-bold text-slate-500 dark:text-slate-400 min-w-0 truncate">{FILTER_LABEL[filter]} · {shown.length} item</p>
+        <div className="flex gap-2 shrink-0">
+          <Button variant="secondary" size="sm" onClick={copyList} disabled={!shown.length} icon={<Copy className="w-4 h-4" />}>Salin</Button>
+          {canShare && <Button variant="secondary" size="sm" onClick={shareList} disabled={!shown.length} icon={<Share2 className="w-4 h-4" />}>Bagikan</Button>}
+        </div>
       </div>
 
       <div className="space-y-2">

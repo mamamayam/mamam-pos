@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  businessDate, stockStatus, parseQty, formatQty, stockRows, sortByStatus, countByStatus, buyList, buyListText,
+  businessDate, stockStatus, parseQty, formatQty, stockRows, sortByStatus, countByStatus, filterRows, shareText,
   itemOk, dayLabel, categoryProgress, categoryReady, gatingCategories, saveCheck, moveId, daySummary,
 } from './stockMath';
 
@@ -62,10 +62,25 @@ describe('ringkasan stok', () => {
     expect(sortByStatus(r).map((x) => x.item.id)).toEqual(['b', 'd', 'a', 'c', 'e']);
   });
   it('countByStatus', () => expect(countByStatus(rows)).toEqual({ habis: 1, menipis: 1, aman: 2, belum: 1 }));
-  it('buyList = Habis lalu Menipis', () => expect(buyList(rows).map((r) => r.item.id)).toEqual(['a', 'b']));
-  it('buyListText', () => {
-    expect(buyListText(rows, 'Sen, 26 Okt')).toBe('Daftar belanja — Sen, 26 Okt\n- A (habis, sisa 0 pcs)\n- B (menipis, sisa 2 pcs)');
-    expect(buyListText(stockRows(master, { a: { qty: 99 } }))).toBe('Daftar belanja\nTidak ada yang perlu dibeli.');
+  it('filterRows', () => {
+    expect(filterRows(rows, 'semua')).toHaveLength(5);
+    expect(filterRows(rows, 'menipis').map((r) => r.item.id)).toEqual(['b']);
+    expect(filterRows(rows, 'habis').map((r) => r.item.id)).toEqual(['a']);
+    expect(filterRows(rows, 'belum').map((r) => r.item.id)).toEqual(['e']);
+  });
+  it('shareText: hanya item sesuai filter, dikelompokkan per kategori', () => {
+    expect(shareText(rows, 'menipis', 'Sen, 26 Okt')).toBe('Stok Belanja — Menipis (Sen, 26 Okt) · 1 item\n\nMinuman\n- B: 2 pcs');
+    expect(shareText(rows, 'habis')).toBe('Stok Belanja — Habis · 1 item\n\nMinuman\n- A: 0 pcs');
+    expect(shareText(rows, 'belum')).toBe('Stok Belanja — Belum dicek · 1 item\n\nOpsional\n- E');
+  });
+  it('shareText semua: semua item per kategori dengan status', () => {
+    expect(shareText(rows, 'semua')).toBe(
+      'Stok Belanja — Semua item · 5 item\n\nMinuman\n- A: 0 pcs (habis)\n- B: 2 pcs (menipis)\n- C: 9 pcs (aman)\n\nKulkas\n- D: 10 pcs (aman)\n\nOpsional\n- E',
+    );
+  });
+  it('shareText tanpa item', () => {
+    expect(shareText(rows, 'habis').includes('Menipis')).toBe(false);
+    expect(shareText(stockRows(master, { a: { qty: 99 } }), 'habis')).toBe('Stok Belanja — Habis\nTidak ada item.');
   });
 });
 

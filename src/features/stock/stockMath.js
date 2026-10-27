@@ -70,16 +70,28 @@ export function countByStatus(rows) {
   return out;
 }
 
-/** Yang perlu dibeli = Habis + Menipis, Habis dulu. */
-export function buyList(rows) {
-  return sortByStatus(rows.filter((r) => r.status === 'habis' || r.status === 'menipis'));
-}
+/** Filter tampilan Ringkasan: 'semua' atau salah satu status. */
+export const FILTER_LABEL = { semua: 'Semua item', habis: 'Habis', menipis: 'Menipis', aman: 'Aman', belum: 'Belum dicek' };
+export const filterRows = (rows, filter) => (filter === 'semua' ? rows : rows.filter((r) => r.status === filter));
 
-export function buyListText(rows, dateLabel = '') {
-  const list = buyList(rows);
-  const head = `Daftar belanja${dateLabel ? ` — ${dateLabel}` : ''}`;
-  if (!list.length) return `${head}\nTidak ada yang perlu dibeli.`;
-  return [head, ...list.map((r) => `- ${r.item.name} (${STATUS_META[r.status].label.toLowerCase()}, sisa ${formatQty(r.qty)} ${r.item.unit})`)].join('\n');
+/**
+ * Teks yang disalin/dibagikan dari Ringkasan, SESUAI filter yang sedang dipilih (Menipis = hanya yang menipis, dst).
+ * Dikelompokkan per kategori (nama item seperti "Mamam" tidak jelas tanpa kategorinya), urutan sama dengan master.
+ * Baris: "- Nama: 2 porsi"; filter Semua menambahkan status "(habis)"; Belum dicek hanya nama.
+ */
+export function shareText(rows, filter = 'semua', dateLabel = '') {
+  const list = filterRows(rows, filter);
+  const title = `Stok Belanja — ${FILTER_LABEL[filter] || FILTER_LABEL.semua}${dateLabel ? ` (${dateLabel})` : ''}`;
+  if (!list.length) return `${title}\nTidak ada item.`;
+  const out = [`${title} · ${list.length} item`];
+  let current = null;
+  for (const r of list) {
+    if (r.category.id !== current) { current = r.category.id; out.push('', r.category.name); }
+    const qty = r.qty === null ? '' : `: ${formatQty(r.qty)} ${r.item.unit}`;
+    const tag = filter === 'semua' && r.status !== 'belum' ? ` (${STATUS_META[r.status].label.toLowerCase()})` : '';
+    out.push(`- ${r.item.name}${qty}${tag}`);
+  }
+  return out.join('\n');
 }
 
 const hasQty = (c) => Boolean(c) && c.qty !== null && c.qty !== undefined && !Number.isNaN(Number(c.qty));

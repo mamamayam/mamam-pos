@@ -88,6 +88,12 @@ describe('StockSummary (tab Ringkasan)', () => {
     expect(html).toContain('1 menipis');
     expect(html).toContain('Terakhir disimpan Min, 25 Okt · Dewi');
   });
+  it('baris aksi menyebut filter aktif dan jumlah item yang akan disalin', () => {
+    const latest = { a: { qty: 0 }, b: { qty: 2 }, d: { qty: 9 } };
+    const html = clean(renderToString(<StockSummary master={master} latest={latest} />));
+    expect(html).toMatch(/data-testid="stok-aksi-daftar"[^>]*><p[^>]*>Semua item · 3 item</);   // 'belum' tidak ada: hanya 3 item punya stok
+    expect(html).toContain('>Salin<');
+  });
   it('tanpa item: petunjuk Kelola', () => {
     expect(renderToString(<StockSummary master={[]} latest={{}} />)).toContain('Belum ada item');
   });

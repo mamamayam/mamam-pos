@@ -35,7 +35,7 @@ export const PERMISSIONS = {
   'karyawan.kelola': ['owner'],          // tambah/edit/hapus/impor karyawan
   'karyawan.upah': ['owner'],            // melihat upah, bonus, tarif lembur
   'absensi.edit': ['owner'],             // mengoreksi jam absen (disimpan di C, bukan di sistem absensi)
-  'stok.kelola': ['owner'],              // Stok Belanja: tab Ringkasan/Kelola/Riwayat, kode bypass Absen Pulang, buka kembali hasil. Layarnya terbuka untuk staf, tapi staf hanya mengisi (tab Isi)
+  'stok.kelola': ['owner'],              // Stok Belanja: tab Riwayat/Kelola, kode bypass Absen Pulang, buka kembali hasil. Layarnya terbuka untuk staf, tapi staf hanya mengisi (tab Isi)
 };
 
 /** Layar yang butuh izin tertentu untuk dibuka (id layar -> izin). */

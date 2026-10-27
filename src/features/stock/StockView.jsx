@@ -3,28 +3,26 @@ import { PillTabs, Alert, Button } from '../../components/ui';
 import { useAuth } from '../../auth/AuthContext';
 import { useStockData } from '../../hook/useStockData';
 import StockFill from './StockFill';
-import StockSummary from './StockSummary';
 import StockManage from './StockManage';
 import StockHistory from './StockHistory';
 
 /**
  * StockView — Stok Belanja (menggantikan Stock List di web absensi). Hasil TIDAK dikirim ke WhatsApp: tersimpan
- * di aplikasi, owner memantau yang habis/menipis di Ringkasan, dan menyimpan hasil membuka "Absen Pulang" di web absensi.
+ * di aplikasi, owner memantau hasil tiap hari di Riwayat (status habis/menipis per item), dan menyimpan hasil membuka "Absen Pulang" di web absensi.
  *  - Staf (tanpa izin `stok.kelola`): hanya tab Isi.
- *  - Owner: Ringkasan, Isi (+ kode bypass), Kelola, Riwayat.
+ *  - Owner: Riwayat (tab pertama, terbuka lebih dulu), Isi (+ kode bypass), Kelola.
  */
 const OWNER_TABS = [
-  { value: 'ringkasan', label: 'Ringkasan' },
+  { value: 'riwayat', label: 'Riwayat' },
   { value: 'isi', label: 'Isi' },
   { value: 'kelola', label: 'Kelola' },
-  { value: 'riwayat', label: 'Riwayat' },
 ];
 
 export default function StockView() {
   const { can } = useAuth();
   const manage = can('stok.kelola');
   const stock = useStockData();
-  const [tab, setTab] = useState('ringkasan');
+  const [tab, setTab] = useState('riwayat');
   const active = manage ? tab : 'isi';
 
   let body;
@@ -37,8 +35,7 @@ export default function StockView() {
         <Button variant="secondary" size="full" onClick={stock.reload}>Coba lagi</Button>
       </div>
     );
-  } else if (active === 'ringkasan') body = <StockSummary master={stock.master} latest={stock.latest} />;
-  else if (active === 'isi') body = <StockFill stock={stock} manage={manage} />;
+  } else if (active === 'isi') body = <StockFill stock={stock} manage={manage} />;
   else if (active === 'kelola') body = <StockManage stock={stock} />;
   else body = <StockHistory master={stock.master} enabled />;
 

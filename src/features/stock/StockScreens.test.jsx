@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderToString } from 'react-dom/server';
 
 // Modal memakai portal (butuh DOM); di uji SSR cukup dikosongkan. Yang diuji: apa yang tampil untuk staf vs owner,
-// status gate, tombol Simpan, dan hitungan Ringkasan.
+// status gate, tombol Simpan, dan Riwayat.
 vi.mock('../../components/ui', async (orig) => ({ ...(await orig()), Modal: () => null }));
 vi.mock('../../context/AppContext', () => ({ useAppContext: () => ({ triggerConfirm: () => {}, triggerAlert: () => {} }) }));
 const auth = { owner: true };
@@ -26,7 +26,6 @@ vi.mock('../../hook/useStockData', () => ({
 }));
 
 import StockFill from './StockFill';
-import StockSummary from './StockSummary';
 import StockView from './StockView';
 import StockHistory from './StockHistory';
 
@@ -81,38 +80,21 @@ describe('StockFill (tab Isi)', () => {
   });
 });
 
-describe('StockSummary (tab Ringkasan)', () => {
-  it('menghitung Habis / Menipis dari stok tersimpan; kartu Perlu Dibeli sudah dihapus', () => {
-    const latest = { a: { qty: 0, day: '2026-10-25', saved_by: 'Dewi' }, b: { qty: 2 }, d: { qty: 9 } };   // a habis, b menipis (<= 2), d aman
-    const html = clean(renderToString(<StockSummary master={master} latest={latest} />));
-    expect(html).not.toContain('PERLU DIBELI');
-    expect(html).toMatch(/HABIS[\s\S]{0,200}?1 item/);
-    expect(html).toMatch(/MENIPIS[\s\S]{0,200}?1 item/);
-    expect(html).not.toContain('Terakhir disimpan');
-  });
-  it('baris aksi menyebut filter aktif dan jumlah item yang akan disalin', () => {
-    const latest = { a: { qty: 0 }, b: { qty: 2 }, d: { qty: 9 } };
-    const html = clean(renderToString(<StockSummary master={master} latest={latest} />));
-    expect(html).toMatch(/data-testid="stok-aksi-daftar"[^>]*><p[^>]*>Semua item · 3 item</);   // 'belum' tidak ada: hanya 3 item punya stok
-    expect(html).toContain('>Salin<');
-  });
-  it('tanpa item: petunjuk Kelola', () => {
-    expect(renderToString(<StockSummary master={[]} latest={{}} />)).toContain('Belum ada item');
-  });
-});
-
 describe('StockView', () => {
   it('staf: langsung tab Isi tanpa tab lain', () => {
     auth.owner = false;
     const html = renderToString(<StockView />);
     expect(html).toContain('data-testid="stok-isi"');
-    expect(html).not.toContain('Ringkasan');
+    expect(html).not.toContain('Riwayat');
     expect(html).not.toContain('Kelola');
   });
-  it('owner: empat tab, mulai dari Ringkasan', () => {
+  it('owner: tiga tab, Riwayat paling depan dan langsung terbuka (tanpa tab Ringkasan)', () => {
+    history.rows = [];
     const html = renderToString(<StockView />);
-    for (const t of ['Ringkasan', 'Isi', 'Kelola', 'Riwayat']) expect(html).toContain(t);
-    expect(html).toContain('data-testid="stok-ringkasan"');
+    for (const t of ['Riwayat', 'Isi', 'Kelola']) expect(html).toContain(t);
+    expect(html).not.toContain('Ringkasan');
+    expect(html.indexOf('Riwayat')).toBeLessThan(html.indexOf('>Isi<'));
+    expect(html).toContain('Belum ada riwayat');
   });
   it('migrasi belum dijalankan: petunjuk', () => {
     Object.assign(stock, { ready: false, error: 'Stok Belanja belum aktif: jalankan migrasi' });

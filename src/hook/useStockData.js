@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { isMissingTable } from './deviceLogic';
 import { businessDate, moveId } from '../features/stock/stockMath';
+import { pengisiNames } from '../features/stock/stockPengisi';
 
 /**
  * useStockData — Stok Belanja (migrasi 020): master kategori/item, isian HARI INI, dan stok terakhir tersimpan.
@@ -227,6 +228,19 @@ export function useStockHistory(enabled, limit = 14) {
     }
     setState({ loading: false, error: '', rows: list.map((d) => ({ ...d, counts: byDay[d.day] || [] })) });
   }, [limit]);
+  useEffect(() => { if (enabled) reload(); }, [enabled, reload]);
+  return { ...state, reload };
+}
+
+/** Nama karyawan yang boleh dipilih sebagai pengisi checklist (dari tabel employees; lihat `pengisiNames`). */
+export function useStockEmployees(today, enabled = true) {
+  const [state, setState] = useState({ loading: true, error: '', names: [] });
+  const reload = useCallback(async () => {
+    setState((s) => ({ ...s, loading: true, error: '' }));
+    const { data, error } = await supabase.from('employees').select('name, status, is_active, resign_date').order('name');
+    if (error) { setState({ loading: false, error: error.message, names: [] }); return; }
+    setState({ loading: false, error: '', names: pengisiNames(data || [], today) });
+  }, [today]);
   useEffect(() => { if (enabled) reload(); }, [enabled, reload]);
   return { ...state, reload };
 }

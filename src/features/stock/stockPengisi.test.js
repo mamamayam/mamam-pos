@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cleanName, validName, readPengisi, savePengisi } from './stockPengisi';
+import { cleanName, validName, readPengisi, savePengisi, pengisiNames } from './stockPengisi';
 
 const fakeStorage = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; };
 
@@ -28,4 +28,22 @@ describe('nama pengisi checklist stok', () => {
     expect(readPengisi('2026-10-27', rusak)).toBe('');
     expect(readPengisi('2026-10-27', null)).toBe('');
   });
+});
+
+describe('pengisiNames (daftar pilihan dari data karyawan)', () => {
+  const rows = [
+    { name: 'Sri Depi ', status: 'aktif', is_active: true, resign_date: null },
+    { name: 'Agung Prayoga', status: 'aktif', is_active: true },
+    { name: 'Lepas', status: 'freelance', is_active: true },
+    { name: 'Sudah Resign', status: 'resign', is_active: false },
+    { name: 'Nonaktif', status: 'aktif', is_active: false },
+    { name: 'Resign Kemarin', status: 'aktif', is_active: true, resign_date: '2026-10-27' },
+    { name: 'Resign Besok', status: 'aktif', is_active: true, resign_date: '2026-10-29' },
+    { name: 'sri depi', status: 'aktif', is_active: true },
+    { name: '  ', status: 'aktif', is_active: true },
+  ];
+  it('hanya karyawan yang masih bisa absen, urut nama, tanpa nama kosong', () => {
+    expect(pengisiNames(rows, '2026-10-28')).toEqual(['Agung Prayoga', 'Lepas', 'Resign Besok', 'sri depi', 'Sri Depi']);
+  });
+  it('tanpa data: kosong', () => expect(pengisiNames(undefined, '2026-10-28')).toEqual([]));
 });

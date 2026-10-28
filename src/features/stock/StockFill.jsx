@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Check, Lock, Unlock, Minus, Plus, Save, ExternalLink, UserRound } from 'lucide-react';
-import { Card, Button, Input, Modal, EmptyState } from '../../components/ui';
+import { Card, Button, Select, Modal, EmptyState, Alert } from '../../components/ui';
+import { useStockEmployees } from '../../hook/useStockData';
 import { showToast } from '../../lib/toast';
-import { cleanName, validName, readPengisi, savePengisi } from './stockPengisi';
+import { readPengisi, savePengisi } from './stockPengisi';
 import { ABSENSI_URL } from './stockLinks';
 import {
   parseQty, formatQty, categoryProgress, categoryReady, gatingCategories, saveCheck,
@@ -10,7 +11,7 @@ import {
 
 /**
  * StockFill — tab Isi (khusus staf): isian stok HARI INI per kategori. Owner tidak mengisi (tab Bypass dan Riwayat).
- * Sebelum mengisi, pengisi MENGETIK namanya dulu (bukan otomatis dari siapa yang membuka Dompet; lihat stockPengisi.js).
+ * Sebelum mengisi, pengisi MEMILIH namanya dulu dari data karyawan (bukan otomatis dari siapa yang membuka Dompet; lihat stockPengisi.js).
  * Setelah semua kategori selesai dan hasil DISIMPAN, gate Absen Pulang di web absensi terbuka (hasil tetap di
  * aplikasi, tidak dikirim ke WhatsApp) dan muncul tautan ke web absensi.
  */
@@ -89,22 +90,35 @@ function SaveSheet({ open, onClose, onConfirm, master, counts, pengisi }) {
   );
 }
 
-/** Kartu "siapa yang mengisi": wajib diisi (diketik) sebelum kategori tampil. */
-function PengisiCard({ initial, onSubmit }) {
-  const [text, setText] = useState(initial);
+/** Kartu "siapa yang mengisi": nama WAJIB dipilih (dropdown dari data karyawan) sebelum kategori tampil. */
+function PengisiCard({ initial, today, onSubmit }) {
+  const { names, loading, error, reload } = useStockEmployees(today);
+  const [picked, setPicked] = useState(initial);
+  const shown = initial && !names.includes(initial) ? [initial, ...names] : names;   // nama lama yang tidak ada di daftar tetap bisa dipilih lagi
   return (
     <Card padding="md" className="space-y-3" data-testid="stok-pengisi-form">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-accent-50 dark:bg-accent-500/10 text-accent-600 dark:text-accent-400 flex items-center justify-center"><UserRound className="w-5 h-5" /></div>
         <div className="min-w-0">
           <p className="font-heading text-sm font-bold text-slate-900 dark:text-slate-50">Siapa yang mengisi stok hari ini?</p>
-          <p className={`text-xs ${LBL}`}>Ketik nama yang melakukan checklist, bisa beda dengan yang buka dompet.</p>
+          <p className={`text-xs ${LBL}`}>Pilih nama yang melakukan checklist, bisa beda dengan yang buka dompet.</p>
         </div>
       </div>
-      <form onSubmit={(e) => { e.preventDefault(); if (validName(text)) onSubmit(cleanName(text)); }} className="space-y-3">
-        <Input label="Nama pengisi" placeholder="Ketik nama" value={text} onChange={(e) => setText(e.target.value)} />
-        <Button type="submit" size="full" disabled={!validName(text)}>Mulai Isi</Button>
-      </form>
+      {error ? (
+        <div className="space-y-2">
+          <Alert type="banner" variant="error">Daftar karyawan belum bisa dimuat: {error}</Alert>
+          <Button variant="secondary" size="full" onClick={reload}>Coba lagi</Button>
+        </div>
+      ) : (
+        <form onSubmit={(e) => { e.preventDefault(); if (picked) onSubmit(picked); }} className="space-y-3">
+          <Select label="Nama pengisi" title="Nama pengisi" value={picked} onChange={(e) => setPicked(e.target.value)} disabled={loading || shown.length === 0} data-testid="stok-pengisi-select">
+            <option value="">{loading ? 'Memuat...' : shown.length === 0 ? 'Belum ada karyawan aktif' : 'Pilih nama'}</option>
+            {shown.map((n) => <option key={n} value={n}>{n}</option>)}
+          </Select>
+          {!loading && shown.length === 0 && <p className={`text-xs ${LBL}`}>Minta owner menambahkan karyawan di layar Karyawan.</p>}
+          <Button type="submit" size="full" disabled={!picked}>Mulai Isi</Button>
+        </form>
+      )}
     </Card>
   );
 }
@@ -167,11 +181,10 @@ export default function StockFill({ stock }) {
           <a href={ABSENSI_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-bold underline" data-testid="stok-link-absen">
             Isi absen pulang sekarang <ExternalLink className="w-3.5 h-3.5" />
           </a>
-          <p className="font-normal opacity-80">Isian terkunci sampai ganti hari.</p>
         </div>
       )}
 
-      {!locked && !pengisi && <PengisiCard key={draft} initial={draft} onSubmit={setName} />}
+      {!locked && !pengisi && <PengisiCard key={draft} initial={draft} today={today} onSubmit={setName} />}
 
       {!locked && pengisi && (
         <div className="flex items-center justify-between gap-2 px-1 text-xs" data-testid="stok-pengisi">

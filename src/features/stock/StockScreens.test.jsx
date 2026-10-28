@@ -25,6 +25,7 @@ const stock = {
 vi.mock('../../hook/useStockData', () => ({
   useStockData: () => stock,
   useStockHistory: () => ({ rows: history.rows, loading: false, error: '', reload: () => {} }),
+  useStockEmployees: () => ({ names: ['Dewi', 'Sri Depi'], loading: false, error: '', reload: () => {} }),
 }));
 
 import StockFill from './StockFill';
@@ -47,15 +48,18 @@ beforeEach(() => {
 });
 
 describe('StockFill (tab Isi, khusus staf)', () => {
-  it('sebelum nama pengisi diketik: hanya kartu nama, kategori dan tombol Simpan belum tampil', () => {
+  it('sebelum nama pengisi dipilih: hanya kartu nama (dropdown), kategori dan tombol Simpan belum tampil', () => {
     const html = clean(renderToString(<StockFill stock={stock} />));
     expect(html).toContain('data-testid="stok-pengisi-form"');
+    expect(html).toContain('data-testid="stok-pengisi-select"');
+    expect(html).toContain('Pilih nama');
+    expect(html).not.toMatch(/<input[^>]*placeholder="Ketik nama"/);
     expect(html).toContain('Siapa yang mengisi stok hari ini?');
     expect(html).not.toContain('data-testid="stok-kategori-');
     expect(html).not.toContain('data-testid="stok-simpan"');
     expect(html).not.toContain('data-testid="bypass-card"');
   });
-  it('setelah nama diketik: kategori tampil dengan nama pengisi dan tombol Ganti', () => {
+  it('setelah nama dipilih: kategori tampil dengan nama pengisi dan tombol Ganti', () => {
     pengisiState.name = 'Dewi';
     const html = clean(renderToString(<StockFill stock={stock} />));
     expect(html).not.toContain('data-testid="stok-pengisi-form"');
@@ -84,6 +88,7 @@ describe('StockFill (tab Isi, khusus staf)', () => {
     expect(html).toContain('Absen pulang terbuka');
     expect(html).toContain('oleh Dewi');
     expect(html).toContain('Stok sudah selesai diisi.');
+    expect(html).not.toContain('Isian terkunci');
     expect(html).toMatch(new RegExp(`<a href="${ABSENSI_URL.replace(/[.]/g, '\\.')}"[^>]*data-testid="stok-link-absen"`));
     expect(html).toContain('Isi absen pulang sekarang');
     expect(html).not.toContain('stok-simpan');

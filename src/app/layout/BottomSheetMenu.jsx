@@ -192,7 +192,15 @@ export default function BottomSheetMenu({
   return (
     <Modal isOpen={isOpen} onClose={onClose} sheet size="lg" maxHeight className="pb-[max(1.25rem,env(safe-area-inset-bottom))]">
       <div className="px-5 pt-4 pb-2">
-        <div className="flex items-center justify-end min-h-8 mb-3">
+        <div className="flex items-center justify-between min-h-8 mb-3">
+          <button
+            type="button"
+            data-testid="menu-keluar"
+            onClick={() => { onClose(); onLogout(); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 active:scale-95 transition-all"
+          >
+            <LogOut className="w-3 h-3" />Keluar
+          </button>
           <div className="flex items-center gap-1">
             {editing && (
               <button type="button" onClick={handleReset} data-testid="menu-reset"
@@ -278,15 +286,8 @@ export default function BottomSheetMenu({
           </>
         )}
 
-        <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
+        <div className="mt-5 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1">
           <p className="text-center text-xs text-slate-400 dark:text-slate-500">Masuk sebagai <span className="font-bold text-slate-600 dark:text-slate-300" data-testid="role-label">{roleLabel(role)}</span></p>
-          <button
-            onClick={() => { onClose(); onLogout(); }}
-            className="w-full flex items-center justify-center gap-2 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 py-3 rounded-2xl font-semibold text-sm active:scale-[0.98] transition-all duration-200"
-          >
-            <LogOut className="w-4 h-4" />
-            Keluar
-          </button>
           <p className="text-center text-[11px] text-slate-300 dark:text-slate-600" data-testid="app-version">{versionLabel()}</p>
         </div>
       </div>

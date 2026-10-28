@@ -7,6 +7,12 @@ const num = (v) => Number(v) || 0;
 export const saleTime = (s) => new Date(s.paid_at || s.created_at).getTime();
 export const methodOf = (s) => s.payment_method || 'Lainnya';
 
+/** Rincian Split Payment satu transaksi: [{ method, amount }] (kosong kalau bukan split / datanya tidak ada). */
+export function splitPartsOf(sale) {
+  if (sale?.payment_method !== 'Split Payment' || !Array.isArray(sale.split_payments_json)) return [];
+  return sale.split_payments_json.filter((p) => p && p.method).map((p) => ({ method: p.method, amount: num(p.amount) }));
+}
+
 export const SORT_OPTIONS = [
   { key: 'terbaru', label: 'Terbaru Dulu', short: 'Terbaru' },
   { key: 'terlama', label: 'Terlama Dulu', short: 'Terlama' },

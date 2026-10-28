@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filterSales, paymentStats, sortSales, isTimeSort, methodOf } from './riwayatFilter';
+import { filterSales, paymentStats, sortSales, isTimeSort, methodOf, splitPartsOf } from './riwayatFilter';
 
 const S = [
   { id: 'a1', display_number: 101, customer_name: 'Budi', order_type: 'Takeaway', payment_method: 'Tunai', total: 30000, paid_at: '2026-10-10T03:00:00Z' },
@@ -54,5 +54,16 @@ describe('riwayatFilter', () => {
     expect(filterSales(D, { query: 'kasir depan' }).map((s) => s.id)).toEqual(['a1']);
     expect(filterSales(D, { device: 'dev-2', query: 'budi' }).map((s) => s.id)).toEqual(['b2']);
     expect(filterSales(D, { device: 'dev-2', query: 'kasir' })).toEqual([]);
+  });
+});
+
+describe('splitPartsOf', () => {
+  it('Split Payment: daftar metode + nominal; bukan split / data kosong / rusak = kosong', () => {
+    const split = { payment_method: 'Split Payment', split_payments_json: [{ method: 'Tunai', amount: 5000 }, { method: 'QRIS', amount: '5000' }] };
+    expect(splitPartsOf(split)).toEqual([{ method: 'Tunai', amount: 5000 }, { method: 'QRIS', amount: 5000 }]);
+    expect(splitPartsOf({ payment_method: 'Tunai', split_payments_json: [{ method: 'Tunai', amount: 1 }] })).toEqual([]);
+    expect(splitPartsOf({ payment_method: 'Split Payment', split_payments_json: null })).toEqual([]);
+    expect(splitPartsOf({ payment_method: 'Split Payment', split_payments_json: [null, { amount: 1 }] })).toEqual([]);
+    expect(splitPartsOf(null)).toEqual([]);
   });
 });

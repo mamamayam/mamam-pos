@@ -12,7 +12,7 @@ import { useDeleteRequestIndex } from '../../hook/useDeleteRequests';
 import DeleteRequestSheet from './DeleteRequestSheet';
 import { receiptFromSale } from '../pos/receiptModel';
 import { shareReceiptWithAlert } from '../pos/shareReceipt';
-import { filterSales, paymentStats, sortSales, methodOf, isTimeSort, SORT_OPTIONS, DEFAULT_SORT } from './riwayatFilter';
+import { filterSales, paymentStats, sortSales, methodOf, splitPartsOf, isTimeSort, SORT_OPTIONS, DEFAULT_SORT } from './riwayatFilter';
 
 /**
  * RiwayatView — Riwayat transaksi lunas, layar tersendiri (dulu tab di Laporan).
@@ -247,13 +247,21 @@ export default function RiwayatView() {
           { label: 'Ongkir', value: detail?.delivery_fee, type: 'currency' },
         ]}
         highlight={{ label: 'Total Tagihan', value: detail?.total }}
-        afterHighlight={detail?.amount_paid != null && (
+        afterHighlight={(detail?.amount_paid != null || splitPartsOf(detail).length > 0) && (
           <div data-testid="riwayat-cash" className="mt-3 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 py-3 space-y-1.5 text-xs">
-            <div className="flex justify-between gap-3">
-              <span className="text-slate-500 dark:text-slate-400">{detail.payment_method === 'Tunai' ? 'Uang diterima' : 'Dibayar'}</span>
-              <span className="font-bold text-slate-700 dark:text-slate-200">{formatRupiah(detail.amount_paid)}</span>
-            </div>
-            {detail.change_amount != null && (
+            {splitPartsOf(detail).map((p, i) => (
+              <div key={i} className="flex justify-between gap-3" data-testid="riwayat-split">
+                <span className="text-slate-500 dark:text-slate-400">Split {i + 1} · {p.method}</span>
+                <span className="font-bold text-slate-700 dark:text-slate-200">{formatRupiah(p.amount)}</span>
+              </div>
+            ))}
+            {detail.amount_paid != null && (
+              <div className="flex justify-between gap-3">
+                <span className="text-slate-500 dark:text-slate-400">{detail.payment_method === 'Tunai' ? 'Uang diterima' : 'Dibayar'}</span>
+                <span className="font-bold text-slate-700 dark:text-slate-200">{formatRupiah(detail.amount_paid)}</span>
+              </div>
+            )}
+            {detail.amount_paid != null && detail.change_amount != null && (
               <div className="flex justify-between gap-3">
                 <span className="text-slate-500 dark:text-slate-400">Kembalian</span>
                 <span className="font-bold text-slate-700 dark:text-slate-200">{formatRupiah(detail.change_amount)}</span>

@@ -101,7 +101,7 @@ describe('StockFill (tab Isi, khusus staf)', () => {
   });
 });
 
-describe('BypassCard (tab Bypass, owner)', () => {
+describe('BypassCard (kartu kode di tab Bypass layar Absensi)', () => {
   it('hanya kode: tanpa lencana "Hanya owner" dan tanpa kalimat penjelasan', () => {
     const html = clean(renderToString(<BypassCard />));
     expect(html).toContain('data-testid="bypass-card"');
@@ -127,13 +127,14 @@ describe('StockView', () => {
     expect(html).not.toContain('Riwayat');
     expect(html).not.toContain('Kelola');
   });
-  it('owner: tiga tab (Riwayat, Bypass, Kelola), Riwayat paling depan dan langsung terbuka; tanpa tab Isi', () => {
+  it('owner: dua tab (Riwayat, Kelola), Riwayat paling depan dan langsung terbuka; tanpa tab Isi, Bypass, Ringkasan', () => {
     history.rows = [];
     const html = renderToString(<StockView />);
-    for (const t of ['Riwayat', 'Bypass', 'Kelola']) expect(html).toContain(t);
+    for (const t of ['Riwayat', 'Kelola']) expect(html).toContain(t);
     expect(html).not.toContain('>Isi<');
+    expect(html).not.toContain('>Bypass<');   // kode bypass pindah ke layar Absensi
     expect(html).not.toContain('Ringkasan');
-    expect(html.indexOf('Riwayat')).toBeLessThan(html.indexOf('>Bypass<'));
+    expect(html.indexOf('Riwayat')).toBeLessThan(html.indexOf('>Kelola<'));
     expect(html).toContain('Belum ada riwayat');
   });
   it('migrasi belum dijalankan: petunjuk', () => {

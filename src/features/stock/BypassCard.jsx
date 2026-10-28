@@ -6,7 +6,7 @@ import { bypassSecret, isValidSecret, totpCode, secondsLeft, groupCode, STEP_SEC
 
 /**
  * BypassCard — kode 6 digit (ganti tiap 30 detik) untuk membuka Absen Pulang di web absensi TANPA mengisi
- * Stok Belanja. Hanya dirender untuk owner (izin `stok.kelola`, dicek oleh pemanggil) di tab Bypass. Rahasianya
+ * Stok Belanja. Hanya dirender untuk owner (izin `stok.kelola`, dicek oleh pemanggil) di tab Bypass layar Absensi. Rahasianya
  * VITE_STOCK_BYPASS_SECRET harus sama dengan tabel stock_secret di database (lihat migrasi 020).
  */
 export default function BypassCard() {

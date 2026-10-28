@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import { RefreshCw, Fingerprint, Pencil } from 'lucide-react';
-import { Card, Badge, Button, EditedMark, EmptyState } from '../../components/ui';
+import { Card, Badge, Button, EditedMark, EmptyState, PillTabs } from '../../components/ui';
 import { useAttendanceDay } from '../../hook/useAttendanceDay';
 import PeriodNav from '../../components/PeriodNav';
 import { parseIsoDate, formatIsoDate } from '../payroll/payrollEngine';
 import { toLocalDateString } from '../../utils/formatters';
 import { useAuth } from '../../auth/AuthContext';
 import AttendanceEditSheet from './AttendanceEditSheet';
+import BypassPanel from '../stock/BypassPanel';
 
 /**
  * AttendanceView — Absensi. Papan BACA-SAJA: siapa sedang jaga, bolong, belum
  * absen, sudah pulang, atau libur pada satu hari. Data dari sistem absensi;
  * absen dilakukan di sana, bukan di sini.
+ * Owner (izin `stok.kelola`) punya pill tab kedua, Bypass: status Absen Pulang hari ini + kode bypass
+ * (dulu di Stok Belanja). Staf tidak melihat tab.
  */
 const STATUS = {
   sedangJaga: { label: 'Sedang Jaga', variant: 'success' },
@@ -26,7 +29,7 @@ const fmtHM = (min) => `${Math.floor(min / 60)}j ${String(min % 60).padStart(2, 
 const shiftDay = (iso, n) => formatIsoDate(new Date(parseIsoDate(iso).getTime() + n * 86400000));
 const longDate = (iso) => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); };
 
-export default function AttendanceView() {
+function AttendanceBoard() {
   const today = toLocalDateString();
   const [date, setDate] = useState(today);
   const { loading, error, board, info, updatedAt, reload, overrideKeys } = useAttendanceDay({ date });
@@ -46,8 +49,7 @@ export default function AttendanceView() {
   }
 
   return (
-    <div className="p-4 md:p-6 bg-slate-50 dark:bg-slate-950 flex-1 flex flex-col h-full overflow-y-auto animate-in fade-in slide-in-from-bottom-4 duration-300 ease-out">
-      <div className="max-w-3xl w-full space-y-4 pb-10">
+    <>
         <Card className="space-y-2">
           <PeriodNav
             label={longDate(date)} labelTestId="att-date"
@@ -122,7 +124,6 @@ export default function AttendanceView() {
             ))}
           </>
         )}
-      </div>
 
       {editRow && (
         <AttendanceEditSheet
@@ -131,6 +132,21 @@ export default function AttendanceView() {
           hasOverride={overrideKeys.has(`${editRow.employee.id}|${date}`)} onSaved={reload}
         />
       )}
+    </>
+  );
+}
+
+export default function AttendanceView() {
+  const { can } = useAuth();
+  const manage = can('stok.kelola');
+  const [tab, setTab] = useState('absensi');
+  const active = manage ? tab : 'absensi';
+  return (
+    <div className="p-4 md:p-6 bg-slate-50 dark:bg-slate-950 flex-1 flex flex-col h-full overflow-y-auto animate-in fade-in slide-in-from-bottom-4 duration-300 ease-out">
+      <div className="max-w-3xl w-full space-y-4 pb-10">
+        {manage && <PillTabs options={[{ value: 'absensi', label: 'Absensi' }, { value: 'bypass', label: 'Bypass' }]} value={active} onChange={setTab} />}
+        {active === 'bypass' ? <BypassPanel /> : <AttendanceBoard />}
+      </div>
     </div>
   );
 }

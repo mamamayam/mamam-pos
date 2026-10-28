@@ -244,3 +244,25 @@ export function useStockEmployees(today, enabled = true) {
   useEffect(() => { if (enabled) reload(); }, [enabled, reload]);
   return { ...state, reload };
 }
+
+/**
+ * Status Absen Pulang hari ini (true = terbuka). Memakai fungsi SQL `stok_gate_terbuka()` yang SAMA dengan web absensi,
+ * jadi hasilnya pasti sama dengan yang dilihat karyawan. Diperbarui tiap 15 detik selama layarnya terbuka.
+ */
+export function useStockGate(enabled = true) {
+  const [state, setState] = useState({ open: null, loading: true, error: '' });
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let alive = true;
+    const check = async () => {
+      const { data, error } = await supabase.rpc('stok_gate_terbuka');
+      if (!alive) return;
+      if (error) setState({ open: null, loading: false, error: isMissingTable(error) ? STOCK_MIGRATION_HINT : error.message });
+      else setState({ open: Boolean(data), loading: false, error: '' });
+    };
+    check();
+    const t = setInterval(check, 15000);
+    return () => { alive = false; clearInterval(t); };
+  }, [enabled]);
+  return state;
+}

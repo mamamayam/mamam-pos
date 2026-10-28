@@ -6,6 +6,7 @@ import { toLocalDateString } from '../utils/formatters';
 import { employeeGrossCost } from '../features/payroll/payrollCost';
 import { prepareLogs, nowMinutesOf } from '../features/attendance/dayRules';
 import { fetchOverrides } from './attendanceOverrides';
+import { isOnDuty } from '../features/employee/employeeOptions';
 import { isCountedAddition, countPendingAdditions } from '../features/payroll/additionApproval';
 import { parseDetail } from '../features/payroll/additionDetail';
 import { deductionUpdateArgs } from '../features/home/quickEntryMath';
@@ -131,7 +132,7 @@ export function usePayrollData({ period, attendanceClient = supabase }) {
         employee: toEngineEmployee(e), logs, additions, deductions, openingBalances, period: { start, end, monthKey, isMonth: !!monthKey }, today: engineToday,
       });
       const active = payroll.attendance.dayRows.length > 0 || payroll.additions.length > 0 || payroll.deductions.length > 0 || payroll.openingBalance !== 0;
-      if (e.status === 'resign' && !active) continue;      // resign tanpa aktivitas di periode ini: disembunyikan
+      if (!isOnDuty(e) && !active) continue;      // cuti/resign tanpa aktivitas di periode ini: disembunyikan
       const needsClarification = payroll.attendance.dayRows.filter(r => r.status === 'perluKlarifikasi');
       rows.push({ employee: { id: e.id, name: e.name, role: e.role, status: e.status, externalId: e.externalId }, payroll, rates: toEngineEmployee(e), needsClarification });
     }

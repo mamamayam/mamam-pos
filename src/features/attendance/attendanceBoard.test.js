@@ -45,14 +45,19 @@ describe('buildAttendanceBoard — status per karyawan', () => {
 });
 
 describe('papan hari: urutan, hitungan, filter', () => {
-  const employees = [emp('a', 'Andi'), emp('b', 'Budi'), emp('c', 'Citra'), emp('d', 'Dedi'), emp('e', 'Eko', 'resign'), emp('f', 'Fani')];
+  const employees = [emp('a', 'Andi'), emp('b', 'Budi'), emp('c', 'Citra'), emp('d', 'Dedi'), emp('e', 'Eko', 'resign'), emp('f', 'Fani'), emp('g', 'Gita', 'cuti'), emp('h', 'Hana', 'freelance')];
   const logs = [L('b', 'masuk', '09:00'), L('c', 'masuk', '09:00'), L('c', 'pulang', '19:00'), L('d', 'libur', null), L('f', 'masuk', '09:00'), L('f', 'bolong', '12:00'), L('e', 'masuk', '09:00')];
   const { rows, counts } = buildAttendanceBoard(employees, logs, T, T);
   it('karyawan resign tidak tampil', () => { expect(rows.map(r => r.employee.name)).not.toContain('Eko'); });
-  it('urutan: sedang jaga, bolong, belum absen, sudah pulang, libur', () => {
-    expect(rows.map(r => r.employee.name + ':' + r.status)).toEqual(['Budi:sedangJaga', 'Fani:bolong', 'Andi:belumAbsen', 'Citra:sudahPulang', 'Dedi:libur']);
+  it('karyawan cuti juga tidak tampil; freelance tampil', () => {
+    const names = rows.map(r => r.employee.name);
+    expect(names).not.toContain('Gita');
+    expect(names).toContain('Hana');
   });
-  it('hitungan per status', () => { expect(counts).toMatchObject({ sedangJaga: 1, bolong: 1, belumAbsen: 1, sudahPulang: 1, libur: 1, lupaPulang: 0, perluKlarifikasi: 0 }); });
+  it('urutan: sedang jaga, bolong, belum absen, sudah pulang, libur', () => {
+    expect(rows.map(r => r.employee.name + ':' + r.status)).toEqual(['Budi:sedangJaga', 'Fani:bolong', 'Andi:belumAbsen', 'Hana:belumAbsen', 'Citra:sudahPulang', 'Dedi:libur']);
+  });
+  it('hitungan per status', () => { expect(counts).toMatchObject({ sedangJaga: 1, bolong: 1, belumAbsen: 2, sudahPulang: 1, libur: 1, lupaPulang: 0, perluKlarifikasi: 0 }); });
   it('daftar kosong aman', () => { expect(buildAttendanceBoard([], [], T, T).rows).toEqual([]); });
 });
 

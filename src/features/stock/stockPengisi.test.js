@@ -36,6 +36,7 @@ describe('pengisiNames (daftar pilihan dari data karyawan)', () => {
     { name: 'Agung Prayoga', status: 'aktif', is_active: true },
     { name: 'Lepas', status: 'freelance', is_active: true },
     { name: 'Sudah Resign', status: 'resign', is_active: false },
+    { name: 'Sedang Cuti', status: 'cuti', is_active: true },
     { name: 'Nonaktif', status: 'aktif', is_active: false },
     { name: 'Resign Kemarin', status: 'aktif', is_active: true, resign_date: '2026-10-27' },
     { name: 'Resign Besok', status: 'aktif', is_active: true, resign_date: '2026-10-29' },

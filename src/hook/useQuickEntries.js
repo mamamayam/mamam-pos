@@ -9,6 +9,7 @@ import {
 import { onApprovalsChanged } from './usePendingApprovals';
 import { updateDeduction as updateDeductionRpc, fetchExpensePayment } from './deductionEdit';
 import { saveAdditionEdit } from './additionEdit';
+import { onDutyOnly } from '../features/employee/employeeOptions';
 
 /**
  * useQuickEntries — data "Catat Cepat" di Beranda, ONLINE-FIRST.
@@ -69,7 +70,7 @@ export function useQuickEntries({ canApprove, onChanged }) {
       if (bad) throw new Error(bad.error.message);
 
       const nameById = Object.fromEntries((emps.data || []).map(e => [e.id, e.name]));
-      setEmployees((emps.data || []).filter(e => e.status !== 'resign'));
+      setEmployees(onDutyOnly(emps.data));
       setAdditions((adds.data || []).map(r => mapAdditionRow(r, nameById)));
       setDeductions((deds.data || []).map(r => mapDeductionRow(r, nameById)));
       setExpenses((exps.data || []).map(mapExpenseRow));

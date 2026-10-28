@@ -22,7 +22,7 @@ export function pengisiNames(rows = [], today = '') {
     const name = cleanName(e?.name);
     if (!name) continue;
     if (e.is_active === false) continue;
-    if (e.status && !['aktif', 'freelance'].includes(e.status)) continue;
+    if (e.status && !['aktif', 'freelance'].includes(e.status)) continue;   // cuti dan resign tidak muncul
     if (e.resign_date && today && String(e.resign_date).slice(0, 10) <= today) continue;
     out.add(name);
   }

@@ -82,6 +82,8 @@ Rincian: `docs/versioning.md`. Versi tampil di menu Lainnya dan layar login (`sr
 
 **Staf** tidak boleh melihat/membuka **Laporan** (owner-only). **Riwayat** terbuka untuk staf, tapi staf TIDAK bisa menghapus langsung: hanya **mengajukan hapus** per transaksi (lihat Persetujuan di bawah).
 
+**Karyawan Cuti dan Resign disembunyikan di mana pun** (permintaan pemilik 28 Okt 2026) sampai statusnya kembali Aktif/Freelance: tidak ada di papan Absensi, daftar pengisi Stok Belanja, penerima Tambah/Potongan (Catat Cepat), kurir (form Pengeluaran, Bayar POS), "Dibuka oleh" Dompet, "Diajukan oleh" (ajukan hapus), PIN slip gaji, dan web absensi (`absen_daftar_karyawan()` hanya aktif/freelance). Satu aturan di `employeeOptions.js` (`isOnDuty`, `onDutyOnly`, dites): jangan menulis `status !== 'resign'` sendiri di layar baru. Layar **Karyawan** tetap menampilkan semuanya (supaya status bisa diubah). Satu pengecualian: **Penggajian** tetap menampilkan cuti/resign bila ada aktivitas di periode yang dilihat (absen, tambahan, potongan, saldo awal), supaya gaji terakhir tidak hilang.
+
 **Gaji** mengikuti aturan hitung mamam-kasir (B): `docs/payroll-rules.md`. Jangan diubah diam-diam.
 
 **Simpan Pesanan / bayar nanti** (`src/features/pos/savedOrders.js`, `OrderBreakdown.jsx`, `SavedOrdersSheet.jsx`, `src/hook/useSavedOrders.js`; tanpa migrasi):

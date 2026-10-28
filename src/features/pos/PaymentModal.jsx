@@ -5,6 +5,7 @@ import {
 import { usePosStore } from '../../store/usePosStore';
 import { computeOrderTotals, cashChange, splitStatus, displayNumberFromId } from './posMath';
 import { checkout } from './useCheckout';
+import { isOnDuty } from '../employee/employeeOptions';
 import useBackLayer from '../../hook/useBackLayer';
 import NominalInput from '../../components/ui/NominalInput';
 import Overlay from '../../components/ui/Overlay';
@@ -52,7 +53,7 @@ export default function PaymentModal({ menus, customers, vouchers, employees, tr
   // Hanya jalan saat modal BARU dibuka, jadi memilih "Kasir" secara manual tidak ditimpa lagi.
   useEffect(() => {
     if (!paymentModal.isOpen || orderType !== 'Delivery' || deliveryCourierId) return;
-    const first = employees.find(e => e.role === 'kurir' && e.status !== 'resign');
+    const first = employees.find(e => e.role === 'kurir' && isOnDuty(e));
     if (first) { setDeliveryCourierId(first.id); setDeliveryPaidTo('kurir'); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentModal.isOpen]);
@@ -63,7 +64,7 @@ export default function PaymentModal({ menus, customers, vouchers, employees, tr
   const totals = computeOrderTotals({ cart, voucher: appliedVoucher, manualDiscount, orderType, deliveryFee });
   const total = totals.total;
   const { isSplitMode, splitPayments, method, amountPaid, ojolPlatform, orderNumber } = paymentModal;
-  const couriers = employees.filter(e => e.role === 'kurir' && e.status !== 'resign');
+  const couriers = employees.filter(e => e.role === 'kurir' && isOnDuty(e));
 
   const kembalian = method === 'Tunai' && !isSplitMode ? cashChange(amountPaid, total) : 0;
   const isReadyToPay = method === 'Tunai' && !isSplitMode ? Number(amountPaid) >= total : true;

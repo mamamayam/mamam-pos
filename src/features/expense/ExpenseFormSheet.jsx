@@ -3,6 +3,7 @@ import { Input, NominalInput, Select, Button, Modal, BulletListInput, PillTabs }
 import CategoryModal from '../../components/CategoryModal';
 import CategorySelect from '../../components/CategorySelect';
 import { storeExpenseCategories } from './expenseCategories';
+import { isOnDuty } from '../employee/employeeOptions';
 import { useAppContext } from '../../context/AppContext';
 import { toLocalDateString } from '../../utils/formatters';
 import { showToast } from '../../lib/toast';
@@ -78,7 +79,7 @@ export default function ExpenseFormSheet({ isOpen, onClose, editing = null, data
   };
 
   const couriers = useMemo(
-    () => employees.filter(e => e.role === 'kurir' && e.status !== 'resign'),
+    () => employees.filter(e => e.role === 'kurir' && isOnDuty(e)),
     [employees]
   );
 

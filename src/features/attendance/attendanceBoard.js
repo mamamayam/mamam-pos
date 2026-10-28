@@ -13,6 +13,7 @@
  *   libur            ditandai libur di sistem absensi
  */
 import { computeDayResult } from '../payroll/payrollEngine.js';
+import { isOnDuty } from '../employee/employeeOptions.js';
 
 export const STATUS_ORDER = ['sedangJaga', 'bolong', 'perluKlarifikasi', 'lupaPulang', 'belumAbsen', 'sudahPulang', 'libur'];
 
@@ -30,7 +31,7 @@ export function bolongPairs(dayLogs) {
 export function buildAttendanceBoard(employees, logs, date, today) {
   const rows = [];
   for (const emp of employees) {
-    if (emp.status === 'resign') continue;
+    if (!isOnDuty(emp)) continue;   // cuti dan resign tidak tampil di papan
     const dayLogs = logs.filter(l => l.employeeId === emp.id && l.date === date);
     const masukLog = dayLogs.filter(l => l.type === 'masuk').sort(byTime)[0];
     const pulangLog = dayLogs.filter(l => l.type === 'pulang').sort(byTime).slice(-1)[0];

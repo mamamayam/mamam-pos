@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { randomSalt, hashPin, verifyPinHash } from '../auth/pinHash';
+import { onDutyOnly } from '../features/employee/employeeOptions';
 
 /**
  * useEmployeePins — PIN karyawan (untuk melihat gaji sendiri di Penggajian mode
@@ -14,13 +15,13 @@ export function useEmployeePins() {
 
   const reload = useCallback(async () => {
     const [emp, pins] = await Promise.all([
-      supabase.from('employees').select('id, name, status').neq('status', 'resign').order('name'),
+      supabase.from('employees').select('id, name, status').order('name'),
       supabase.from('employee_pins').select('employee_id'),
     ]);
     const e = emp.error || pins.error;
     if (e) { setError(e.message); setLoading(false); return; }
     const have = new Set((pins.data || []).map((p) => p.employee_id));
-    setPeople((emp.data || []).map((x) => ({ id: x.id, name: x.name, hasPin: have.has(x.id) })));
+    setPeople(onDutyOnly(emp.data).map((x) => ({ id: x.id, name: x.name, hasPin: have.has(x.id) })));
     setError(null);
     setLoading(false);
   }, []);

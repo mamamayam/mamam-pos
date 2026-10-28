@@ -7,6 +7,7 @@ import { ajukanHapusTransaksi, ajukanHapusPengeluaran } from '../../hook/useDele
 import useDirty from '../../hook/useDirty';
 import { showToast } from '../../lib/toast';
 import { WAGE_MASK } from '../expense/expenseFilter';
+import { onDutyOnly } from '../employee/employeeOptions';
 
 /**
  * DeleteRequestSheet — staf mengajukan hapus satu transaksi (bottom sheet dari Detail di Riwayat; prop `sale`)
@@ -31,7 +32,7 @@ export default function DeleteRequestSheet({ isOpen, onClose, sale, expense, hid
     setReason(''); setRequestedBy(lastRequester);
     let cancelled = false;
     supabase.from('employees').select('id, name, status').order('name').then(({ data }) => {
-      if (!cancelled) setEmployees((data || []).filter(e => e.status !== 'resign'));
+      if (!cancelled) setEmployees(onDutyOnly(data));
     });
     return () => { cancelled = true; };
   }, [isOpen, target?.id]);

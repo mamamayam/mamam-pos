@@ -9,6 +9,7 @@ import { useShiftData } from '../../hook/useShiftData';
 import { toLocalDateString } from '../../utils/formatters';
 import { dayLabel, dayOptions, shiftDate } from '../reports/reportsMath';
 import { closedOnDay, diffTone, walletRows, courierRows, dayTotalCash } from './shiftMath';
+import { onDutyOnly } from '../employee/employeeOptions';
 
 /**
  * ShiftView — Dompet (buka/tutup kas). SATU halaman, bergaya Absensi (navigasi hari), tanpa tab Riwayat:
@@ -275,7 +276,7 @@ const ShiftView = () => {
   }
   if (report) return <ClosedReport shift={report} formatRupiah={formatRupiah} onClose={() => setReport(null)} />;
 
-  const activeEmployees = employees.filter(e => e.status !== 'resign');
+  const activeEmployees = onDutyOnly(employees);
   const couriers = stats?.couriers || [];
   const isToday = day === today;
   const showLive = isToday && !!currentShift;

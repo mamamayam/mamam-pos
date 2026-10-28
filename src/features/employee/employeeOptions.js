@@ -22,5 +22,15 @@ export const EMPLOYEE_ROLE_OPTIONS = [
 
 export const OVERTIME_RATE_PER_30MIN = 5000;
 
+/**
+ * Karyawan berstatus Cuti atau Resign DISEMBUNYIKAN dari semua pilihan dan papan kerja (Absensi, daftar pengisi stok,
+ * penerima Kasbon/Tambahan, kurir, dst) sampai statusnya kembali Aktif/Freelance (permintaan pemilik 28 Okt 2026).
+ * Layar Karyawan tetap menampilkan semuanya supaya statusnya bisa diubah. Satu-satunya pengecualian: Penggajian tetap
+ * menampilkan mereka bila ada aktivitas di periode yang dilihat (gaji terakhir tidak boleh hilang).
+ */
+export const HIDDEN_STATUSES = ['cuti', 'resign'];
+export const isOnDuty = (e) => !HIDDEN_STATUSES.includes(e?.status);
+export const onDutyOnly = (list) => (list || []).filter(isOnDuty);
+
 export const statusInfo = (v) => EMPLOYEE_STATUS_OPTIONS.find(s => s.value === v) || EMPLOYEE_STATUS_OPTIONS[0];
 export const roleInfo = (v) => EMPLOYEE_ROLE_OPTIONS.find(r => r.value === v) || EMPLOYEE_ROLE_OPTIONS[0];

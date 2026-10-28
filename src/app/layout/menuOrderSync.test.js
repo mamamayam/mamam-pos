@@ -21,8 +21,9 @@ describe('menuOrderSync', () => {
     expect(menuOrderKey('staff')).toBe('menu_order:staff');
     expect(menuOrderKey(null)).toBe('menu_order:umum');
   });
-  it('fetch: array id dari server; null kalau belum ada; undefined kalau galat/offline', async () => {
-    expect(await fetchMenuOrder(fakeClient({ rows: [{ value: ['b', 'a'] }] }), 'owner')).toEqual(['b', 'a']);
+  it('fetch: tata letak dari server (array lama tetap terbaca); null kalau belum ada; undefined kalau galat/offline', async () => {
+    expect(await fetchMenuOrder(fakeClient({ rows: [{ value: { pinned: ['a'], full: ['b', 'a'] } }] }), 'owner')).toEqual({ pinned: ['a'], full: ['b', 'a'] });
+    expect(await fetchMenuOrder(fakeClient({ rows: [{ value: ['b', 'a'] }] }), 'owner')).toEqual({ pinned: null, full: ['b', 'a'] });
     expect(await fetchMenuOrder(fakeClient({ rows: [] }), 'owner')).toBeNull();
     expect(await fetchMenuOrder(fakeClient({ rows: [{ value: 'rusak' }] }), 'owner')).toBeNull();
     expect(await fetchMenuOrder(fakeClient({ error: { message: 'x' } }), 'owner')).toBeUndefined();
@@ -35,14 +36,14 @@ describe('menuOrderSync', () => {
   });
   it('push: upsert satu baris per peran (onConflict key); false kalau gagal, tidak melempar', async () => {
     const c = fakeClient();
-    expect(await pushMenuOrder(c, 'owner', ['a', 'b'])).toBe(true);
+    expect(await pushMenuOrder(c, 'owner', { pinned: ['a'], full: ['a', 'b'] })).toBe(true);
     const [, table, row, opts] = c.calls[0];
     expect(table).toBe('app_settings');
     expect(row.key).toBe('menu_order:owner');
-    expect(row.value).toEqual(['a', 'b']);
+    expect(row.value).toEqual({ pinned: ['a'], full: ['a', 'b'] });
     expect(opts).toEqual({ onConflict: 'key' });
-    expect(await pushMenuOrder(fakeClient({ error: { message: 'x' } }), 'owner', ['a'])).toBe(false);
-    expect(await pushMenuOrder(fakeClient({ throws: true }), 'owner', ['a'])).toBe(false);
+    expect(await pushMenuOrder(fakeClient({ error: { message: 'x' } }), 'owner', { pinned: ['a'], full: null })).toBe(false);
+    expect(await pushMenuOrder(fakeClient({ throws: true }), 'owner', { pinned: ['a'], full: null })).toBe(false);
   });
   it('delete: hapus baris peran itu saja', async () => {
     const c = fakeClient();

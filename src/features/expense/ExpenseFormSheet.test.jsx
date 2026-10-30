@@ -10,10 +10,10 @@ vi.mock('../../components/ui', async (orig) => {
 
 import ExpenseFormSheet from './ExpenseFormSheet';
 
-const data = (employees) => ({
-  categories: ['Belanja'], employees, saveExpense: async () => {}, setCategoriesPersist: async () => {}, renameCategory: async () => {}, deleteCategory: async () => {},
+const data = (employees, categories = ['Belanja']) => ({
+  categories, employees, saveExpense: async () => {}, setCategoriesPersist: async () => {}, renameCategory: async () => {}, deleteCategory: async () => {},
 });
-const render = (employees) => renderToString(<ExpenseFormSheet isOpen onClose={() => {}} data={data(employees)} />).replace(/<!-- -->/g, '');
+const render = (employees, categories) => renderToString(<ExpenseFormSheet isOpen onClose={() => {}} data={data(employees, categories)} />).replace(/<!-- -->/g, '');
 
 describe('urutan form Pengeluaran', () => {
   it('kategori, toko, detail, jumlah, tanggal, lalu Sumber Dana berdampingan dengan Uang Siapa?', () => {
@@ -34,5 +34,16 @@ describe('urutan form Pengeluaran', () => {
   });
   it('tanpa kurir: tidak ada pilihan Uang Siapa?', () => {
     expect(render([])).not.toContain('Uang Siapa?');
+  });
+});
+
+describe('kategori bawaan form Pengeluaran', () => {
+  it('catatan baru langsung terisi Belanja (dropdown tetap bisa diganti)', () => {
+    const html = render([], ['Gaji', 'Belanja', 'Lainnya']);
+    expect(html).toContain('>Belanja<');
+    expect(html).not.toContain('Pilih kategori');
+  });
+  it('kalau tidak ada kategori Belanja, jatuh ke "Pilih kategori"', () => {
+    expect(render([], ['Gaji', 'Lainnya'])).toContain('Pilih kategori');
   });
 });

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Input, NominalInput, Select, Button, Modal, BulletListInput, PillTabs } from '../../components/ui';
 import CategoryModal from '../../components/CategoryModal';
 import CategorySelect from '../../components/CategorySelect';
-import { storeExpenseCategories } from './expenseCategories';
+import { storeExpenseCategories, defaultExpenseCategory } from './expenseCategories';
 import { isOnDuty } from '../employee/employeeOptions';
 import { useAppContext } from '../../context/AppContext';
 import { toLocalDateString } from '../../utils/formatters';
@@ -37,7 +37,8 @@ export default function ExpenseFormSheet({ isOpen, onClose, editing = null, data
   const { categories, employees, saveExpense, setCategoriesPersist, renameCategory, deleteCategory } = data;
 
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('');
+  // null = belum disentuh: tampil kategori bawaan (Belanja). Memilih (termasuk "Pilih kategori" yang kosong) mengisi string.
+  const [category, setCategory] = useState(null);
   const [supplier, setSupplier] = useState('');
   const [detailItems, setDetailItems] = useState(['']);
   const [dateInput, setDateInput] = useState(toLocalDateString());
@@ -58,15 +59,17 @@ export default function ExpenseFormSheet({ isOpen, onClose, editing = null, data
       setPaymentMethod(editing.paymentMethod === 'Non-Tunai' ? 'Non-Tunai' : 'Tunai');
       setCashHolderId(editing.cashHolderEmployeeId || 'kasir');
     } else {
-      setAmount(''); setCategory(''); setSupplier(''); setDetailItems(['']);
+      setAmount(''); setCategory(null); setSupplier(''); setDetailItems(['']);
       setDateInput(toLocalDateString()); setPaymentMethod('Tunai'); setCashHolderId('kasir');
     }
   }, [isOpen, editing]);
 
+  const categoryOptions = storeExpenseCategories(categories);
+  const shownCategory = category ?? (editing ? '' : defaultExpenseCategory(categoryOptions));
   const { dirty, rebase } = useDirty(isOpen, [amount, category, supplier, detailItems, dateInput, paymentMethod, cashHolderId]);
 
   const resetForm = () => {
-    setAmount(''); setCategory(''); setSupplier(''); setDetailItems(['']);
+    setAmount(''); setCategory(null); setSupplier(''); setDetailItems(['']);
     setDateInput(toLocalDateString()); setPaymentMethod('Tunai'); setCashHolderId('kasir');
     rebase();
   };
@@ -88,7 +91,7 @@ export default function ExpenseFormSheet({ isOpen, onClose, editing = null, data
   const handleSave = () => run(async () => {
     const holder = paymentMethod === 'Tunai' && cashHolderId !== 'kasir' ? couriers.find(c => c.id === cashHolderId) : null;
     await saveExpense({
-      id: editing?.id || null, amount, category, note: detailItems.map(t => t.trim()).filter(Boolean).join('\n'),
+      id: editing?.id || null, amount, category: shownCategory, note: detailItems.map(t => t.trim()).filter(Boolean).join('\n'),
       supplier: supplier.trim(), date: dateInput, paymentMethod,
       cashHolderEmployeeId: holder?.id || null, cashHolderName: holder?.name || null,
     });
@@ -108,7 +111,7 @@ export default function ExpenseFormSheet({ isOpen, onClose, editing = null, data
         <div className="p-5 pt-2 space-y-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           {/* Urutan mengikuti kebiasaan mengisi: kategori -> toko -> detail belanjaan -> jumlah,
               lalu Sumber Dana dan Sumber Uang berdampingan (satu konteks), tanggal terakhir. */}
-          <CategorySelect value={category} onChange={setCategory} options={storeExpenseCategories(categories)} onManage={() => setIsCategoryModalOpen(true)} />
+          <CategorySelect value={shownCategory} onChange={setCategory} options={categoryOptions} onManage={() => setIsCategoryModalOpen(true)} />
 
           <Input label="Nama Toko/Supplier" value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Opsional" />
 
@@ -157,11 +160,11 @@ export default function ExpenseFormSheet({ isOpen, onClose, editing = null, data
         deleteMessage={(cat) => `Yakin ingin menghapus kategori "${cat}"? Catatan pengeluaran lama tetap tersimpan dengan nama kategori ini.`}
         onRenameAsync={(oldCat, newCat) => {
           run(() => renameCategory(oldCat, newCat));
-          if (category === oldCat) setCategory(newCat);
+          if (shownCategory === oldCat) setCategory(newCat);
         }}
         onDeleteAsync={(deletedCat) => {
           run(() => deleteCategory(deletedCat));
-          if (category === deletedCat) setCategory(categories.find(c => c !== deletedCat) || '');
+          if (shownCategory === deletedCat) setCategory(categories.find(c => c !== deletedCat) || '');
         }}
       />
     </>

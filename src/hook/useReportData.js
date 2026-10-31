@@ -8,6 +8,8 @@ import { dayStartISO, nextDayStartISO } from '../features/reports/reportsMath';
  * (inklusif). fromDate/toDate null = tanpa batas. ONLINE-FIRST, semua dibaca
  * bertahap (paginasi) supaya periode besar tidak terpotong diam-diam di 1000 baris.
  *
+ * `categories` = nama kategori pengeluaran di app (tabel expense_categories; kosong kalau withExpenses=false).
+ *
  * Penjualan difilter pada paid_at (waktu presisi) memakai batas hari LOKAL:
  * [awal hari fromDate, awal hari setelah toDate). Pengeluaran difilter pada
  * transaction_date (kolom tanggal).
@@ -20,13 +22,14 @@ const ITEM_COLUMNS = 'menu_item_id, name, variant_name, note, qty, price, hpp';
 export function useReportData({ fromDate, toDate, withSales = true, withExpenses = true }) {
   const [sales, setSales] = useState([]);
   const [expenses, setExpenses] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [updatedAt, setUpdatedAt] = useState(null);
 
   const reload = useCallback(async () => {
     try {
-      const [salesRows, expenseRows] = await Promise.all([
+      const [salesRows, expenseRows, categoryRows] = await Promise.all([
         // withSales=false: layar yang tidak butuh penjualan melewati query-nya.
         withSales ? fetchAllPages((from, to) => {
           let q = supabase.from('transactions')
@@ -43,8 +46,14 @@ export function useReportData({ fromDate, toDate, withSales = true, withExpenses
           if (toDate) q = q.lte('transaction_date', toDate);
           return q.order('transaction_date', { ascending: false }).order('id').range(from, to);
         }, 'pengeluaran') : Promise.resolve([]),
+        // Daftar kategori pengeluaran di app (Kelola Kategori), untuk rincian Income Statement. Hanya kosmetik (kategori yang belum
+        // dipakai tampil Rp 0): kalau gagal dibaca, laporan tetap jalan dengan kategori yang ada di catatan, totalnya tidak berubah.
+        withExpenses
+          ? supabase.from('expense_categories').select('name').order('sort_order').order('created_at').then(({ data, error: e }) => (e ? [] : (data || []).map(c => c.name)))
+          : Promise.resolve([]),
       ]);
       setSales(salesRows);
+      setCategories(categoryRows);
       setExpenses(expenseRows.map(e => ({ ...e, transaction_date: String(e.transaction_date).slice(0, 10) })));
       setError(null);
       setUpdatedAt(new Date());
@@ -71,5 +80,5 @@ export function useReportData({ fromDate, toDate, withSales = true, withExpenses
     await reload();
   };
 
-  return { sales, expenses, loading, error, updatedAt, reload, deleteTransaction, bulkDeleteTransactions };
+  return { sales, expenses, categories, loading, error, updatedAt, reload, deleteTransaction, bulkDeleteTransactions };
 }

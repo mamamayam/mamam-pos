@@ -117,6 +117,24 @@ export function reportRange(sel, today = localDateString()) {
   }
 }
 
+/**
+ * Teks periode untuk judul Income Statement: 'Oktober 2026' / 'Rab, 30 Sep 2026' / 'Semua periode' /
+ * '1 Okt 2026 – 15 Okt 2026'. Rentang tanpa tanggal awal = '' (layar belum menampilkan apa pun).
+ */
+export function periodLabel(sel) {
+  switch (sel.mode) {
+    case 'bulan': return monthLabel(sel.month);
+    case 'hari': return dayLabel(sel.day);
+    case 'semua': return 'Semua periode';
+    case 'rentang': {
+      const r = reportRange(sel);
+      if (!r) return '';
+      return r.fromDate === r.toDate ? shortDateLabel(r.fromDate) : `${shortDateLabel(r.fromDate)} – ${shortDateLabel(r.toDate)}`;
+    }
+    default: return '';
+  }
+}
+
 /** Awal hari lokal (00:00) sebagai ISO UTC — untuk filter kolom timestamptz. */
 export const dayStartISO = (dateStr) => { const [y, m, d] = dateStr.split('-').map(Number); return new Date(y, m - 1, d, 0, 0, 0, 0).toISOString(); };
 /** Awal hari BERIKUTNYA — dipakai sebagai batas atas eksklusif (< ). */
@@ -160,6 +178,19 @@ export function topMenus(sales, limit = 10) {
     map.set(key, cur);
   }
   return [...map.values()].sort((a, b) => b.qty - a.qty || b.revenue - a.revenue).slice(0, limit);
+}
+
+/** Jumlah menu yang tampil di kartu Menu Terlaris sebelum tombol "Lainnya" ditekan. */
+export const TOP_MENU_COUNT = 10;
+
+/**
+ * Daftar Menu Terlaris untuk tampilan: `menus` = SEMUA menu terjual (dari `topMenus(sales, Infinity)`, sudah urut).
+ * Ringkas = TOP_MENU_COUNT teratas; `expanded` = semua. `canToggle` = tombol Lainnya/Ringkas perlu ada (hanya kalau ada
+ * lebih dari TOP_MENU_COUNT menu), `hiddenCount` = jumlah menu yang belum tampil saat ringkas.
+ */
+export function menuListView(menus, expanded, limit = TOP_MENU_COUNT) {
+  const canToggle = menus.length > limit;
+  return { rows: expanded || !canToggle ? menus : menus.slice(0, limit), canToggle, hiddenCount: Math.max(0, menus.length - limit) };
 }
 
 // ── Ringkasan pengeluaran ─────────────────────────────────────────────

@@ -5,6 +5,7 @@ import {
 import { usePosStore } from '../../store/usePosStore';
 import { computeOrderTotals, cashChange, splitStatus, displayNumberFromId } from './posMath';
 import { checkout } from './useCheckout';
+import { OJOL_PLATFORMS } from '../../lib/ojolPlatforms';
 import { isOnDuty } from '../employee/employeeOptions';
 import useBackLayer from '../../hook/useBackLayer';
 import NominalInput from '../../components/ui/NominalInput';
@@ -151,7 +152,7 @@ export default function PaymentModal({ menus, customers, vouchers, employees, tr
                 <div className="mb-6 p-4 border border-orange-200 dark:border-orange-500/30 bg-accent-50 dark:bg-accent-500/10 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300">
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-2">Pilih Aplikasi Ojol</label>
                   <div className="flex gap-2 mb-4">
-                    {['Shopeefood', 'Grabfood', 'Gofood'].map((ojol) => (
+                    {OJOL_PLATFORMS.map((ojol) => (
                       <button key={ojol} onClick={() => setPaymentModal({ ...paymentModal, ojolPlatform: ojol })} className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-colors ${ojolPlatform === ojol ? 'bg-accent-600 dark:bg-accent-500 text-white border-orange-600 dark:border-orange-500 shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-950'}`}>{ojol}</button>
                     ))}
                   </div>

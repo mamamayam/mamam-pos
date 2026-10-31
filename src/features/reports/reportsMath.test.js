@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   summarizeSales, topMenus, summarizeExpenses, expenseDetailText,
   periodRange, dayStartISO, nextDayStartISO, localDateOf, localDateString,
-  shiftMonthKey, monthLabel, dayLabel, shortDateLabel, monthRange, monthOptions, dayOptions, lastDaysRange, shiftDate, reportRange,
+  shiftMonthKey, monthLabel, dayLabel, shortDateLabel, monthRange, monthOptions, dayOptions, lastDaysRange, shiftDate, reportRange, periodLabel, menuListView, TOP_MENU_COUNT,
 } from './reportsMath.js';
 
 const it_ = (menu, name, qty, price) => ({ menu_item_id: menu, name, qty, price });
@@ -164,5 +164,42 @@ describe('navigasi periode Laporan', () => {
     expect(reportRange({ mode: 'rentang', start: '2026-10-05', end: '' }, today)).toEqual({ fromDate: '2026-10-05', toDate: '2026-10-05' });
     expect(reportRange({ mode: 'rentang', start: '2026-10-09', end: '2026-10-01' }, today)).toEqual({ fromDate: '2026-10-01', toDate: '2026-10-09' });
     expect(reportRange({ mode: 'rentang', start: '', end: '' }, today)).toBeNull();
+  });
+});
+
+describe('periodLabel (judul Income Statement)', () => {
+  it('bulan, hari, semua', () => {
+    expect(periodLabel({ mode: 'bulan', month: '2026-10' })).toBe('Oktober 2026');
+    expect(periodLabel({ mode: 'hari', day: '2026-10-03' })).toBe('Sab, 3 Okt 2026');
+    expect(periodLabel({ mode: 'semua' })).toBe('Semua periode');
+  });
+  it('rentang: satu hari, dua tanggal, tanggal terbalik ditukar, kosong = teks kosong', () => {
+    expect(periodLabel({ mode: 'rentang', start: '2026-10-05', end: '' })).toBe('5 Okt 2026');
+    expect(periodLabel({ mode: 'rentang', start: '2026-10-01', end: '2026-10-15' })).toBe('1 Okt 2026 – 15 Okt 2026');
+    expect(periodLabel({ mode: 'rentang', start: '2026-10-15', end: '2026-10-01' })).toBe('1 Okt 2026 – 15 Okt 2026');
+    expect(periodLabel({ mode: 'rentang', start: '', end: '' })).toBe('');
+  });
+});
+
+describe('menuListView (tombol Lainnya di Menu Terlaris)', () => {
+  const menus = (n) => Array.from({ length: n }, (_, i) => ({ key: `m${i}`, name: `Menu ${i}`, qty: n - i, revenue: 0 }));
+  it('batas ringkas = 10', () => { expect(TOP_MENU_COUNT).toBe(10); });
+  it('lebih dari 10 menu: ringkas = 10 teratas + tombol "Lainnya" (sisa dihitung); diperluas = semua', () => {
+    const m = menus(25);
+    const ringkas = menuListView(m, false);
+    expect(ringkas.rows).toHaveLength(10); expect(ringkas.rows[0].key).toBe('m0'); expect(ringkas.canToggle).toBe(true); expect(ringkas.hiddenCount).toBe(15);
+    const semua = menuListView(m, true);
+    expect(semua.rows).toHaveLength(25); expect(semua.canToggle).toBe(true);
+  });
+  it('10 menu atau kurang: semua tampil dan tidak ada tombol', () => {
+    for (const n of [0, 3, 10]) {
+      const v = menuListView(menus(n), false);
+      expect(v.rows).toHaveLength(n); expect(v.canToggle).toBe(false); expect(v.hiddenCount).toBe(0);
+    }
+  });
+  it('topMenus tanpa batas mengembalikan semua menu terjual, urut porsi terbanyak', () => {
+    const sales = Array.from({ length: 15 }, (_, i) => ({ total: 0, items: [{ menu_item_id: `m${i}`, name: `Menu ${i}`, qty: i + 1, price: 1000 }] }));
+    const all = topMenus(sales, Infinity);
+    expect(all).toHaveLength(15); expect(all[0].qty).toBe(15); expect(all[14].qty).toBe(1);
   });
 });

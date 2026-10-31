@@ -1,9 +1,12 @@
-import { useMemo } from 'react';
-import { Card } from '../../components/ui';
+import { useMemo, useState } from 'react';
+import { BarChart3 } from 'lucide-react';
+import { Card, Button } from '../../components/ui';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../auth/AuthContext';
 import { useReportData } from '../../hook/useReportData';
-import { summarizeSales, summarizeExpenses, topMenus } from './reportsMath';
+import { summarizeSales, summarizeExpenses, topMenus, menuListView } from './reportsMath';
+import { buildIncomeStatement } from './incomeStatementMath';
+import IncomeStatementSheet from './IncomeStatementSheet';
 import ReportGate from './ReportGate';
 
 /**
@@ -12,16 +15,24 @@ import ReportGate from './ReportGate';
  * Di bawahnya: pengeluaran per kategori, penjualan per metode bayar / tipe pesanan, dan menu terlaris.
  * (Daftar catatan pengeluaran ada di layar Pengeluaran, tidak diulang di sini.)
  * Kartu Laba Kotor hanya untuk yang berizin `laporan.labaKotor`.
+ * Paling bawah: tombol Income Statement (izin `laporan.labaKotor` juga) yang membuka Laba Rugi bertingkat
+ * (pendapatan, HPP, laba kotor, beban operasional, net profit) dari data yang sama. `periodLabel` = teks periode di judulnya.
+ * Menu Terlaris menampilkan 10 teratas; tombol "Lainnya" di bawahnya membuka SEMUA menu yang terjual (urut porsi terbanyak) supaya
+ * kelihatan menu mana yang laku dan mana yang tidak; "Ringkas" menutup lagi.
  */
-export default function LabaRugiTab({ range }) {
+export default function LabaRugiTab({ range, periodLabel = '' }) {
   const { formatRupiah } = useAppContext();
   const { can } = useAuth();
   const canProfit = can('laporan.labaKotor');
-  const { sales, expenses, loading, error, reload } = useReportData(range);
+  const { sales, expenses, categories, loading, error, reload } = useReportData(range);
+  const [statementOpen, setStatementOpen] = useState(false);
+  const [allMenus, setAllMenus] = useState(false);
 
   const summary = useMemo(() => summarizeSales(sales), [sales]);
-  const menus = useMemo(() => topMenus(sales, 10), [sales]);
+  const soldMenus = useMemo(() => topMenus(sales, Infinity), [sales]);
+  const menuView = menuListView(soldMenus, allMenus);
   const expSummary = useMemo(() => summarizeExpenses(expenses), [expenses]);
+  const statement = useMemo(() => (canProfit ? buildIncomeStatement({ sales, expenses, categories }) : null), [canProfit, sales, expenses, categories]);
   const pengeluaran = expSummary.total;
   const labaKotor = summary.total - pengeluaran;
 
@@ -57,10 +68,22 @@ export default function LabaRugiTab({ range }) {
 
       <Card className="space-y-1.5">
         <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Menu Terlaris</p>
-        {menus.length === 0 ? <p className="text-xs text-slate-400">Belum ada data.</p> : menus.map((m, i) => (
-          <div key={m.key} className="flex justify-between text-sm gap-3"><span className="text-slate-600 dark:text-slate-300 min-w-0 truncate"><span className="text-slate-400 mr-1.5">{i + 1}.</span>{m.name}</span><span className="shrink-0"><span className="font-bold text-slate-800 dark:text-slate-100">{m.qty}×</span> <span className="text-xs text-slate-400">{formatRupiah(m.revenue)}</span></span></div>
+        {soldMenus.length === 0 ? <p className="text-xs text-slate-400">Belum ada data.</p> : menuView.rows.map((m, i) => (
+          <div key={m.key} data-testid="menu-row" className="flex justify-between text-sm gap-3"><span className="text-slate-600 dark:text-slate-300 min-w-0 truncate"><span className="text-slate-400 mr-1.5">{i + 1}.</span>{m.name}</span><span className="shrink-0"><span className="font-bold text-slate-800 dark:text-slate-100">{m.qty}×</span> <span className="text-xs text-slate-400">{formatRupiah(m.revenue)}</span></span></div>
         ))}
+        {menuView.canToggle && (
+          <Button variant="secondary" size="sm" className="w-full mt-2" onClick={() => setAllMenus(v => !v)} data-testid="btn-menu-lainnya">
+            {allMenus ? 'Ringkas' : `Lainnya (${menuView.hiddenCount} menu lagi)`}
+          </Button>
+        )}
       </Card>
+
+      {canProfit && (
+        <>
+          <Button size="full" icon={<BarChart3 className="w-4 h-4" />} onClick={() => setStatementOpen(true)} data-testid="btn-income-statement">Income Statement</Button>
+          <IncomeStatementSheet isOpen={statementOpen} onClose={() => setStatementOpen(false)} statement={statement} periodLabel={periodLabel} />
+        </>
+      )}
     </ReportGate>
   );
 }

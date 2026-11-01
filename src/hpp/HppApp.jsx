@@ -3,15 +3,20 @@ import { Settings } from 'lucide-react'
 import LoginScreen from './LoginScreen'
 import MenuTab from './MenuTab'
 import BahanTab from './BahanTab'
+import ResepTab from './ResepTab'
 import MenuSheet from './MenuSheet'
 import BahanSheet from './BahanSheet'
+import ResepSheet from './ResepSheet'
+import DampakSheet from './DampakSheet'
 import SettingsSheet from './SettingsSheet'
 import { hppConfigured, hppDb } from './hppClient'
 import { keluar, masuk, pulihkanSesi } from './hppAuth'
 import { TABS, pathForTab, tabFromPath } from './hppRoutes'
 import { useHpp } from './useHpp'
+import { dampakUbah } from './hppModel'
+import { ringkasUbahBahan } from './hppFormat'
 import { setelahSinkron, useBackLayer, useExitHint } from './hppBackStack'
-import { NotifKeluar } from './ui'
+import { NotifKeluar, Snack } from './ui'
 
 /**
  * Root HPP (path /hpp dan /hpp/*). Dimuat lewat React.lazy dari src/main.jsx, jadi menjadi
@@ -21,7 +26,7 @@ import { NotifKeluar } from './ui'
  *  - Berkas di src/hpp hanya boleh mengimpor dari src/hpp, `react`, `lucide-react`, `@supabase/supabase-js`,
  *    ditambah dua modul bersama yang murni (tanpa kode POS): `lib/backStack` (hanya `createBackStack`, lewat
  *    `hppBackStack.js`) dan `components/ui/Overlay` (lewat `ui.jsx`). Jangan menyentuh `auth/*`, `app/*`, atau komponen POS lain.
- *  - Stack navigasi: Back menutup popup dulu, lalu tab Harga bahan -> Menu, lalu notif "Ketuk lagi untuk keluar" lalu keluar ke POS (hppBackStack.js).
+ *  - Stack navigasi: Back menutup popup dulu, lalu tab Bahan baku / Resep -> Menu, lalu notif "Ketuk lagi untuk keluar" lalu keluar ke POS (hppBackStack.js).
  *  - Data HPP dijaga RLS di database (supabase/migrations/013_hpp.sql). Frontend hanya memakai anon key.
  */
 export default function HppApp() {
@@ -72,11 +77,47 @@ function Pesan({ judul, children, aksi }) {
 }
 
 function Cangkang({ db, email, onKeluar }) {
-  const { model, status, galat, pesan, perubahanTerakhir, actions, raw } = useHpp(db)
+  const { model, status, galat, pesan, actions: aksiDasar, raw } = useHpp(db)
   const [tab, setTab] = useState(() => tabFromPath(window.location.pathname))
-  const [lembar, setLembar] = useState(null)   // { t: 'menu' | 'bahan' | 'set', id }
+  const [lembar, setLembar] = useState(null)   // { t: 'menu' | 'resep' | 'bahan' | 'set' | 'dampak', id } ('dampak' membawa judul dan rows)
+  const [snack, setSnack] = useState(null)     // { pesan, judul, rows } notifikasi setelah harga bahan berubah
+  const tutupSnack = useCallback(() => setSnack(null), [])
 
-  // Tab selain Menu = satu lapisan di stack navigasi (hppBackStack.js): Back dari Harga bahan kembali ke Menu,
+  // Setelah harga/satuan bahan tersimpan: hitung menu yang ikut berubah (dari model SEBELUM perubahan) lalu tampilkan
+  // notifikasi dengan tombol "Lihat" (popup Menu terdampak). Berlaku dari mana pun harga diubah (popup bahan, menu, resep).
+  const umumkan = (modelAwal, bahanId, { harga, isi }) => {
+    const b = modelAwal.bahan[bahanId]
+    if (!b) return
+    const d = dampakUbah(modelAwal, bahanId, { harga, isi })
+    setSnack({
+      pesan: d.rows.length ? `Tersimpan · ${d.rows.length} menu terdampak` : 'Tersimpan',
+      judul: ringkasUbahBahan(b, harga ?? b.harga, isi ?? b.isi),
+      rows: d.rows,
+    })
+  }
+  const actions = {
+    ...aksiDasar,
+    async ubahHarga(arg) {
+      const awal = model
+      const ok = await aksiDasar.ubahHarga(arg)
+      if (ok) umumkan(awal, arg.bahanId, { harga: arg.harga })
+      return ok
+    },
+    /** Simpan sekaligus dari popup Update harga: satuan + isi, harga (riwayat dicatat trigger), kategori. */
+    async ubahBahan({ bahanId, harga, satuan, isi, kategoriId, catatan }) {
+      const awal = model
+      const b = awal.bahan[bahanId]
+      if (!b) return false
+      let ok = true
+      if (satuan !== b.satuan || isi !== b.isi) ok = await aksiDasar.ubahSatuan(bahanId, { satuan, isi })
+      if (ok && harga !== b.harga) ok = await aksiDasar.ubahHarga({ bahanId, harga, catatan, sumber: 'manual' })
+      if (ok && kategoriId && kategoriId !== b.kategoriId) aksiDasar.kategoriBahan(bahanId, kategoriId)
+      if (ok) umumkan(awal, bahanId, { harga, isi })
+      return ok
+    },
+  }
+
+  // Tab selain Menu = satu lapisan di stack navigasi (hppBackStack.js): Back dari Bahan baku / Resep kembali ke Menu,
   // Back dari Menu memunculkan notif, Back kedua meninggalkan HPP (ke POS). Popup (Sheet) menumpuk di atasnya dan ditutup lebih dulu.
   const gantiTab = useCallback((key) => setTab(key), [])
   useBackLayer(tab !== 'menu', () => setTab('menu'))
@@ -125,9 +166,9 @@ function Cangkang({ db, email, onKeluar }) {
       </header>
 
       <div className="mx-auto max-w-3xl px-4 pb-16 pt-3.5">
-        <nav aria-label="Bagian HPP" className="relative mb-3.5 grid grid-cols-2 rounded-full bg-white shadow-md ring-1 ring-slate-200">
-          <span className="absolute inset-y-0 left-0 w-1/2 rounded-full bg-gradient-to-r from-accent-600 to-accent-500 transition-transform duration-300"
-            style={{ transform: `translateX(${tab === 'menu' ? 0 : 100}%)` }} aria-hidden="true" />
+        <nav aria-label="Bagian HPP" className="relative mb-3.5 grid grid-cols-3 rounded-full bg-white shadow-md ring-1 ring-slate-200">
+          <span className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-gradient-to-r from-accent-600 to-accent-500 transition-transform duration-300"
+            style={{ transform: `translateX(${Math.max(0, TABS.findIndex((t) => t.key === tab)) * 100}%)` }} aria-hidden="true" />
           {TABS.map((t) => (
             <button key={t.key} type="button" onClick={() => gantiTab(t.key)} aria-current={tab === t.key ? 'page' : undefined}
               className={`relative z-[1] rounded-full py-2.5 text-sm font-semibold transition-colors ${tab === t.key ? 'text-white' : 'text-slate-500'}`}>
@@ -136,14 +177,19 @@ function Cangkang({ db, email, onKeluar }) {
           ))}
         </nav>
 
-        {tab === 'menu'
-          ? <MenuTab model={model} onOpen={(id) => setLembar({ t: 'menu', id })} onAcuan={actions.jadikanAcuan} adaPerubahan={adaPerubahan} />
-          : <BahanTab model={model} onOpen={(id) => setLembar({ t: 'bahan', id })} />}
+        {tab === 'menu' && <MenuTab model={model} onOpen={(id) => setLembar({ t: 'menu', id })} onAcuan={actions.jadikanAcuan} adaPerubahan={adaPerubahan} />}
+        {tab === 'resep' && <ResepTab model={model} onOpen={(id) => setLembar({ t: 'resep', id })} />}
+        {tab === 'bahan' && <BahanTab model={model} onOpen={(id) => setLembar({ t: 'bahan', id })} />}
       </div>
 
       {lembar?.t === 'menu' && <MenuSheet model={model} menuId={lembar.id} actions={actions} onClose={tutup} />}
-      {lembar?.t === 'bahan' && <BahanSheet model={model} bahanId={lembar.id} actions={actions} perubahan={perubahanTerakhir} onClose={tutup} />}
+      {lembar?.t === 'resep' && <ResepSheet model={model} resepId={lembar.id} actions={actions} onClose={tutup} />}
+      {lembar?.t === 'bahan' && <BahanSheet model={model} bahanId={lembar.id} actions={actions} onClose={tutup} />}
+      {lembar?.t === 'dampak' && <DampakSheet model={model} judul={lembar.judul} rows={lembar.rows} onClose={tutup} />}
       {lembar?.t === 'set' && <SettingsSheet model={model} actions={actions} email={email} onKeluar={onKeluar} onClose={tutup} />}
+
+      <Snack pesan={snack?.pesan} aksi={snack?.rows.length ? 'Lihat' : null} onTutup={tutupSnack}
+        onAksi={() => { setLembar({ t: 'dampak', judul: snack.judul, rows: snack.rows }); setSnack(null) }} />
 
       {pesan && (
         <div role="alert" className="hpp-toast fixed inset-x-4 bottom-4 z-[60] mx-auto flex max-w-md items-center justify-between gap-3 rounded-2xl bg-red-600 px-4 py-3 text-white shadow-xl">

@@ -1,78 +1,43 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
-import { ctxAcuan, kelompokkan, makeCtx, menuInfo } from './hppModel'
-import { rupiah } from './hppFormat'
-import { Card, Chip, ChipRow, Delta, SearchBox, SectionLabel, TierBadge } from './ui'
+import { ctxAcuan, kelompokkan, makeCtx, menuInfo, menuParts, riwayatModalRows } from './hppModel'
+import { angka, rupiah } from './hppFormat'
+import { Delta, Sel, SearchBox, TierBadge, TombolAksi } from './ui'
+import DaftarKelompok, { BarisLipat, RiwayatMini, useBarisTerbuka } from './DaftarUi'
 
-/** Tab Menu: daftar menu per kategori. Ketuk menu untuk melihat modalnya (popup). */
-export default function MenuTab({ model, onOpen, onAcuan, adaPerubahan }) {
+/**
+ * Tab Menu: daftar menu per kategori (kategori menguncup di awal). Ketuk menu untuk melihat komposisi dan riwayat
+ * modalnya; tombol Edit membuka popup modal menu (MenuSheet).
+ */
+export default function MenuTab({ model, onOpen, onAcuan, adaPerubahan, awalBuka = false, awalTerbuka = [] }) {
   const [q, setQ] = useState('')
-  const [kat, setKat] = useState('semua')
-  const [tutup, setTutup] = useState({})
+  const [terbuka, toggle] = useBarisTerbuka(awalTerbuka)
 
   const info = useMemo(() => {
     const ctx = makeCtx(model)
     const acuan = ctxAcuan(model)
-    return new Map(model.menu.map((m) => [m.id, { ...menuInfo(model, ctx, m), delta: ctx.menuHpp(m) - acuan.menuHpp(m) }]))
+    return new Map(model.menu.map((m) => [m.id, { ...menuInfo(model, ctx, m), delta: ctx.menuHpp(m) - acuan.menuHpp(m), ctx }]))
   }, [model])
 
   const cari = q.trim().toLowerCase()
-  const daftar = model.menu.filter((m) => (
-    (kat === 'semua' || m.kategoriId === kat)
-    && m.nama.toLowerCase().includes(cari)
-  ))
+  const daftar = model.menu.filter((m) => m.nama.toLowerCase().includes(cari))
   const grup = kelompokkan(daftar, model.kategoriMenu, (m) => m.kategoriId)
 
   return (
     <section>
       <SearchBox value={q} onChange={setQ} placeholder="Cari menu" />
 
-      <ChipRow>
-        <Chip on={kat === 'semua'} onClick={() => setKat('semua')}>Semua {model.menu.length}</Chip>
-        {model.kategoriMenu.map((k) => (
-          <Chip key={k.id} on={kat === k.id} onClick={() => setKat(k.id)}>
-            {k.nama} {model.menu.filter((m) => m.kategoriId === k.id).length}
-          </Chip>
-        ))}
-      </ChipRow>
-
-      {grup.map((g) => {
-        const lipat = tutup[g.id ?? 'x']
-        return (
-          <div key={g.id ?? 'x'} className="mb-3">
-            <button type="button" onClick={() => setTutup((s) => ({ ...s, [g.id ?? 'x']: !s[g.id ?? 'x'] }))}
-              aria-expanded={!lipat} className="mb-1.5 flex w-full items-center justify-between px-0.5">
-              <SectionLabel>{g.nama} · {g.items.length}</SectionLabel>
-              <ChevronDown size={14} className={`text-slate-400 transition-transform ${lipat ? '-rotate-90' : ''}`} />
-            </button>
-            {!lipat && (
-              <Card>
-                {g.items.map((m) => {
-                  const i = info.get(m.id)
-                  return (
-                    <button key={m.id} type="button" onClick={() => onOpen(m.id)}
-                      className="flex w-full items-center justify-between gap-3 border-t border-slate-100 py-2.5 text-left first:border-t-0 active:opacity-70">
-                      <span className="min-w-0">
-                        <span className="block truncate font-semibold text-slate-800">{m.nama}</span>
-                        <span className="block text-xs text-slate-400">
-                          Modal {rupiah(i.hpp)} · Jual {rupiah(m.hargaOutlet)} <Delta value={i.delta} className="ml-1" />
-                        </span>
-                      </span>
-                      <span className="flex flex-none items-center gap-1.5 text-slate-300">
-                        <TierBadge tier={i.tier} pct={i.pct} /><ChevronRight size={14} />
-                      </span>
-                    </button>
-                  )
-                })}
-              </Card>
-            )}
-          </div>
-        )
-      })}
-
-      {grup.length === 0 && (
-        <Card padded className="text-center text-xs text-slate-400">Tidak ada menu yang cocok</Card>
-      )}
+      <DaftarKelompok grup={grup} cari={cari} awalBuka={awalBuka} kosong="Tidak ada menu yang cocok"
+        renderItem={(m) => {
+          const i = info.get(m.id)
+          return (
+            <BarisLipat key={m.id} buka={terbuka.has(m.id)} onToggle={() => toggle(m.id)} judul={m.nama}
+              sub={<>Modal {rupiah(i.hpp)} · Jual {rupiah(m.hargaOutlet)} <Delta value={i.delta} className="ml-1" /></>}
+              nilai={<TierBadge tier={i.tier} pct={i.pct} />}>
+              <DetailMenu model={model} ctx={i.ctx} m={m} info={i} />
+              <TombolAksi onClick={() => onOpen(m.id)}>Edit</TombolAksi>
+            </BarisLipat>
+          )
+        }} />
 
       {adaPerubahan && (
         <button type="button" onClick={onAcuan}
@@ -81,5 +46,28 @@ export default function MenuTab({ model, onOpen, onAcuan, adaPerubahan }) {
         </button>
       )}
     </section>
+  )
+}
+
+/** Isi detail menu (hanya dipasang saat baris terbuka). */
+function DetailMenu({ model, ctx, m, info }) {
+  const parts = menuParts(model, ctx, m)
+  const riwayat = useMemo(() => riwayatModalRows(model, { menuId: m.id }), [model, m.id])
+  return (
+    <>
+      {parts.map((p) => (
+        <div key={`${p.kind}-${p.itemId ?? p.id}`} className="flex items-center justify-between gap-3 border-t border-slate-100 py-1.5 text-sm first:border-t-0">
+          <span className="min-w-0 truncate text-slate-700">{p.nama}</span>
+          <span className="flex-none text-slate-400">{p.kind === 'lain' ? '' : `${angka(p.qty)} ${p.unit}`}</span>
+          <span className="w-20 flex-none text-right font-semibold tabular-nums text-slate-800">{rupiah(p.biaya)}</span>
+        </div>
+      ))}
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        <Sel label="Modal">{rupiah(info.hpp)}</Sel>
+        <Sel label="Harga jual">{rupiah(m.hargaOutlet)}</Sel>
+        <Sel label="Profit">{rupiah(info.profit)}</Sel>
+      </div>
+      <RiwayatMini judul="Riwayat modal" entri={riwayat} />
+    </>
   )
 }

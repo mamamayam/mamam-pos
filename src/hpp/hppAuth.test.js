@@ -77,6 +77,8 @@ describe('route tab', () => {
     expect(tabFromPath('/hpp/')).toBe('menu');
     expect(tabFromPath('/hpp/bahan')).toBe('bahan');
     expect(tabFromPath('/hpp/bahan/')).toBe('bahan');
+    expect(tabFromPath('/hpp/resep')).toBe('resep');
+    expect(TABS.map((t) => t.key)).toEqual(['bahan', 'resep', 'menu']);
     expect(tabFromPath('/hpp/apa-saja')).toBe('menu');
     for (const t of TABS) expect(tabFromPath(pathForTab(t.key))).toBe(t.key);
   });

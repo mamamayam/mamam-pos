@@ -241,3 +241,98 @@ export function kelompokkan(items, kategoriList, getKategoriId) {
   if (sisa.length) grup.push({ id: null, nama: 'Lainnya', items: sisa });
   return grup.filter((g) => g.items.length);
 }
+
+/** Kelompokkan resep per `grup` (teks bebas). Urutan kelompok = urutan resep pertama di tiap kelompok. Id kelompok = `g:<nama>`. */
+export function kelompokResep(items) {
+  const peta = new Map();
+  [...items].sort((a, b) => (a.urutan - b.urutan) || a.nama.localeCompare(b.nama, 'id')).forEach((r) => {
+    const nama = r.grup || 'Lainnya';
+    if (!peta.has(nama)) peta.set(nama, { id: `g:${nama}`, nama, items: [] });
+    peta.get(nama).items.push(r);
+  });
+  return [...peta.values()];
+}
+
+/** Riwayat harga satu bahan untuk tampilan, terbaru dulu: tiap baris punya `sebelum` dan `persen` (null = harga awal). */
+export function riwayatBahanRows(model, bahanId) {
+  const l = model.riwayat[bahanId] || [];
+  return l.map((e, i) => {
+    const sebelum = e.hargaSebelum ?? l[i + 1]?.harga ?? null;
+    return { ...e, sebelum, persen: sebelum ? ((e.harga - sebelum) / sebelum) * 100 : null };
+  });
+}
+
+/**
+ * Harga bahan pada waktu `ts` (ms) menurut riwayat. Sebelum perubahan pertama dipakai harga sebelum perubahan itu
+ * (atau harga awalnya). Bahan tanpa riwayat memakai harga sekarang.
+ */
+export function hargaPada(model, bahanId, ts) {
+  const b = model.bahan[bahanId];
+  if (!b) return null;
+  const l = model.riwayat[bahanId] || [];   // terbaru dulu
+  if (l.length === 0) return b.harga;
+  const e = l.find((x) => new Date(x.pada).getTime() <= ts);
+  if (e) return e.harga;
+  const awal = l[l.length - 1];
+  return awal.hargaSebelum ?? awal.harga;
+}
+
+/**
+ * Riwayat modal menu `{ menuId }` atau resep `{ resepId }`, DITURUNKAN dari riwayat harga bahan yang dipakainya
+ * (tidak disimpan di database): modal dihitung ulang pada tiap waktu ada bahan yang berganti harga. Tanpa perubahan
+ * modal berurutan. Hasil terbaru dulu: [{ pada, nilai, persen }], persen = selisih terhadap entri sebelumnya (null = yang paling awal).
+ * Nilai resep = total satu batch (atau satu porsi), sama dengan angka di daftar.
+ */
+export function riwayatModalRows(model, { menuId = null, resepId = null }) {
+  const m = menuId ? model.menu.find((x) => x.id === menuId) : null;
+  if (!m && !(resepId && model.resep[resepId])) return [];
+  const ids = new Set();
+  const dariResep = (id, stack = []) => {
+    const r = model.resep[id];
+    if (!r || stack.includes(id)) return;
+    for (const it of r.items) { if (it.bahanId) ids.add(it.bahanId); else dariResep(it.subResepId, [...stack, id]); }
+  };
+  if (m) m.items.forEach((it) => (it.bahanId ? ids.add(it.bahanId) : dariResep(it.resepId)));
+  else dariResep(resepId);
+
+  const waktu = [...new Set([...ids].flatMap((id) => (model.riwayat[id] || []).map((e) => new Date(e.pada).getTime())))]
+    .filter(Number.isFinite).sort((a, b) => a - b);
+  const naik = [];
+  for (const t of waktu) {
+    const ov = {};
+    ids.forEach((id) => { ov[id] = hargaPada(model, id, t); });
+    const ctx = makeCtx(model, ov);
+    const nilai = m ? ctx.menuHpp(m) : ctx.resepTotal(resepId);
+    if (!naik.length || Math.round(nilai) !== Math.round(naik[naik.length - 1].nilai)) naik.push({ pada: new Date(t).toISOString(), nilai });
+  }
+  return naik.map((e, i) => ({ ...e, persen: i > 0 && naik[i - 1].nilai ? ((e.nilai - naik[i - 1].nilai) / naik[i - 1].nilai) * 100 : null })).reverse();
+}
+
+/**
+ * Dampak mengubah bahan (harga dan/atau isi per satuan beli) ke menu yang memakainya, TANPA mengubah model:
+ * hanya menu yang modalnya berubah. rows: [{ menu, sebelum, sesudah, selisih, ganti }], urut perubahan terbesar.
+ */
+export function dampakUbah(model, bahanId, { harga, isi } = {}) {
+  const b = model.bahan[bahanId];
+  if (!b) return { rows: [], ganti: 0 };
+  const sesudah = { ...model, bahan: { ...model.bahan, [bahanId]: { ...b, harga: harga === undefined ? b.harga : harga, isi: isi === undefined ? b.isi : isi } } };
+  const before = makeCtx(model);
+  const after = makeCtx(sesudah);
+  const rows = menusUsingBahan(model, bahanId).map((m) => {
+    const a = menuInfo(model, before, m);
+    const z = menuInfo(sesudah, after, m);
+    return { menu: m, sebelum: a, sesudah: z, selisih: z.hpp - a.hpp, ganti: a.tier !== z.tier };
+  }).filter((r) => Math.abs(r.selisih) >= 0.5)
+    .sort((x, y) => Math.abs(y.selisih) - Math.abs(x.selisih));
+  return { rows, ganti: rows.filter((r) => r.ganti).length };
+}
+
+/** Satuan beli yang ditawarkan di popup Update harga (tombol pilihan). Satuan bahan itu sendiri selalu ikut. */
+export const SATUAN_UMUM = ['kg', 'liter', 'pcs', 'pack', 'btl', 'renceng', 'galon', 'ekor', 'tabung', 'karton'];
+export const opsiSatuan = (saatIni) => (saatIni && !SATUAN_UMUM.includes(saatIni) ? [...SATUAN_UMUM, saatIni] : SATUAN_UMUM);
+
+/** Isi bawaan saat satuan dipilih: 1 kg = 1000 gr, 1 liter = 1000 ml. null = tidak diubah. */
+export function isiBawaan(satuan, unitDasar) {
+  if ((satuan === 'kg' && unitDasar === 'gr') || (satuan === 'liter' && unitDasar === 'ml')) return 1000;
+  return null;
+}

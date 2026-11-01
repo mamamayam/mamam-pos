@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ChevronDown, Pencil, Plus, Trash2 } from 'lucide-react'
-import { ctxAcuan, hargaMinimal, makeCtx, menuBahanKosong, menuInfo, menuParts, menusUsingBahan, menusUsingResep, resepRows } from './hppModel'
+import { ctxAcuan, hargaMinimal, makeCtx, menuBahanKosong, menuInfo, menuParts, menusUsingResep, resepRows } from './hppModel'
 import { angka, persen, rupiah } from './hppFormat'
 import KomposisiPicker from './KomposisiPicker'
 import { Card, Chip, ChipRow, Delta, Hero, HeroLabel, NumberField, ProporsiBar, SectionLabel, Sheet, TierBadge } from './ui'
@@ -121,7 +121,7 @@ export default function MenuSheet({ model, menuId, actions, onClose }) {
   )
 }
 
-function TombolTambah({ onClick, children }) {
+export function TombolTambah({ onClick, children }) {
   return (
     <button type="button" onClick={onClick}
       className="mb-2 mt-1 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-accent-300 py-2 text-sm font-bold text-accent-700 active:scale-[0.98]">
@@ -140,16 +140,15 @@ function TombolHapus({ label, onClick }) {
 }
 
 /** Satu baris bahan langsung. Normal: harga per satuan beli bisa diedit. Mode ubah: takaran + hapus. */
-function BahanLine({ model, bahanId, qty, biaya, onHarga, dalam = false, edit = false, onQty, onHapus }) {
+export function BahanLine({ model, bahanId, qty, biaya, onHarga, dalam = false, edit = false, onQty, onHapus }) {
   const b = model.bahan[bahanId]
   if (!b) return null
-  const n = menusUsingBahan(model, bahanId).length
   return (
     <div className={`flex items-start justify-between gap-3 border-t border-slate-100 ${dalam ? 'py-1.5' : 'py-2.5'}`}>
       <div className="min-w-0 pt-1">
         <div className={`truncate ${dalam ? 'text-slate-600' : 'font-semibold text-slate-800'}`}>{b.nama}</div>
         <div className="text-xs text-slate-400">
-          {edit ? `${rupiah(biaya)} · ${rupiah(b.harga === null ? 0 : b.harga / b.isi)}/${b.unit}` : `${angka(qty)} ${b.unit} · ${rupiah(biaya)}${!dalam ? ` · dipakai di ${n} menu` : ''}`}
+          {edit ? `${rupiah(biaya)} · ${rupiah(b.harga === null ? 0 : b.harga / b.isi)}/${b.unit}` : `${angka(qty)} ${b.unit} · ${rupiah(biaya)}`}
         </div>
       </div>
       {edit ? (
@@ -169,7 +168,7 @@ function BahanLine({ model, bahanId, qty, biaya, onHarga, dalam = false, edit = 
 }
 
 /** Satu baris resep yang bisa dibuka: lihat isi, ubah harga bahan, dan (mode ubah) ubah/hapus/tambah isinya. */
-function ResepLine({ model, ctx, resepId, qty, biaya, total, onHarga, dalam = false, stack = [], edit = false, actions, picker, setPicker, lapor, onQty, onHapus }) {
+export function ResepLine({ model, ctx, resepId, qty, biaya, total, onHarga, dalam = false, stack = [], edit = false, actions, picker, setPicker, lapor, onQty, onHapus }) {
   const [buka, setBuka] = useState(false)
   const r = model.resep[resepId]
   if (!r) return null

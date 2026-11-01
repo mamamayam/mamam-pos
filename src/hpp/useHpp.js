@@ -56,6 +56,19 @@ export function useHpp(db) {
       return true;
     },
 
+    /** Ubah satuan beli dan isi per satuan (mis. kg, isi 1000 gr). Harga per unit dasar ikut berubah. */
+    async ubahSatuan(bahanId, { satuan, isi }) {
+      const b = raw.bahan.find((x) => x.id === bahanId);
+      const s = String(satuan || '').trim();
+      if (!b || !s || !(isi > 0)) return false;
+      if (b.satuan === s && Number(b.isi) === isi) return false;
+      try {
+        await repo.ubahBahan(db, bahanId, { satuan: s, isi });
+      } catch (e) { setPesan(e.message); return false; }
+      update('bahan', bahanId, { satuan: s, isi });
+      return true;
+    },
+
     async jadikanAcuan() {
       try { await repo.setAcuan(db); } catch (e) { setPesan(e.message); return; }
       patch((r) => ({ ...r, bahan: r.bahan.map((x) => ({ ...x, harga_acuan: x.harga })) }));

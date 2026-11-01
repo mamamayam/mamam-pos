@@ -185,6 +185,7 @@ const TOMBOL_X = 'flex-none rounded-full bg-slate-100 p-2 text-slate-400 transit
  * Menutup lewat X, tarik ke bawah, ketuk latar, Esc, atau tombol Back browser/HP: animasi keluar diputar dulu,
  * baru `onClose` dipanggil (induk melepas popup). Selama terbuka, popup menjadi lapisan di stack navigasi
  * (`hppBackStack.js`), jadi Back menutup popup ini, bukan keluar dari halaman.
+ * `children` boleh berupa fungsi `(tutup) => ...` supaya isi popup bisa menutup dirinya (dengan animasi keluar) setelah simpan.
  */
 export function Sheet({ title, onClose, children, full = false }) {
   const [keluar, setKeluar] = useState(false)
@@ -218,7 +219,7 @@ export function Sheet({ title, onClose, children, full = false }) {
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-slate-50 p-4">
-          {children}
+          {typeof children === 'function' ? children(tutup) : children}
         </div>
       </div>
     </Overlay>
@@ -245,6 +246,105 @@ export function NotifKeluar({ tampil }) {
       <div className="rounded-full bg-slate-900/95 px-4 py-2.5 text-sm font-semibold text-white shadow-lg">
         Ketuk lagi untuk keluar
       </div>
+    </div>
+  )
+}
+
+/** Grafik garis kecil untuk riwayat (nilai urut lama -> baru). Tidak tampil kalau datanya kurang dari dua. */
+export function Sparkline({ nilai, className = '' }) {
+  if (!nilai || nilai.length < 2) return null
+  const min = Math.min(...nilai)
+  const rentang = Math.max(...nilai) - min || 1
+  const titik = nilai.map((v, i) => `${((i * 100) / (nilai.length - 1)).toFixed(1)},${(24 - ((v - min) / rentang) * 20).toFixed(1)}`).join(' ')
+  return (
+    <svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="Grafik riwayat" className={`my-1 block h-11 w-full ${className}`}>
+      <polyline points={titik} fill="none" stroke={WARNA_BAR[0]} strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+    </svg>
+  )
+}
+
+/** Perubahan dalam persen: naik (makin mahal) oranye, turun hijau, hampir nol = "stabil". null = tidak tampil. */
+export function DeltaPersen({ nilai, className = '' }) {
+  if (nilai === null || nilai === undefined || !Number.isFinite(nilai)) return null
+  if (Math.abs(nilai) < 0.05) return <span className={`text-xs font-bold text-slate-400 ${className}`}>stabil</span>
+  const naik = nilai > 0
+  return (
+    <span className={`text-xs font-bold tabular-nums ${naik ? 'text-accent-600' : 'text-emerald-600'} ${className}`}>
+      {naik ? '▲' : '▼'} {persen(Math.abs(nilai))}
+    </span>
+  )
+}
+
+/** Pil kecil "Belum diisi" (kuning), sama dengan penanda bahan tanpa harga di daftar. */
+export function PilBelumDiisi() {
+  return <span className="inline-block whitespace-nowrap rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700">Belum diisi</span>
+}
+
+/** Satu kotak angka ringkas (label kecil + nilai). */
+export function Sel({ label, children }) {
+  return (
+    <div className="min-w-0 rounded-xl bg-slate-50 px-3 py-2">
+      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{label}</div>
+      <div className="truncate font-bold tabular-nums text-slate-800">{children}</div>
+    </div>
+  )
+}
+
+/** Tombol utama di dalam detail baris (garis oranye). */
+export function TombolAksi({ onClick, children }) {
+  return (
+    <button type="button" onClick={onClick}
+      className="mt-3 w-full rounded-2xl border-[1.5px] border-accent-500 py-2.5 font-bold text-accent-600 transition-transform active:scale-[0.98]">
+      {children}
+    </button>
+  )
+}
+
+/**
+ * Isian angka besar dengan tombol − dan + (nyaman ditekan di HP). `value` = teks isian, `onChange(teks)`.
+ * `step` = besar langkah tombol. `awalan` / `akhiran` = teks di dalam kolom (mis. "Rp", "gr").
+ */
+export function Stepper({ value, onChange, step = 1, awalan = null, akhiran = null, ariaLabel }) {
+  const ubah = (arah) => {
+    const v = parseAngka(value) ?? 0
+    onChange(String(Math.max(0, Math.round((v + arah * step) * 100) / 100)))
+  }
+  const tombol = 'flex h-12 w-12 flex-none items-center justify-center rounded-2xl border border-slate-200 bg-white text-2xl font-semibold text-slate-700 transition-transform active:scale-95'
+  return (
+    <div className="flex items-stretch gap-2">
+      <button type="button" aria-label={`Kurangi ${ariaLabel}`} onClick={() => ubah(-1)} className={tombol}>−</button>
+      <label className="flex min-w-0 flex-1 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 focus-within:border-accent-500 focus-within:ring-2 focus-within:ring-accent-500/20">
+        {awalan && <span className="text-sm font-semibold text-slate-400">{awalan}</span>}
+        <input
+          type="text" inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} aria-label={ariaLabel}
+          aria-invalid={value !== '' && parseAngka(value) === null ? 'true' : undefined}
+          className="min-w-0 flex-1 bg-transparent py-2.5 text-right font-heading text-xl font-bold tabular-nums text-slate-900 outline-none"
+        />
+        {akhiran && <span className="text-sm font-semibold text-slate-400">{akhiran}</span>}
+      </label>
+      <button type="button" aria-label={`Tambah ${ariaLabel}`} onClick={() => ubah(1)} className={tombol}>+</button>
+    </div>
+  )
+}
+
+/**
+ * Notifikasi singkat di bawah (gelap) dengan satu tombol aksi opsional; hilang sendiri setelah 9 detik.
+ * `onTutup` harus stabil (useCallback), kalau tidak timer mulai ulang tiap render.
+ */
+export function Snack({ pesan, aksi = null, onAksi, onTutup }) {
+  useEffect(() => {
+    if (!pesan) return undefined
+    const t = setTimeout(onTutup, 9000)
+    return () => clearTimeout(t)
+  }, [pesan, onTutup])
+  if (!pesan) return null
+  return (
+    <div role="status" aria-live="polite"
+      className="hpp-toast fixed inset-x-4 bottom-4 z-[60] mx-auto flex max-w-md items-center justify-between gap-3 rounded-2xl bg-slate-900 py-2.5 pl-4 pr-2.5 text-white shadow-xl">
+      <span className="min-w-0 text-sm font-semibold">{pesan}</span>
+      {aksi && (
+        <button type="button" onClick={onAksi} className="flex-none rounded-xl bg-accent-500 px-3.5 py-2 text-sm font-bold text-white active:scale-95">{aksi}</button>
+      )}
     </div>
   )
 }

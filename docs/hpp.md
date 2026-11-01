@@ -50,14 +50,29 @@ Bahan tanpa harga dihitung 0 dan menu yang memakainya diberi peringatan.
 
 ## Navigasi dan popup
 
-- **Back** (tombol Back HP, browser, atau geser mundur) menutup lapisan teratas: popup dulu, lalu tab **Harga bahan**
+- **Back** (tombol Back HP, browser, atau geser mundur) menutup lapisan teratas: popup dulu, lalu tab **Bahan baku** atau **Resep**
   kembali ke **Menu**. Dari Menu, Back pertama memunculkan notif **"Ketuk lagi untuk keluar"** (teks, bentuk, dan posisi sama dengan `ExitToast` app utama); Back kedua
   dalam 2 detik meninggalkan HPP (kembali ke POS). Cara kerjanya sama dengan "Ketuk lagi untuk keluar" di Beranda POS.
   Mesinnya `createBackStack` yang sama dengan POS, instance sendiri (`src/hpp/hppBackStack.js`).
-- Alamat mengikuti tab (`/hpp`, `/hpp/bahan`) lewat `replaceState`, jadi refresh dan link langsung tetap jalan.
+- Alamat mengikuti tab (`/hpp`, `/hpp/bahan`, `/hpp/resep`) lewat `replaceState`, jadi refresh dan link langsung tetap jalan.
 - **Popup** memakai kerangka yang sama dengan app utama (`components/ui/Overlay`): lembar putih naik dari bawah di HP
   (laptop: dialog di tengah), ada handle bar dan tombol X bulat, dan bisa **ditarik ke bawah** untuk menutup.
   Menutup lewat X, tarik ke bawah, ketuk latar, Esc, atau Back.
+
+## Tampilan daftar
+
+Tiga tab: **Bahan baku**, **Resep**, **Menu** (Menu = tab awal). Di semuanya:
+
+- Kategori (grup untuk Resep) **menguncup** di awal; ketuk judulnya untuk membuka. Pencarian membuka semua yang cocok.
+- Ketuk satu baris untuk membuka **detail**: riwayat (grafik kecil + 3 perubahan terakhir, **Lihat semua** untuk sisanya),
+  dan untuk resep/menu juga komposisi dan angka ringkas. Tombol di dalamnya membuka popup:
+  **Update harga** (bahan), **Edit** (resep dan menu).
+- **Update harga**: ubah harga per satuan beli dengan tombol − / + (langkah Rp500) atau ketik langsung. Satuan beli, isi per
+  satuan, dan kategori ada di balik tombol **Ubah**. Pratinjau menunjukkan harga per unit dasar (mis. Rp38.000/kg ÷ 1.000 gr = Rp38/gr).
+  Riwayat harga tetap per satuan beli, jadi setelah satuan diganti bandingkan perubahannya per unit dasar.
+- **Menu terdampak**: tombol "Lihat menu terdampak" di popup sebelum simpan, dan notifikasi "Tersimpan · N menu terdampak"
+  (tombol **Lihat**) sesudahnya. Isinya menu per kategori dengan modal sebelum → sesudah, persen, dan margin.
+- **Riwayat modal** resep dan menu tidak disimpan: dihitung ulang dari riwayat harga bahan yang dipakainya.
 
 ## Hasil migrasi dari file 27/11/2025
 

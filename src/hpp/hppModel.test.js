@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { RAW } from './fixture';
 import {
-  biayaKomponen, bisaTambahSub, buildModel, ctxAcuan, dampakHarga, hargaMinimal, kelompokkan, makeCtx, marginPct, menuBahanKosong, menuInfo,
-  menuParts, menusUsingBahan, menusUsingResep, perubahanTerakhir, resepMemuat, resepRows, tierOf, tiersFor,
+  biayaKomponen, bisaTambahSub, buildModel, ctxAcuan, dampakHarga, dampakUbah, hargaMinimal, hargaPada, isiBawaan, kelompokResep, kelompokkan, makeCtx, marginPct,
+  menuBahanKosong, menuInfo, menuParts, menusUsingBahan, menusUsingResep, opsiSatuan, perubahanTerakhir, resepMemuat, resepRows, riwayatBahanRows,
+  riwayatModalRows, tierOf, tiersFor,
 } from './hppModel';
 
 const model = () => buildModel(RAW);
@@ -191,5 +192,89 @@ describe('komposisi: id baris, lingkaran, dan pemakai resep', () => {
     expect(makeCtx(tambah).menuHpp(tambah.menu[1])).toBe(1200);        // 1000 + 200 gr ayam
     const hapus = buildModel({ ...RAW, menuItem: RAW.menuItem.filter((i) => i.id !== 'j2') });
     expect(makeCtx(hapus).menuHpp(hapus.menu[0])).toBeCloseTo(730);    // 230 + 500, tanpa kemasan 1000
+  });
+});
+
+describe('daftar HPP: kelompok resep, riwayat turunan, dampak ubah', () => {
+  it('kelompokResep: per grup, urut resep pertama; grup kosong jadi Lainnya', () => {
+    const m = model();
+    const g = kelompokResep(Object.values(m.resep));
+    expect(g.map((x) => x.nama)).toEqual(['Saos', 'Menu utama']);
+    expect(g[0]).toMatchObject({ id: 'g:Saos' });
+    expect(g[0].items.map((r) => r.id)).toEqual(['saos']);
+    expect(kelompokResep([{ id: 'x', nama: 'X', grup: null, urutan: 1 }])[0].nama).toBe('Lainnya');
+  });
+
+  it('riwayatBahanRows: terbaru dulu, dengan harga sebelum dan persen (null = awal)', () => {
+    const r = riwayatBahanRows(model(), 'A');
+    expect(r.map((x) => x.harga)).toEqual([1000, 800]);
+    expect(r[0].sebelum).toBe(800);
+    expect(r[0].persen).toBeCloseTo(25);
+    expect(r[1].persen).toBeNull();
+    expect(riwayatBahanRows(model(), 'B')).toEqual([]);
+  });
+
+  it('hargaPada: harga bahan menurut waktu; sebelum riwayat pertama pakai harga awal; tanpa riwayat = harga sekarang', () => {
+    const m = model();
+    expect(hargaPada(m, 'A', new Date('2026-10-10T00:00:00Z').getTime())).toBe(1000);
+    expect(hargaPada(m, 'A', new Date('2026-09-15T00:00:00Z').getTime())).toBe(800);
+    expect(hargaPada(m, 'A', new Date('2026-01-01T00:00:00Z').getTime())).toBe(800);
+    expect(hargaPada(m, 'B', 0)).toBe(50000);
+    expect(hargaPada(m, 'tidak-ada', 0)).toBeNull();
+  });
+
+  it('riwayatModalRows: modal menu/resep dihitung ulang tiap harga bahan berganti (terbaru dulu)', () => {
+    const m = model();
+    const menu = riwayatModalRows(m, { menuId: 'm1' });
+    expect(menu.map((e) => Math.round(e.nilai))).toEqual([1730, 1704]);
+    expect(menu[0].persen).toBeCloseTo((26 / 1704) * 100, 3);
+    expect(menu[1].persen).toBeNull();
+    expect(riwayatModalRows(m, { resepId: 'saos' }).map((e) => Math.round(e.nilai))).toEqual([2600, 2480]);
+    expect(riwayatModalRows(m, { menuId: 'm2' })).toEqual([]);        // bahannya tidak pernah berubah harga
+    expect(riwayatModalRows(m, { menuId: 'tidak-ada' })).toEqual([]);
+  });
+
+  it('riwayatModalRows: perubahan yang tidak mengubah modal (setelah dibulatkan) tidak dicatat sebagai entri baru', () => {
+    // Kemasan (dipakai m1) berubah Rp50.000 -> Rp50.010: modal bergeser kurang dari Rp1.
+    const m = buildModel({
+      ...RAW,
+      bahan: RAW.bahan.map((b) => (b.id === 'B' ? { ...b, harga: 50010 } : b)),
+      riwayat: [...RAW.riwayat, { id: 'r3', bahan_id: 'B', harga: 50010, harga_sebelum: 50000, catatan: '', sumber: 'manual', dibuat_pada: '2026-10-20T00:00:00Z' }],
+    });
+    expect(riwayatModalRows(m, { menuId: 'm1' })).toHaveLength(2);
+  });
+
+  it('dampakUbah: modal sebelum/sesudah per menu tanpa mengubah model; hanya yang berubah; isi ikut dihitung', () => {
+    const m = model();
+    const d = dampakUbah(m, 'A', { harga: 2000 });
+    expect(d.rows).toHaveLength(1);
+    expect(d.rows[0].menu.id).toBe('m1');
+    expect(d.rows[0].sebelum.hpp).toBeCloseTo(1730);
+    expect(d.rows[0].sesudah.hpp).toBeCloseTo(1860);
+    expect(d.rows[0].selisih).toBeCloseTo(130);
+    expect(m.bahan.A.harga).toBe(1000);                                // model asli tidak berubah
+    const isi = dampakUbah(m, 'A', { isi: 500 });                      // isi separuh = harga per gr dua kali lipat
+    expect(isi.rows[0].sesudah.hpp).toBeCloseTo(1860);
+    expect(dampakUbah(m, 'A', { harga: 1000 }).rows).toEqual([]);      // tidak berubah
+    expect(dampakUbah(m, 'tidak-ada', { harga: 1 })).toEqual({ rows: [], ganti: 0 });
+  });
+
+  it('dampakUbah: menandai menu yang berganti kategori margin', () => {
+    const m = buildModel({ ...RAW, setting: [{ key: 'margin', value: { lo: 80, hi: 80 } }] });
+    const d = dampakUbah(m, 'A', { harga: 2000 });
+    expect(d.ganti).toBe(0);                                           // 82,7% -> 81,4%: masih HIGH
+    const keras = dampakUbah(m, 'A', { harga: 20000 });
+    expect(keras.rows[0].ganti).toBe(true);
+    expect(keras.ganti).toBe(1);
+  });
+
+  it('opsiSatuan dan isiBawaan', () => {
+    expect(opsiSatuan('kg')).toContain('renceng');
+    expect(opsiSatuan('20 kg')).toContain('20 kg');
+    expect(opsiSatuan('kg')).not.toContain('20 kg');
+    expect(isiBawaan('kg', 'gr')).toBe(1000);
+    expect(isiBawaan('liter', 'ml')).toBe(1000);
+    expect(isiBawaan('kg', 'pcs')).toBeNull();
+    expect(isiBawaan('pack', 'gr')).toBeNull();
   });
 });

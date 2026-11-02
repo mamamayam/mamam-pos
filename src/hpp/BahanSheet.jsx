@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
-import { dampakUbah, isiBawaan, opsiSatuan } from './hppModel'
+import { dampakUbah, isiBawaan, menusUsingBahan, opsiSatuan } from './hppModel'
 import { angka, labelSatuan, parseAngka, ringkasUbahBahan, rupiah, rupiahUnit } from './hppFormat'
 import { Chip, ChipRow, DeltaPersen, Dropdown, FieldLabel, Pratinjau, Sheet, Stepper, TextInput, TombolDampak, TombolForm } from './ui'
 import DampakSheet from './DampakSheet'
 
 /**
  * Form "Update harga" satu bahan: nama, harga per satuan beli (tombol − / +, langkah Rp500), dan pratinjau harga per unit dasar.
- * Satuan beli, isi, dan kategori jarang berubah, jadi disembunyikan di balik tombol Ubah. Tidak ada tombol persentase.
+ * Satuan beli, satuan pembagi, isi, dan kategori jarang berubah (pilihan satuan diatur di Pengaturan HPP), jadi disembunyikan di balik tombol Ubah. Tidak ada tombol persentase.
  * Sebelum Simpan, "Lihat menu terdampak" menunjukkan menu yang modalnya ikut berubah. Riwayat harga ada di detail baris
  * (tab Bahan baku), bukan di sini; "dipakai di N menu" sengaja tidak ditampilkan.
  * `actions.simpanBahan` (HppApp) menyimpan semuanya sekaligus lalu memunculkan notifikasi menu terdampak.
@@ -16,6 +16,7 @@ export default function BahanSheet({ model, bahanId, actions, onClose, awalUbah 
   const [nama, setNama] = useState(() => b?.nama ?? '')
   const [nilai, setNilai] = useState(() => (b && b.harga !== null ? String(b.harga) : ''))
   const [satuan, setSatuan] = useState(() => b?.satuan ?? '')
+  const [unit, setUnit] = useState(() => b?.unit ?? '')
   const [isi, setIsi] = useState(() => (b ? String(b.isi) : ''))
   const [kat, setKat] = useState(() => b?.kategoriId ?? null)
   const [ubah, setUbah] = useState(awalUbah)
@@ -24,8 +25,8 @@ export default function BahanSheet({ model, bahanId, actions, onClose, awalUbah 
 
   const harga = parseAngka(nilai)
   const isiBaru = parseAngka(isi)
-  const valid = !!b && nama.trim() !== '' && harga !== null && isiBaru !== null && isiBaru > 0 && satuan.trim() !== ''
-  const berubah = valid && (nama.trim() !== b.nama || harga !== b.harga || satuan.trim() !== b.satuan || isiBaru !== b.isi || kat !== b.kategoriId)
+  const valid = !!b && nama.trim() !== '' && harga !== null && isiBaru !== null && isiBaru > 0 && satuan.trim() !== '' && unit.trim() !== ''
+  const berubah = valid && (nama.trim() !== b.nama || harga !== b.harga || satuan.trim() !== b.satuan || isiBaru !== b.isi || unit !== b.unit || kat !== b.kategoriId)
   const dampak = useMemo(
     () => (valid ? dampakUbah(model, bahanId, { harga, isi: isiBaru }) : { rows: [], ganti: 0 }),
     [model, bahanId, valid, harga, isiBaru],
@@ -34,9 +35,15 @@ export default function BahanSheet({ model, bahanId, actions, onClose, awalUbah 
 
   const lama = b.harga === null ? null : b.harga / b.isi
   const baru = valid ? harga / isiBaru : null
+  const bahanDipakai = unit !== b.unit && (menusUsingBahan(model, bahanId).length > 0 || Object.values(model.resep).some((r) => r.items.some((it) => it.bahanId === bahanId)))
   const pilihSatuan = (s) => {
     setSatuan(s)
-    const bawaan = isiBawaan(s, b.unit)
+    const bawaan = isiBawaan(s, unit)
+    if (bawaan !== null) setIsi(String(bawaan))
+  }
+  const pilihUnit = (u) => {
+    setUnit(u)
+    const bawaan = isiBawaan(satuan.trim(), u)
     if (bawaan !== null) setIsi(String(bawaan))
   }
 
@@ -47,7 +54,7 @@ export default function BahanSheet({ model, bahanId, actions, onClose, awalUbah 
           const simpan = async () => {
             if (!berubah || menyimpan) return
             setMenyimpan(true)
-            const ok = await actions.simpanBahan(b.id, { nama: nama.trim(), harga, satuan: satuan.trim(), isi: isiBaru, kategoriId: kat })
+            const ok = await actions.simpanBahan(b.id, { nama: nama.trim(), harga, satuan: satuan.trim(), isi: isiBaru, kategoriId: kat, unit })
             setMenyimpan(false)
             if (ok) tutup()
           }
@@ -63,10 +70,19 @@ export default function BahanSheet({ model, bahanId, actions, onClose, awalUbah 
                 <div className="hpp-reveal mt-3 rounded-2xl border border-slate-200 bg-white p-3">
                   <FieldLabel>Satuan beli</FieldLabel>
                   <ChipRow>
-                    {opsiSatuan(b.satuan).map((s) => <Chip key={s} on={satuan === s} onClick={() => pilihSatuan(s)}>{s}</Chip>)}
+                    {opsiSatuan(b.satuan, model.satuanBeli).map((s) => <Chip key={s} on={satuan === s} onClick={() => pilihSatuan(s)}>{s}</Chip>)}
                   </ChipRow>
-                  <FieldLabel>Isi per {satuan.trim() || b.satuan} (dibagi per {b.unit})</FieldLabel>
-                  <Stepper value={isi} onChange={setIsi} step={b.unit === 'gr' || b.unit === 'ml' ? 100 : 1} akhiran={b.unit} ariaLabel="Isi per satuan" />
+                  <FieldLabel>Satuan pembagi (hitung HPP per)</FieldLabel>
+                  <ChipRow>
+                    {opsiSatuan(b.unit, model.satuanDasar).map((u) => <Chip key={u} on={unit === u} onClick={() => pilihUnit(u)}>{u}</Chip>)}
+                  </ChipRow>
+                  {bahanDipakai && (
+                    <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      Takaran di resep/menu yang memakai bahan ini tidak ikut dikonversi (tetap angka yang sama dalam {unit}). Cek lagi setelah simpan.
+                    </p>
+                  )}
+                  <FieldLabel>Isi per {satuan.trim() || b.satuan} (dibagi per {unit})</FieldLabel>
+                  <Stepper value={isi} onChange={setIsi} step={unit === 'gr' || unit === 'ml' ? 100 : 1} akhiran={unit} ariaLabel="Isi per satuan" />
                   <FieldLabel>Kategori bahan</FieldLabel>
                   <Dropdown value={kat} options={model.kategoriBahan} onChange={setKat} label="Kategori bahan" placeholder="Pilih kategori" />
                 </div>
@@ -82,7 +98,7 @@ export default function BahanSheet({ model, bahanId, actions, onClose, awalUbah 
                 {valid
                   ? (
                     <>
-                      {rupiah(harga)}/{satuan.trim()} ÷ {angka(isiBaru)} {b.unit} = <b className="text-slate-900">{rupiahUnit(baru)}</b>/{b.unit}{' '}
+                      {rupiah(harga)}/{satuan.trim()} ÷ {angka(isiBaru)} {unit} = <b className="text-slate-900">{rupiahUnit(baru)}</b>/{unit}{' '}
                       {lama !== null && lama > 0 && Math.abs(baru / lama - 1) > 0.0005 && (
                         <>
                           <DeltaPersen nilai={(baru / lama - 1) * 100} /> <span className="text-xs text-slate-400">dari {rupiahUnit(lama)}</span>

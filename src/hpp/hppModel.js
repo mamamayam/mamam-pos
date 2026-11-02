@@ -65,6 +65,9 @@ export function buildModel(raw) {
     kategoriMenu: kategori.filter((k) => k.jenis === 'menu').sort(urut),
     bahan, bahanList: Object.values(bahan).sort((a, b) => a.nama.localeCompare(b.nama, 'id')),
     resep, menu, riwayat, margin, markup: Number(st.online_markup ?? DEFAULT_MARKUP),
+    // Pilihan satuan di form Update harga (diatur di Pengaturan); belum diatur = daftar bawaan.
+    satuanBeli: daftarSatuan(st.satuan_beli, SATUAN_UMUM),
+    satuanDasar: daftarSatuan(st.satuan_dasar, SATUAN_DASAR_UMUM),
   };
 }
 
@@ -335,7 +338,34 @@ export const resepPerUnit = (r, total) => (r.hasilQty ? total / r.hasilQty : tot
 
 /** Satuan beli yang ditawarkan di popup Update harga (tombol pilihan). Satuan bahan itu sendiri selalu ikut. */
 export const SATUAN_UMUM = ['kg', 'liter', 'pcs', 'pack', 'btl', 'renceng', 'galon', 'ekor', 'tabung', 'karton'];
-export const opsiSatuan = (saatIni) => (saatIni && !SATUAN_UMUM.includes(saatIni) ? [...SATUAN_UMUM, saatIni] : SATUAN_UMUM);
+/** Satuan pembagi (unit dasar) bawaan: hitungan HPP per gr / ml / pcs / porsi. */
+export const SATUAN_DASAR_UMUM = ['gr', 'ml', 'pcs', 'porsi'];
+export const MAKS_NAMA_SATUAN = 20;
+
+/** Rapikan daftar satuan: teks, dipangkas, tanpa kosong, tanpa kembar (huruf besar/kecil dianggap sama), nama maksimal 20 huruf. */
+export function rapikanSatuan(daftar) {
+  const lihat = new Set();
+  const hasil = [];
+  for (const x of Array.isArray(daftar) ? daftar : []) {
+    const s = String(x ?? '').trim().slice(0, MAKS_NAMA_SATUAN);
+    const k = s.toLowerCase();
+    if (!s || lihat.has(k)) continue;
+    lihat.add(k); hasil.push(s);
+  }
+  return hasil;
+}
+/** Daftar dari pengaturan; kosong / tidak valid = bawaan. */
+export const daftarSatuan = (nilai, bawaan) => { const d = rapikanSatuan(nilai); return d.length ? d : bawaan; };
+
+/** Daftar pilihan + satuan yang sedang dipakai (supaya satuan bahan yang tidak ada di daftar tetap tampil dan bisa dipilih). */
+export const opsiSatuan = (saatIni, daftar = SATUAN_UMUM) => (saatIni && !daftar.includes(saatIni) ? [...daftar, saatIni] : daftar);
+
+/** Berapa bahan yang memakai tiap satuan (beli atau pembagi): { satuan: n }. Untuk menahan hapus satuan yang masih dipakai. */
+export function pemakaiSatuan(model, kunci) {
+  const c = {};
+  for (const b of model.bahanList) c[b[kunci]] = (c[b[kunci]] || 0) + 1;
+  return c;
+}
 
 /** Isi bawaan saat satuan dipilih: 1 kg = 1000 gr, 1 liter = 1000 ml. null = tidak diubah. */
 export function isiBawaan(satuan, unitDasar) {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { bisaTambahSub, buildModel } from './hppModel';
+import { bisaTambahSub, buildModel, rapikanSatuan } from './hppModel';
 import * as repo from './hppRepo';
 
 const KOSONG = { kategori: [], bahan: [], riwayat: [], resep: [], resepItem: [], menu: [], menuItem: [], setting: [] };
@@ -81,15 +81,17 @@ export function useHpp(db) {
      * Simpan form "Update harga": nama, satuan beli, isi, kategori (satu update) lalu harga (RPC, riwayat dicatat trigger).
      * false = tidak ada yang tersimpan atau gagal (pesan galat sudah ditampilkan).
      */
-    async simpanBahan(bahanId, { nama, harga, satuan, isi, kategoriId }) {
+    async simpanBahan(bahanId, { nama, harga, satuan, isi, kategoriId, unit }) {
       const b = raw.bahan.find((x) => x.id === bahanId);
       const n = String(nama || '').trim();
       const s = String(satuan || '').trim();
-      if (!b || !n || !s || !(isi > 0) || harga === null || Number.isNaN(harga) || harga < 0) return false;
+      const u = unit === undefined ? b?.unit_dasar : String(unit || '').trim();
+      if (!b || !n || !s || !u || !(isi > 0) || harga === null || Number.isNaN(harga) || harga < 0) return false;
       const kolom = {};
       if (n !== b.nama) kolom.nama = n;
       if (s !== b.satuan) kolom.satuan = s;
       if (Number(b.isi) !== isi) kolom.isi = isi;
+      if (u !== b.unit_dasar) kolom.unit_dasar = u;
       if (kategoriId && kategoriId !== b.kategori_id) kolom.kategori_id = kategoriId;
       const hargaBerubah = b.harga === null || Number(b.harga) !== harga;
       if (!Object.keys(kolom).length && !hargaBerubah) return false;
@@ -192,6 +194,14 @@ export function useHpp(db) {
       const value = { lo: margin.lo, hi: margin.hi };
       patch((r) => ({ ...r, setting: [...r.setting.filter((s) => s.key !== 'margin'), { key: 'margin', value }] }));
       repo.simpanSetting(db, 'margin', value).catch(gagal);
+    },
+    /** Simpan daftar pilihan satuan di Pengaturan: kunci 'satuan_beli' atau 'satuan_dasar' (daftar teks, sudah dirapikan). */
+    simpanSatuan(kunci, daftar) {
+      if (kunci !== 'satuan_beli' && kunci !== 'satuan_dasar') return;
+      const value = rapikanSatuan(daftar);
+      if (!value.length) return;
+      patch((r) => ({ ...r, setting: [...r.setting.filter((s) => s.key !== kunci), { key: kunci, value }] }));
+      repo.simpanSetting(db, kunci, value).catch(gagal);
     },
     simpanMarkup(markup) {
       patch((r) => ({ ...r, setting: [...r.setting.filter((s) => s.key !== 'online_markup'), { key: 'online_markup', value: markup }] }));

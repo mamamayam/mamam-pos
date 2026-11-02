@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { RAW } from './fixture';
 import {
   bisaTambahSub, buildModel, ctxAcuan, dampakUbah, dampakUbahResep, draftBerubah, draftDariMenu, draftDariResep, draftValid, hargaMinimal, hargaPada, isiBawaan, kelompokResep, kelompokkan, makeCtx, marginPct,
-  itemsMenuDariDraft, itemsResepDariDraft, draftSalinDariMenu, menuSumberSalin, menuBahanKosong, menuInfo, menuParts, modelDenganResep, resepPerUnit, ringkasanDaftar, menusUsingBahan, menusUsingResep, opsiSatuan, perubahanTerakhir, resepMemuat, resepRows, riwayatBahanRows,
+  itemsMenuDariDraft, itemsResepDariDraft, draftSalinDariMenu, menuSumberSalin, menuBahanKosong, menuInfo, menuParts, modelDenganResep, resepPerUnit, ringkasanDaftar, menusUsingBahan, menusUsingResep, opsiSatuan, pemakaiSatuan, rapikanSatuan, SATUAN_DASAR_UMUM, SATUAN_UMUM, perubahanTerakhir, resepMemuat, resepRows, riwayatBahanRows,
   riwayatModalRows, tierOf, tiersFor,
 } from './hppModel';
 
@@ -272,6 +272,32 @@ describe('daftar HPP: kelompok resep, riwayat turunan, dampak ubah', () => {
     expect(isiBawaan('liter', 'ml')).toBe(1000);
     expect(isiBawaan('kg', 'pcs')).toBeNull();
     expect(isiBawaan('pack', 'gr')).toBeNull();
+  });
+
+  it('satuan beli dan satuan pembagi: bawaan bila belum diatur, ikut pengaturan bila ada', () => {
+    const m = model();
+    expect(m.satuanBeli).toEqual(SATUAN_UMUM);
+    expect(m.satuanDasar).toEqual(SATUAN_DASAR_UMUM);
+    const atur = buildModel({ ...RAW, setting: [...RAW.setting, { key: 'satuan_beli', value: ['kg', ' dus ', 'DUS', ''] }, { key: 'satuan_dasar', value: ['gr', 'sdm'] }] });
+    expect(atur.satuanBeli).toEqual(['kg', 'dus']);
+    expect(atur.satuanDasar).toEqual(['gr', 'sdm']);
+    const rusak = buildModel({ ...RAW, setting: [{ key: 'satuan_beli', value: [] }, { key: 'satuan_dasar', value: 'gr' }] });
+    expect(rusak.satuanBeli).toEqual(SATUAN_UMUM);
+    expect(rusak.satuanDasar).toEqual(SATUAN_DASAR_UMUM);
+  });
+
+  it('rapikanSatuan: pangkas, buang kosong dan kembar (tanpa peduli huruf), batasi 20 huruf; opsiSatuan ikut daftar sendiri', () => {
+    expect(rapikanSatuan([' Kg ', 'kg', '', null, 'dus'])).toEqual(['Kg', 'dus']);
+    expect(rapikanSatuan('bukan daftar')).toEqual([]);
+    expect(rapikanSatuan(['x'.repeat(30)])[0]).toHaveLength(20);
+    expect(opsiSatuan('ikat', ['kg', 'dus'])).toEqual(['kg', 'dus', 'ikat']);
+    expect(opsiSatuan('dus', ['kg', 'dus'])).toEqual(['kg', 'dus']);
+  });
+
+  it('pemakaiSatuan: hitung bahan per satuan beli dan per satuan pembagi', () => {
+    const m = model();
+    expect(pemakaiSatuan(m, 'satuan')).toEqual({ kg: 1, pack: 2 });
+    expect(pemakaiSatuan(m, 'unit')).toEqual({ gr: 2, pcs: 1 });
   });
 });
 

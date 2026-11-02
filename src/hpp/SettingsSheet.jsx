@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { ArrowUp, Trash2 } from 'lucide-react'
-import { ctxAcuan, makeCtx, menuInfo } from './hppModel'
+import { ArrowUp, Trash2, X } from 'lucide-react'
+import { MAKS_NAMA_SATUAN, ctxAcuan, makeCtx, menuInfo, pemakaiSatuan, rapikanSatuan } from './hppModel'
 import { Card, Hero, SectionLabel, Sheet } from './ui'
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
@@ -56,6 +56,40 @@ function KategoriEditor({ jenis, daftar, terpakai, actions }) {
   )
 }
 
+/** Daftar pilihan satuan yang bisa ditambah/dihapus. Satuan yang masih dipakai bahan tidak bisa dihapus. Selalu sisakan minimal satu. */
+function SatuanEditor({ judul, daftar, pakai, onSimpan }) {
+  const [baru, setBaru] = useState('')
+  const sudah = daftar.some((x) => x.toLowerCase() === baru.trim().toLowerCase())
+  const tambah = () => { if (baru.trim() && !sudah) { onSimpan(rapikanSatuan([...daftar, baru])); setBaru('') } }
+  return (
+    <>
+      <div className="flex flex-wrap gap-1.5 py-2" role="list" aria-label={judul}>
+        {daftar.map((s) => {
+          const n = pakai[s] || 0
+          const kunci = n > 0 || daftar.length <= 1
+          return (
+            <span key={s} role="listitem" className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white py-1 pl-3 pr-1.5 text-sm font-semibold text-slate-700">
+              {s}
+              {n > 0 && <span className="text-xs font-normal tabular-nums text-slate-400">{n}</span>}
+              <button type="button" aria-label={`Hapus satuan ${s}`} disabled={kunci} title={n > 0 ? `Masih dipakai ${n} bahan` : 'Hapus'}
+                onClick={() => onSimpan(daftar.filter((x) => x !== s))}
+                className="flex h-6 w-6 items-center justify-center rounded-full text-slate-400 active:scale-90 disabled:opacity-30"><X size={13} /></button>
+            </span>
+          )
+        })}
+      </div>
+      <div className="flex items-center gap-1.5 border-t border-slate-100 py-2">
+        <input aria-label={`${judul} baru`} placeholder="Satuan baru" value={baru} maxLength={MAKS_NAMA_SATUAN} onChange={(e) => setBaru(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') tambah() }}
+          className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20" />
+        <button type="button" onClick={tambah} disabled={!baru.trim() || sudah}
+          className="rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-600 disabled:opacity-40">Tambah</button>
+      </div>
+      {sudah && baru.trim() && <p className="pb-2 text-xs text-slate-400">Satuan itu sudah ada.</p>}
+    </>
+  )
+}
+
 /** Pengaturan HPP: batas margin, markup online, kategori bahan dan menu. */
 export default function SettingsSheet({ model, actions, email, onKeluar, onClose }) {
   const hitung = useMemo(() => {
@@ -93,6 +127,16 @@ export default function SettingsSheet({ model, actions, email, onKeluar, onClose
         <SectionLabel className="pb-1 pt-3">Harga online</SectionLabel>
         <Stepper label="Harga online = outlet +" nilai={persenOnline} step={5} max={100} onUbah={(v) => actions.simpanMarkup(1 + v / 100)} />
       </Card>
+
+      <Card className="mb-3">
+        <SectionLabel className="pb-1 pt-3">Satuan beli</SectionLabel>
+        <SatuanEditor judul="Satuan beli" daftar={model.satuanBeli} pakai={pemakaiSatuan(model, 'satuan')} onSimpan={(d) => actions.simpanSatuan('satuan_beli', d)} />
+      </Card>
+      <Card className="mb-1">
+        <SectionLabel className="pb-1 pt-3">Satuan pembagi</SectionLabel>
+        <SatuanEditor judul="Satuan pembagi" daftar={model.satuanDasar} pakai={pemakaiSatuan(model, 'unit')} onSimpan={(d) => actions.simpanSatuan('satuan_dasar', d)} />
+      </Card>
+      <p className="mb-3 px-1 text-xs text-slate-400">Pilihan satuan di form Update harga. Angka kecil = jumlah bahan yang memakainya; satuan yang masih dipakai tidak bisa dihapus.</p>
 
       <Card className="mb-3">
         <SectionLabel className="pb-1 pt-3">Kategori bahan</SectionLabel>

@@ -77,8 +77,10 @@ jumlahnya. Satu kotak cari dipakai tab yang sedang tampil. Di semua tab:
 Ketiganya **form draft**: perubahan baru tersimpan saat **Simpan** ditekan, **Batal** (atau tutup popup) membuang. Simpan nonaktif
 selama belum ada perubahan atau ada isian yang tidak valid. Pratinjau di bawah form menunjukkan angka lama → baru.
 
-- **Update harga** (bahan): nama dan harga per satuan beli dengan tombol − / + (langkah Rp500) atau ketik langsung. Satuan beli, isi per
-  satuan, dan kategori (dropdown) ada di balik tombol **Ubah**. Pratinjau menunjukkan harga per unit dasar (mis. Rp 38.000/kg ÷ 1.000 gr = Rp 38/gr).
+- **Update harga** (bahan): nama dan harga per satuan beli dengan tombol − / + (langkah Rp500) atau ketik langsung. Satuan beli, satuan pembagi (unit
+  dasar), isi per satuan, dan kategori (dropdown) ada di balik tombol **Ubah**. Pilihan satuan beli dan satuan pembagi diatur di **Pengaturan HPP**
+  (kartu Satuan beli / Satuan pembagi: tambah atau hapus; disimpan di `hpp_setting` kunci `satuan_beli` dan `satuan_dasar`, tanpa migrasi; satuan yang
+  masih dipakai bahan tidak bisa dihapus). Mengganti satuan pembagi tidak mengonversi takaran resep/menu (angkanya tetap), jadi form memberi peringatan. Pratinjau menunjukkan harga per unit dasar (mis. Rp 38.000/kg ÷ 1.000 gr = Rp 38/gr).
   Riwayat harga tetap per satuan beli, jadi setelah satuan diganti bandingkan perubahannya per unit dasar. Tidak ada kolom catatan
   dan tombol persentase.
 - **Edit resep**: nama, hasil per batch (hanya resep batch), dan komposisi. Berlaku untuk **semua menu** yang memakai resep itu.

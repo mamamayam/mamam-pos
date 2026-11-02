@@ -184,12 +184,36 @@ describe('layar HPP (render server)', () => {
     const html = render(<BahanSheet model={model} bahanId="A" actions={actions} onClose={noop} awalUbah />);
     expect(html).toContain('Satuan beli');
     expect(html).toContain('>renceng<');
+    expect(html).toContain('Satuan pembagi');
+    expect(html).toContain('>porsi<');                        // pilihan satuan pembagi (bawaan gr, ml, pcs, porsi)
     expect(html).toContain('Isi per kg (dibagi per gr)');
     expect(html).toContain('Kategori bahan');
     expect(html).toContain('>Primer<');
     expect(html).toContain('aria-haspopup="dialog"');
     expect(html).not.toContain('>Packaging<');                // kategori = dropdown
     expect(html).not.toContain('>Ubah<');
+  });
+
+  it('form Update harga memakai daftar satuan dari Pengaturan; satuan bahan yang tak ada di daftar tetap tampil', () => {
+    const atur = buildModel({ ...RAW, setting: [...RAW.setting, { key: 'satuan_beli', value: ['dus', 'ikat'] }, { key: 'satuan_dasar', value: ['sdm'] }] });
+    const html = render(<BahanSheet model={atur} bahanId="A" actions={actions} onClose={noop} awalUbah />);
+    expect(html).toContain('>dus<');
+    expect(html).toContain('>ikat<');
+    expect(html).not.toContain('>renceng<');
+    expect(html).toContain('>kg<');                           // satuan bahan sendiri selalu ikut
+    expect(html).toContain('>sdm<');
+    expect(html).toContain('>gr<');
+    expect(html).not.toContain('>porsi<');
+  });
+
+  it('pengaturan HPP: editor satuan beli dan satuan pembagi; satuan yang masih dipakai tidak bisa dihapus', () => {
+    const html = render(<SettingsSheet model={model} actions={actions} email="owner@x.test" onKeluar={noop} onClose={noop} />);
+    expect(html).toContain('Satuan beli');
+    expect(html).toContain('Satuan pembagi');
+    expect(html).toContain('aria-label="Satuan beli baru"');
+    expect(html).toContain('aria-label="Satuan pembagi baru"');
+    expect(html).toContain('aria-label="Hapus satuan kg" disabled=""');       // dipakai bahan Ayam
+    expect(html).toContain('aria-label="Hapus satuan renceng" title="Hapus"'); // tidak dipakai = bisa dihapus
   });
 
   it('form Update harga tanpa harga: kolom kosong, Simpan nonaktif', () => {

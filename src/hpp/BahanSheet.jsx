@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { dampakUbah, isiBawaan, opsiSatuan } from './hppModel'
 import { angka, labelSatuan, parseAngka, ringkasUbahBahan, rupiah, rupiahUnit } from './hppFormat'
-import { Chip, ChipRow, DeltaPersen, FieldLabel, Pratinjau, Sheet, Stepper, TextInput, TombolDampak, TombolForm } from './ui'
+import { Chip, ChipRow, DeltaPersen, Dropdown, FieldLabel, Pratinjau, Sheet, Stepper, TextInput, TombolDampak, TombolForm } from './ui'
 import DampakSheet from './DampakSheet'
 
 /**
@@ -68,9 +68,7 @@ export default function BahanSheet({ model, bahanId, actions, onClose, awalUbah 
                   <FieldLabel>Isi per {satuan.trim() || b.satuan} (dibagi per {b.unit})</FieldLabel>
                   <Stepper value={isi} onChange={setIsi} step={b.unit === 'gr' || b.unit === 'ml' ? 100 : 1} akhiran={b.unit} ariaLabel="Isi per satuan" />
                   <FieldLabel>Kategori bahan</FieldLabel>
-                  <ChipRow>
-                    {model.kategoriBahan.map((k) => <Chip key={k.id} on={kat === k.id} onClick={() => setKat(k.id)}>{k.nama}</Chip>)}
-                  </ChipRow>
+                  <Dropdown value={kat} options={model.kategoriBahan} onChange={setKat} label="Kategori bahan" placeholder="Pilih kategori" />
                 </div>
               ) : (
                 <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl bg-white px-3.5 py-2.5 text-sm text-slate-500">

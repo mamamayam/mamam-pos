@@ -129,16 +129,15 @@ export function useHpp(db) {
       return true;
     },
 
-    /** Simpan form "Edit menu": nama, kategori, harga jual, biaya lain, dan komposisi (items = [{ id, bahanId, resepId, qty }]). */
-    async simpanMenu(menuId, { nama, kategoriId, hargaOutlet, biayaLain, items }) {
+    /** Simpan form "Edit menu": nama, kategori, harga jual, dan komposisi (items = [{ id, bahanId, resepId, qty }]). Biaya lain tidak disentuh. */
+    async simpanMenu(menuId, { nama, kategoriId, hargaOutlet, items }) {
       const m = model.menu.find((x) => x.id === menuId);
       const n = String(nama || '').trim();
-      if (!m || !n || !(hargaOutlet > 0) || !(biayaLain >= 0) || items.some((i) => !(i.qty > 0))) return false;
+      if (!m || !n || !(hargaOutlet > 0) || items.some((i) => !(i.qty > 0))) return false;
       const kolom = {};
       if (n !== m.nama) kolom.nama = n;
       if (kategoriId && kategoriId !== m.kategoriId) kolom.kategori_id = kategoriId;
       if (hargaOutlet !== m.hargaOutlet) kolom.harga_outlet = hargaOutlet;
-      if (biayaLain !== m.biayaLain) kolom.biaya_lain = biayaLain;
       try {
         if (Object.keys(kolom).length) await repo.ubahMenu(db, menuId, kolom);
         await terapkanItems(m.items, items, {

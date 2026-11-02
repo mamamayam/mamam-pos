@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Search, X } from 'lucide-react'
+import { Check, ChevronDown, Search, X } from 'lucide-react'
 import { parseAngka, rupiah, persen } from './hppFormat'
 import Overlay from '../components/ui/Overlay'
 import { useBackLayer } from './hppBackStack'
@@ -273,6 +273,41 @@ export function TombolDampak({ n, onClick }) {
       className="mt-2.5 w-full rounded-2xl border-[1.5px] border-accent-500 py-2.5 font-bold text-accent-600 active:scale-[0.98]">
       Lihat menu terdampak ({n})
     </button>
+  )
+}
+
+/**
+ * Dropdown: tombol yang menampilkan pilihan sekarang dan membuka bottom sheet berisi daftar pilihan (gaya yang sama dengan
+ * `Select` app utama, yang tidak boleh diimpor ke HPP). `options` = [{ id, nama }]; memilih langsung menutup sheet.
+ */
+export function Dropdown({ value, options, onChange, label, placeholder = 'Pilih' }) {
+  const [buka, setBuka] = useState(false)
+  const sekarang = options.find((o) => o.id === value)
+  return (
+    <>
+      <button type="button" aria-haspopup="dialog" aria-label={label} onClick={() => setBuka(true)}
+        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 py-3 text-left text-slate-800 active:scale-[0.99]">
+        <span className={`min-w-0 truncate ${sekarang ? '' : 'text-slate-400'}`}>{sekarang ? sekarang.nama : placeholder}</span>
+        <ChevronDown size={16} className="flex-none text-slate-400" aria-hidden="true" />
+      </button>
+      {buka && (
+        <Sheet title={label} onClose={() => setBuka(false)}>
+          {(tutup) => (
+            <ul className="overflow-hidden rounded-2xl border border-slate-100 bg-white">
+              {options.map((o) => (
+                <li key={o.id}>
+                  <button type="button" aria-pressed={o.id === value} onClick={() => { onChange(o.id); tutup() }}
+                    className={`flex w-full items-center justify-between gap-2 border-t border-slate-100 px-4 py-3 text-left first:border-t-0 active:bg-slate-50 ${o.id === value ? 'font-bold text-accent-700' : 'text-slate-800'}`}>
+                    <span className="min-w-0 truncate">{o.nama}</span>
+                    {o.id === value && <Check size={16} className="flex-none" aria-hidden="true" />}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Sheet>
+      )}
+    </>
   )
 }
 

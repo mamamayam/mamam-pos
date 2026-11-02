@@ -13,7 +13,7 @@ import ResepSheet from './ResepSheet.jsx';
 import DampakSheet from './DampakSheet.jsx';
 import SettingsSheet from './SettingsSheet.jsx';
 import KomposisiForm from './KomposisiForm.jsx';
-import { NotifKeluar, Sheet, Snack, Sparkline, Stepper, durasiKeluar, DURASI_KELUAR_MS } from './ui.jsx';
+import { Dropdown, NotifKeluar, Sheet, Snack, Sparkline, Stepper, durasiKeluar, DURASI_KELUAR_MS } from './ui.jsx';
 import { draftDariMenu, draftDariResep } from './hppModel';
 
 const render = (el) => renderToString(el).replace(/<!-- -->/g, '');
@@ -136,18 +136,21 @@ describe('layar HPP (render server)', () => {
     expect(html).toContain('>Edit<');
   });
 
-  it('form Edit menu: nama, kategori, harga jual (− +), komposisi, biaya lain, pratinjau modal, Simpan nonaktif sebelum ada perubahan', () => {
+  it('form Edit menu: nama, kategori (dropdown), harga jual (− +), komposisi, pratinjau modal; tanpa Biaya lain; Simpan nonaktif sebelum ada perubahan', () => {
     const html = render(<MenuSheet model={model} menuId="m1" actions={actions} onClose={noop} />);
     expect(html).toContain('Edit menu');
     expect(html).toContain('value="Paket Ayam"');
     expect(html).toContain('Kategori menu');
+    expect(html).toContain('aria-haspopup="dialog"');         // kategori = dropdown, bukan deretan chip
+    expect(html).toContain('>Paket<');
+    expect(html).not.toContain('>Satuan<');                   // kategori lain belum tampil sebelum dropdown dibuka
     expect(html).toContain('aria-label="Kurangi Harga jual outlet"');
     expect(html).toContain('value="10000"');
     expect(html).toContain('Komposisi');
     expect(html).toContain('Ayam goreng');
     expect(html).toContain('Tambah komponen');
-    expect(html).toContain('Biaya lain');
-    expect(html).toContain('value="500"');
+    expect(html).not.toContain('Biaya lain');
+    expect(html).not.toContain('aria-label="Biaya lain"');
     expect(html).toContain('Modal Rp 1.730 → <b class="text-slate-900">Rp 1.730</b>');
     expect(html).not.toContain('harga jual minimal');
     expect(html).toMatch(/disabled=""[^>]*>Simpan</);
@@ -183,6 +186,8 @@ describe('layar HPP (render server)', () => {
     expect(html).toContain('Isi per kg (dibagi per gr)');
     expect(html).toContain('Kategori bahan');
     expect(html).toContain('>Primer<');
+    expect(html).toContain('aria-haspopup="dialog"');
+    expect(html).not.toContain('>Packaging<');                // kategori = dropdown
     expect(html).not.toContain('>Ubah<');
   });
 
@@ -405,6 +410,21 @@ describe('daftar komposisi di form (KomposisiForm)', () => {
     const html = render(<KomposisiForm model={model} untuk={{ tipe: 'resep', resepId: 'porsi' }} draft={draftDariResep(model.resep.porsi)} onChange={noop} />);
     expect(html).toContain('aria-label="Takaran Saos"');
     expect(html).toContain('>gr<');
+  });
+});
+
+describe('Dropdown', () => {
+  const opsi = [{ id: 'a', nama: 'Ricebox' }, { id: 'b', nama: 'Wings' }];
+  it('menampilkan pilihan sekarang; daftar pilihan baru muncul setelah dibuka', () => {
+    const html = render(<Dropdown value="b" options={opsi} onChange={noop} label="Kategori menu" />);
+    expect(html).toContain('aria-label="Kategori menu"');
+    expect(html).toContain('aria-haspopup="dialog"');
+    expect(html).toContain('>Wings<');
+    expect(html).not.toContain('Ricebox');
+    expect(html).not.toContain('role="dialog"');
+  });
+  it('belum ada pilihan: tampil placeholder', () => {
+    expect(render(<Dropdown value={null} options={opsi} onChange={noop} label="Kategori menu" placeholder="Pilih kategori" />)).toContain('Pilih kategori');
   });
 });
 

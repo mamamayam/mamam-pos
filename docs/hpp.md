@@ -41,7 +41,7 @@ Variabel `VITE_SUPABASE_URL` dan `VITE_SUPABASE_ANON_KEY` sama dengan yang dipak
 | Harga per unit dasar bahan | `harga / isi` (isi = jumlah unit dasar dalam satu satuan beli, mis. 1 kg = 1000 gr) |
 | Baris resep (bahan) | `qty x harga per unit dasar` |
 | Baris resep (resep lain) | resep batch (punya `hasil_qty`): `qty / hasil_qty x total resep itu`; resep per porsi: `qty x total` |
-| HPP menu | jumlah komponen + `biaya_lain` |
+| HPP menu | jumlah komponen saja (`biaya_lain` tidak dihitung) |
 | Margin | `(harga jual outlet - HPP) / harga jual outlet` |
 | Kategori | HIGH jika margin >= batas atas, LOW jika < batas bawah, selain itu SEDANG (Pengaturan). Dua batas sama = hanya HIGH/LOW |
 | Harga online | harga outlet x (1 + markup), markup di Pengaturan (awal 25%) |
@@ -98,13 +98,13 @@ Dimigrasikan: **101 bahan** (94 di daftar + 7 yang hanya ada di sheet HPP), **37
 5 kategori bahan, 7 kategori menu. Daftar kontak pelanggan di PDF tidak dipakai dan tidak disimpan.
 
 - **HPP ke-54 menu sama persis dengan file** saat migrasi. Selisih antara HPP file dan komponen yang bisa
-  diuraikan disimpan di `biaya_lain` ("Biaya lain": packaging dkk). Nilainya tetap dihitung dan tampil sebagai baris "Biaya lain" di detail menu, tapi tidak bisa diubah dari halaman (ubah lewat SQL kalau perlu).
+  diuraikan disimpan di kolom `biaya_lain`. **Sejak 2 Nov 2026 kolom ini TIDAK dihitung lagi** (permintaan pemilik: modal menu hanya dari komponen): tidak masuk HPP, tidak tampil di UI. Kolomnya dibiarkan di database sebagai catatan; menu yang modalnya dulu hanya dari `biaya_lain` kini tampil "Belum diisi" sampai komposisinya diisi. Bersihkan nilainya lewat SQL kalau mau: `update hpp_menu set biaya_lain = 0;` (`hpp_file` tetap menyimpan angka aslinya).
 - **Komposisi menu adalah perkiraan awal**: protein (Mamam Chicken / Wingers / Classic Chicken) + Nasi +
   Topping sesuai nama menu; Twins = 0,5 porsi Wingers. File tidak memuat rincian bahan per menu. Koreksi lewat SQL
   (contoh di bawah) kalau berbeda dengan praktik di dapur.
 - Menu "Menu lain" nomor 3 sampai 5 (tanpa nama, HPP 0) tidak dimigrasikan.
 - Harga bahan mengikuti **daftar bahan** (sumber tunggal). Beberapa resep di sheet HPP memakai harga yang berbeda,
-  jadi total resepnya bergeser sedikit. HPP menu tidak ikut bergeser karena terkunci lewat `biaya_lain`.
+  jadi total resepnya bergeser sedikit. HPP menu ikut bergeser karena modal kini hanya dari komponen (`biaya_lain` tidak dihitung).
 
 | Resep | Di sheet | Di app | Penyebab |
 |---|---|---|---|

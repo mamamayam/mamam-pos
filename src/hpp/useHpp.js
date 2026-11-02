@@ -129,7 +129,7 @@ export function useHpp(db) {
       return true;
     },
 
-    /** Simpan form "Edit menu": nama, kategori, harga jual, dan komposisi (items = [{ id, bahanId, resepId, qty }]). Biaya lain tidak disentuh. */
+    /** Simpan form "Edit menu": nama, kategori, harga jual, dan komposisi (items = [{ id, bahanId, resepId, qty }]). Kolom biaya_lain tidak dihitung dan tidak disentuh. */
     async simpanMenu(menuId, { nama, kategoriId, hargaOutlet, items }) {
       const m = model.menu.find((x) => x.id === menuId);
       const n = String(nama || '').trim();

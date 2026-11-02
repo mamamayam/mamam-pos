@@ -5,8 +5,8 @@ import { Delta, Dropdown, FieldLabel, Pratinjau, Sheet, Stepper, TextInput, Tier
 import KomposisiForm from './KomposisiForm'
 
 /**
- * Form "Edit menu": nama, kategori (dropdown), harga jual, dan komposisi (takaran − / +, hapus, tambah). "Biaya lain"
- * tidak ada di form (permintaan pemilik 2 Nov 2026): nilainya tetap dihitung bila ada, tapi tidak diubah dari sini. Semua perubahan hanya draft sampai Simpan; pratinjau memperlihatkan modal dan margin
+ * Form "Edit menu": nama, kategori (dropdown), harga jual, dan komposisi (takaran − / +, hapus, tambah). Tidak ada kolom "Biaya lain"
+ * dan modal hanya dari komponen (permintaan pemilik 2 Nov 2026). Semua perubahan hanya draft sampai Simpan; pratinjau memperlihatkan modal dan margin
  * lama → baru. `actions.simpanMenu` (HppApp) menyimpan semuanya sekaligus.
  */
 export default function MenuSheet({ model, menuId, actions, onClose }) {

@@ -58,7 +58,7 @@ describe('layar HPP (render server)', () => {
   it('tab Menu: detail baris = komposisi, modal/jual/profit, riwayat modal turunan, dan tombol Edit', () => {
     const html = render(<MenuTab model={model} onOpen={noop} onAcuan={noop} adaPerubahan={false} awalBuka awalTerbuka={['m1']} />);
     expect(html).toContain('Ayam goreng');
-    expect(html).toContain('Biaya lain');
+    expect(html).not.toContain('Biaya lain');
     expect(html).toContain('Profit');
     expect(html).toContain('Riwayat modal');
     expect(html).toContain('Rp 1.704');                       // modal saat Ayam masih Rp800/kg

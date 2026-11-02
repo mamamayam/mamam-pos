@@ -22,12 +22,12 @@ export const RAW = {
     { id: 'i4', resep_id: 'porsi', urutan: 2, bahan_id: 'A', sub_resep_id: null, qty: 100 },
   ],
   menu: [
-    { id: 'm1', nama: 'Paket Ayam', kategori_id: 'km1', harga_outlet: 10000, biaya_lain: 500, hpp_file: 1730, urutan: 1 },
+    { id: 'm1', nama: 'Paket Ayam', kategori_id: 'km1', harga_outlet: 10000, biaya_lain: 0, hpp_file: 1730, urutan: 1 },
     { id: 'm2', nama: 'Kemasan Saja', kategori_id: 'km2', harga_outlet: 2000, biaya_lain: 0, hpp_file: 1000, urutan: 2 },
   ],
   menuItem: [
     { id: 'j1', menu_id: 'm1', urutan: 1, resep_id: 'porsi', bahan_id: null, qty: 1 },
-    { id: 'j2', menu_id: 'm1', urutan: 2, resep_id: null, bahan_id: 'B', qty: 1 },
+    { id: 'j2', menu_id: 'm1', urutan: 2, resep_id: null, bahan_id: 'B', qty: 1.5 },
     { id: 'j3', menu_id: 'm2', urutan: 1, resep_id: null, bahan_id: 'B', qty: 1 },
   ],
   riwayat: [

@@ -7,7 +7,7 @@
  *  - biaya baris resep (bahan)    = qty * harga per unit dasar
  *  - biaya baris resep (sub-resep)= resep batch (hasil_qty): qty / hasil_qty * total resep itu
  *                                   resep per porsi        : qty * total resep itu
- *  - HPP menu = jumlah komponen + biaya_lain (sisa yang belum diuraikan)
+ *  - HPP menu = jumlah komponen saja (kolom biaya_lain di database tidak lagi dihitung, permintaan pemilik 2 Nov 2026)
  *  - margin = (harga jual outlet - HPP) / harga jual outlet; HIGH jika >= batas atas, LOW jika < batas bawah.
  * Bahan tanpa harga dihitung 0 dan dilaporkan lewat menuBahanKosong().
  */
@@ -37,7 +37,7 @@ export function buildModel(raw) {
   }
   Object.values(resep).forEach((r) => r.items.sort((a, b) => a.urutan - b.urutan));
   const menu = (raw.menu || []).map((m) => ({
-    id: m.id, nama: m.nama, kategoriId: m.kategori_id ?? null, hargaOutlet: n(m.harga_outlet) ?? 0, biayaLain: n(m.biaya_lain) ?? 0,
+    id: m.id, nama: m.nama, kategoriId: m.kategori_id ?? null, hargaOutlet: n(m.harga_outlet) ?? 0,
     hppFile: n(m.hpp_file), urutan: n(m.urutan) ?? 0, aktif: m.aktif !== false, items: [],
   }));
   const menuById = Object.fromEntries(menu.map((m) => [m.id, m]));
@@ -97,7 +97,7 @@ export function makeCtx(model, overrides = {}) {
   };
   const itemCost = (it, stack) => (it.bahanId ? it.qty * unitCost(it.bahanId) : resepCost(it.subResepId, it.qty, stack));
   const menuItemCost = (it) => (it.bahanId ? it.qty * unitCost(it.bahanId) : resepCost(it.resepId, it.qty));
-  const menuHpp = (m) => m.items.reduce((s, it) => s + menuItemCost(it), 0) + m.biayaLain;
+  const menuHpp = (m) => m.items.reduce((s, it) => s + menuItemCost(it), 0);
   return { unitCost, resepTotal, resepCost, itemCost: (it) => itemCost(it, []), menuItemCost, menuHpp, priceOf };
 }
 
@@ -132,7 +132,7 @@ export function hargaMinimal(hpp, targetPct, step = 500) {
   return Math.ceil(hpp / (1 - targetPct / 100) / step) * step;
 }
 
-/** Komponen menu untuk tampilan: [{kind:'resep'|'bahan'|'lain', id, nama, qty, unit, biaya}] urut biaya terbesar. */
+/** Komponen menu untuk tampilan: [{kind:'resep'|'bahan', id, nama, qty, unit, biaya}] urut biaya terbesar. */
 export function menuParts(model, ctx, m) {
   const parts = m.items.map((it) => {
     if (it.bahanId) {

@@ -26,7 +26,7 @@ export default function MenuTab({ model, onOpen, onAcuan, adaPerubahan, q = '', 
       <DaftarKelompok grup={grup} cari={cari} awalBuka={awalBuka} kosong="Tidak ada menu yang cocok"
         renderItem={(m) => {
           const i = info.get(m.id)
-          const kosong = m.items.length === 0 && !m.biayaLain
+          const kosong = m.items.length === 0
           return (
             <BarisLipat key={m.id} buka={terbuka.has(m.id)} onToggle={() => toggle(m.id)} judul={m.nama}
               sub={<>Jual {rupiah(m.hargaOutlet)}{!kosong && <Delta value={i.delta} className="ml-1" />}</>}
@@ -66,7 +66,7 @@ function DetailMenu({ model, ctx, m, info, kosong }) {
       {parts.map((p) => (
         <div key={`${p.kind}-${p.itemId ?? p.id}`} className="flex items-center justify-between gap-3 border-t border-slate-100 py-1.5 text-sm first:border-t-0">
           <span className="min-w-0 truncate text-slate-700">{p.nama}</span>
-          <span className="flex-none text-slate-400">{p.kind === 'lain' ? '' : `${angka(p.qty)} ${p.unit}`}</span>
+          <span className="flex-none text-slate-400">{`${angka(p.qty)} ${p.unit}`}</span>
           <span className="w-24 flex-none text-right font-semibold tabular-nums text-slate-800">{rupiah(p.biaya)}</span>
         </div>
       ))}

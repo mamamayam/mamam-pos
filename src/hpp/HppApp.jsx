@@ -16,7 +16,8 @@ import { useHpp } from './useHpp'
 import { dampakUbah, ringkasanDaftar } from './hppModel'
 import { ringkasUbahBahan } from './hppFormat'
 import { setelahSinkron, useBackLayer, useExitHint } from './hppBackStack'
-import { NotifKeluar, SearchBox, Snack } from './ui'
+import { IndikatorTarik, NotifKeluar, SearchBox, Snack } from './ui'
+import { useTarikSegarkan } from './useTarikSegarkan'
 
 /**
  * Root HPP (path /hpp dan /hpp/*). Dimuat lewat React.lazy dari src/main.jsx, jadi menjadi
@@ -33,6 +34,7 @@ export default function HppApp() {
   const [auth, setAuth] = useState({ status: hppConfigured ? 'cek' : 'tidak-diset', email: '' })
 
   const tampilKeluar = useExitHint()
+  const akar = useRef(null)   // elemen <main> yang menggulir: dipakai gestur tarik-untuk-memuat-ulang
 
   useEffect(() => { document.title = 'Mamam HPP' }, [])
   useEffect(() => {
@@ -50,7 +52,7 @@ export default function HppApp() {
   const logout = async () => { await keluar(hppDb); setAuth({ status: 'keluar', email: '' }) }
 
   return (
-    <main className="fixed inset-0 overflow-y-auto bg-slate-50 font-body text-slate-800">
+    <main ref={akar} className="fixed inset-0 overflow-y-auto overscroll-y-contain bg-slate-50 font-body text-slate-800">
       {auth.status === 'tidak-diset' && (
         <Pesan judul="HPP belum tersambung ke database">
           Isi VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY di environment, lalu build ulang.
@@ -58,7 +60,7 @@ export default function HppApp() {
       )}
       {auth.status === 'cek' && <Pesan judul="Memeriksa sesi…" />}
       {auth.status === 'keluar' && <LoginScreen onMasuk={login} />}
-      {auth.status === 'masuk' && <Cangkang db={hppDb} email={auth.email} onKeluar={logout} />}
+      {auth.status === 'masuk' && <Cangkang db={hppDb} email={auth.email} onKeluar={logout} akar={akar} />}
       <NotifKeluar tampil={tampilKeluar} />
     </main>
   )
@@ -76,7 +78,7 @@ function Pesan({ judul, children, aksi }) {
   )
 }
 
-function Cangkang({ db, email, onKeluar }) {
+function Cangkang({ db, email, onKeluar, akar }) {
   const { model, status, galat, pesan, actions: aksiDasar, raw } = useHpp(db)
   const [tab, setTab] = useState(() => tabFromPath(window.location.pathname))
   const [lembar, setLembar] = useState(null)   // { t: 'menu' | 'resep' | 'bahan' | 'set' | 'dampak', id } ('dampak' membawa judul dan rows)
@@ -135,6 +137,8 @@ function Cangkang({ db, email, onKeluar }) {
     })
   }, [tab])
   const tutup = useCallback(() => setLembar(null), [])
+  // Tarik daftar ke bawah dari paling atas = muat ulang data (tab, kata cari, dan popup tidak berubah). Pengaman: lihat useTarikSegarkan.js.
+  const tarikSegarkan = useTarikSegarkan(akar, { onSegarkan: actions.reload })
 
   if (status === 'loading') return <Pesan judul="Memuat data HPP…" />
   if (status === 'error') {
@@ -156,6 +160,7 @@ function Cangkang({ db, email, onKeluar }) {
 
   return (
     <>
+      <IndikatorTarik {...tarikSegarkan} />
       <header className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
           <span className="bg-gradient-to-br from-slate-900 to-slate-500 bg-clip-text font-heading text-2xl font-bold text-transparent">HPP</span>

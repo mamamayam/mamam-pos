@@ -13,8 +13,9 @@ import ResepSheet from './ResepSheet.jsx';
 import DampakSheet from './DampakSheet.jsx';
 import SettingsSheet from './SettingsSheet.jsx';
 import KomposisiForm from './KomposisiForm.jsx';
-import { Dropdown, NotifKeluar, Sheet, Snack, Sparkline, Stepper, durasiKeluar, DURASI_KELUAR_MS } from './ui.jsx';
+import { Dropdown, IndikatorTarik, NotifKeluar, Sheet, Snack, Sparkline, Stepper, durasiKeluar, DURASI_KELUAR_MS } from './ui.jsx';
 import { draftDariMenu, draftDariResep } from './hppModel';
+import { AMBANG_TARIK } from './useTarikSegarkan';
 
 const render = (el) => renderToString(el).replace(/<!-- -->/g, '');
 const noop = () => {};
@@ -455,5 +456,26 @@ describe('komponen baru popup/daftar HPP', () => {
     expect(html).toContain('>Lihat<');
     expect(html).toContain('z-[60]');
     expect(render(<Snack pesan={null} onTutup={noop} />)).toBe('');
+  });
+});
+
+describe('tarik untuk memuat ulang (HPP)', () => {
+  const baca = (f) => fs.readFileSync(new URL(`./${f}`, import.meta.url), 'utf8');
+  it('indikator: tersembunyi saat tidak ditarik, muncul saat ditarik, berputar saat memuat ulang', () => {
+    expect(render(<IndikatorTarik tarik={0} menarik={false} menyegarkan={false} />)).toBe('');
+    const tarik = render(<IndikatorTarik tarik={30} menarik menyegarkan={false} />);
+    expect(tarik).toContain('data-testid="indikator-tarik"');
+    expect(tarik).not.toContain('animate-spin');
+    const siap = render(<IndikatorTarik tarik={AMBANG_TARIK} menarik={false} menyegarkan />);
+    expect(siap).toContain('animate-spin');
+    expect(siap).toContain('text-accent-600');
+  });
+  it('HppApp: <main> jadi akar gestur, memuat ulang DATA lewat actions.reload (bukan reload halaman), dan tidak mengimpor hook POS', () => {
+    const src = baca('./HppApp.jsx');
+    expect(src).toMatch(/<main ref=\{akar\}[^>]*overscroll-y-contain/);
+    expect(src).toMatch(/useTarikSegarkan\(akar, \{ onSegarkan: actions\.reload \}\)/);
+    expect(src).toMatch(/<IndikatorTarik \{\.\.\.tarikSegarkan\} \/>/);
+    expect(src).not.toMatch(/location\.reload/);
+    expect(baca('./useTarikSegarkan.js')).not.toMatch(/from '\.\.\//);
   });
 });

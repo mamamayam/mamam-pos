@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, ChevronDown, Search, X } from 'lucide-react'
+import { Check, ChevronDown, RefreshCw, Search, X } from 'lucide-react'
 import { parseAngka, rupiah, persen } from './hppFormat'
 import Overlay from '../components/ui/Overlay'
 import { useBackLayer } from './hppBackStack'
+import { AMBANG_TARIK } from './useTarikSegarkan'
 import './hppAnim.css'
 
 /** Potongan tampilan bersama halaman HPP. Gaya mengikuti app (accent, slate, rounded-2xl, font-heading). */
@@ -140,6 +141,21 @@ export function Sheet({ title, onClose, children, full = false }) {
  * Tampil saat Back ditekan di Menu; Back kedua dalam 2 detik meninggalkan HPP (kembali ke POS).
  * `tampil` dari `useExitHint()` (hppBackStack.js). Tidak menangkap sentuhan dan berada di atas popup.
  */
+/** Lingkaran kecil yang turun saat daftar ditarik; berputar saat memuat ulang (kembaran PullIndicator milik POS). */
+export function IndikatorTarik({ tarik, menarik, menyegarkan }) {
+  if (tarik <= 0 && !menyegarkan) return null
+  const siap = tarik >= AMBANG_TARIK
+  return (
+    <div aria-hidden="true" data-testid="indikator-tarik" className="pointer-events-none absolute left-0 right-0 top-0 z-30 flex justify-center"
+      style={{ transform: `translateY(${tarik - 44}px)`, opacity: Math.min(1, tarik / (AMBANG_TARIK * 0.7)), transition: menarik ? 'none' : 'transform 0.2s ease-out, opacity 0.2s ease-out' }}>
+      <div className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white shadow-md">
+        <RefreshCw size={16} className={`${siap || menyegarkan ? 'text-accent-600' : 'text-slate-400'} ${menyegarkan ? 'animate-spin' : ''}`}
+          style={menyegarkan ? undefined : { transform: `rotate(${tarik * 3}deg)` }} />
+      </div>
+    </div>
+  )
+}
+
 export function NotifKeluar({ tampil }) {
   const [ada, setAda] = useState(tampil)   // tetap terpasang selama animasi keluar
   useEffect(() => {

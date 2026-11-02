@@ -479,3 +479,18 @@ describe('tarik untuk memuat ulang (HPP)', () => {
     expect(baca('./useTarikSegarkan.js')).not.toMatch(/from '\.\.\//);
   });
 });
+
+describe('salin komposisi dari menu lain (form Edit menu)', () => {
+  it('Edit menu menampilkan tombol "Salin dari menu lain" di bawah komposisi; pilihan menu belum terbuka', () => {
+    const html = render(<MenuSheet model={model} menuId="m1" actions={actions} onClose={noop} />);
+    expect(html).toContain('Salin dari menu lain');
+    expect(html).not.toContain('data-testid="salin-komposisi"');
+    expect(html.indexOf('Salin dari menu lain')).toBeGreaterThan(html.indexOf('Tambah komponen'));
+  });
+  it('hasil salinan hanya mengubah draft form (onSalin = setDraft), tidak menyimpan apa pun', () => {
+    const src = fs.readFileSync(new URL('./MenuSheet.jsx', import.meta.url), 'utf8');
+    expect(src).toMatch(/<SalinKomposisi [^>]*onSalin=\{setDraft\}/);
+    const komp = fs.readFileSync(new URL('./SalinKomposisi.jsx', import.meta.url), 'utf8');
+    expect(komp).not.toMatch(/actions\.|simpanMenu|simpanResep|simpanBahan/);
+  });
+});

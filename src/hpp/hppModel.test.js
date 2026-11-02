@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { RAW } from './fixture';
 import {
   bisaTambahSub, buildModel, ctxAcuan, dampakUbah, dampakUbahResep, draftBerubah, draftDariMenu, draftDariResep, draftValid, hargaMinimal, hargaPada, isiBawaan, kelompokResep, kelompokkan, makeCtx, marginPct,
-  itemsMenuDariDraft, itemsResepDariDraft, menuBahanKosong, menuInfo, menuParts, modelDenganResep, resepPerUnit, ringkasanDaftar, menusUsingBahan, menusUsingResep, opsiSatuan, perubahanTerakhir, resepMemuat, resepRows, riwayatBahanRows,
+  itemsMenuDariDraft, itemsResepDariDraft, draftSalinDariMenu, menuSumberSalin, menuBahanKosong, menuInfo, menuParts, modelDenganResep, resepPerUnit, ringkasanDaftar, menusUsingBahan, menusUsingResep, opsiSatuan, perubahanTerakhir, resepMemuat, resepRows, riwayatBahanRows,
   riwayatModalRows, tierOf, tiersFor,
 } from './hppModel';
 
@@ -346,5 +346,42 @@ describe('draft form komposisi dan dampak resep', () => {
     expect(ringkasanDaftar(kosong)).toBe('3 bahan · 2 resep · 2 menu · komposisi belum diisi');
     const rendah = buildModel({ ...RAW, setting: [{ key: 'margin', value: { lo: 90, hi: 90 } }] });
     expect(ringkasanDaftar(rendah)).toContain('2 menu LOW (di bawah 90%)');
+  });
+});
+
+describe('salin komposisi dari menu lain', () => {
+  it('draft salinan: semua baris baru (id null, key unik) dengan jenis, acuan, dan takaran yang sama', () => {
+    const m = model();
+    const sumber = m.menu.find((x) => x.id === 'm1');
+    const d = draftSalinDariMenu(sumber);
+    expect(d).toHaveLength(sumber.items.length);
+    expect(d.every((x) => x.id === null)).toBe(true);
+    expect(new Set(d.map((x) => x.key)).size).toBe(d.length);
+    expect(d.map(({ kind, ref, qty }) => ({ kind, ref, qty }))).toEqual(draftDariMenu(sumber).map(({ kind, ref, qty }) => ({ kind, ref, qty })));
+    expect(draftValid(d)).toBe(true);
+  });
+  it('menu tujuan yang sudah punya komposisi: baris lamanya hilang dari draft (terhapus saat Simpan), draft dianggap berubah', () => {
+    const m = model();
+    const tujuan = m.menu.find((x) => x.id === 'm2');
+    const hasil = draftSalinDariMenu(m.menu.find((x) => x.id === 'm1'));
+    expect(hasil.some((x) => x.id === tujuan.items[0].id)).toBe(false);
+    expect(draftBerubah(draftDariMenu(tujuan), hasil)).toBe(true);
+  });
+  it('hitungan modal menu tujuan sama dengan menu sumber setelah disalin', () => {
+    const m = model();
+    const sumber = m.menu.find((x) => x.id === 'm1');
+    const tujuan = { ...m.menu.find((x) => x.id === 'm2'), items: itemsMenuDariDraft(draftSalinDariMenu(sumber)) };
+    const sesudah = { ...m, menu: m.menu.map((x) => (x.id === tujuan.id ? tujuan : x)) };
+    expect(menuInfo(sesudah, makeCtx(sesudah), tujuan).hpp).toBe(menuInfo(m, makeCtx(m), sumber).hpp);
+  });
+  it('daftar sumber: menu lain yang punya komponen, bisa dicari, tanpa menu yang sedang diedit; menu kosong tidak ditawarkan', () => {
+    const m = model();
+    expect(menuSumberSalin(m, 'm1').map((x) => x.id)).not.toContain('m1');
+    expect(menuSumberSalin(m, 'm1').every((x) => x.items.length > 0)).toBe(true);
+    const semua = menuSumberSalin(m, 'zzz');
+    expect(semua.map((x) => x.nama)).toEqual([...semua.map((x) => x.nama)].sort((a, b) => a.localeCompare(b, 'id')));
+    expect(menuSumberSalin(m, 'zzz', 'tidak-ada-menu-ini')).toEqual([]);
+    const kosong = { ...m, menu: m.menu.map((x) => (x.id === 'm2' ? { ...x, items: [] } : x)) };
+    expect(menuSumberSalin(kosong, 'm1').map((x) => x.id)).not.toContain('m2');
   });
 });

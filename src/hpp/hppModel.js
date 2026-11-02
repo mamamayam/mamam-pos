@@ -350,6 +350,20 @@ export function isiBawaan(satuan, unitDasar) {
 export const draftDariMenu = (m) => m.items.map((it) => ({ key: it.id, id: it.id, kind: it.bahanId ? 'bahan' : 'resep', ref: it.bahanId ?? it.resepId, qty: String(it.qty) }));
 export const draftDariResep = (r) => r.items.map((it) => ({ key: it.id, id: it.id, kind: it.bahanId ? 'bahan' : 'resep', ref: it.bahanId ?? it.subResepId, qty: String(it.qty) }));
 
+/**
+ * Draft komposisi hasil MENYALIN komponen `sumber` (menu lain): semua baris jadi baris BARU (id null) dengan takaran yang sama.
+ * Dipakai tombol "Salin dari menu lain" di form Edit menu; baris lama menu tujuan (kalau ada) hilang dari draft dan terhapus saat Simpan.
+ */
+export const draftSalinDariMenu = (sumber) => draftDariMenu(sumber).map((d, i) => ({ ...d, key: `salin-${i}-${d.kind}-${d.ref}`, id: null }));
+
+/** Menu yang bisa jadi sumber salinan untuk `menuId`: menu LAIN yang punya komponen, nama cocok dengan `q` (kosong = semua), urut nama. */
+export function menuSumberSalin(model, menuId, q = '') {
+  const cari = String(q ?? '').trim().toLowerCase();
+  return model.menu
+    .filter((m) => m.id !== menuId && m.items.length > 0 && (!cari || m.nama.toLowerCase().includes(cari)))
+    .sort((a, b) => a.nama.localeCompare(b.nama, 'id'));
+}
+
 /** Semua takaran draft angka valid dan lebih dari 0. */
 export const draftValid = (draft) => draft.every((d) => { const q = parseAngka(d.qty); return q !== null && q > 0; });
 

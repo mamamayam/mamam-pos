@@ -3,9 +3,10 @@ import { draftBerubah, draftDariMenu, draftValid, hargaMinimal, itemsMenuDariDra
 import { parseAngka, persen, rupiah } from './hppFormat'
 import { Delta, Dropdown, FieldLabel, Pratinjau, Sheet, Stepper, TextInput, TierBadge, TombolForm } from './ui'
 import KomposisiForm from './KomposisiForm'
+import SalinKomposisi from './SalinKomposisi'
 
 /**
- * Form "Edit menu": nama, kategori (dropdown), harga jual, dan komposisi (takaran − / +, hapus, tambah). Tidak ada kolom "Biaya lain"
+ * Form "Edit menu": nama, kategori (dropdown), harga jual, dan komposisi (takaran − / +, hapus, tambah, atau salin dari menu lain). Tidak ada kolom "Biaya lain"
  * dan modal hanya dari komponen (permintaan pemilik 2 Nov 2026). Semua perubahan hanya draft sampai Simpan; pratinjau memperlihatkan modal dan margin
  * lama → baru. `actions.simpanMenu` (HppApp) menyimpan semuanya sekaligus.
  */
@@ -56,6 +57,7 @@ export default function MenuSheet({ model, menuId, actions, onClose }) {
 
             <FieldLabel>Komposisi</FieldLabel>
             <KomposisiForm model={model} untuk={{ tipe: 'menu' }} draft={draft} onChange={setDraft} />
+            <SalinKomposisi model={model} menuId={m.id} jumlahSekarang={draft.length} onSalin={setDraft} />
 
             <Pratinjau>
               {hitung

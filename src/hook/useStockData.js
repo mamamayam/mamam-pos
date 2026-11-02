@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase';
 import { isMissingTable } from './deviceLogic';
 import { businessDate, moveId } from '../features/stock/stockMath';
 import { pengisiNames } from '../features/stock/stockPengisi';
+import { withOpname } from '../features/stock/opnameMath';
+import { OPNAME_MIGRATION_HINT } from './useOpname';
 
 /**
  * useStockData — Stok Belanja (migrasi 020): master kategori/item, isian HARI INI, dan stok terakhir tersimpan.
@@ -24,6 +26,7 @@ export function useStockData() {
   const [today, setToday] = useState(() => businessDate());
   const [counts, setCounts] = useState({});
   const [latest, setLatest] = useState({});
+  const [opname, setOpnameState] = useState(false);       // mode stok opname (migrasi 022): semua item wajib diisi
 
   const countsRef = useRef({});
   const dirtyRef = useRef(new Set());
@@ -32,12 +35,13 @@ export function useStockData() {
 
   const reload = useCallback(async () => {
     const d = businessDate();
-    const [cats, its, dayRes, cnt, lat] = await Promise.all([
+    const [cats, its, dayRes, cnt, lat, setRes] = await Promise.all([
       supabase.from('stock_categories').select('*').order('sort_order').order('created_at'),
       supabase.from('stock_items').select('*').order('sort_order').order('created_at'),
       supabase.from('stock_days').select('*').eq('day', d).maybeSingle(),
       supabase.from('stock_counts').select('item_id, qty, skipped').eq('day', d),
       supabase.from('stock_latest').select('*'),
+      supabase.from('stock_settings').select('opname_aktif').eq('id', 1).maybeSingle(),   // migrasi 022 belum jalan = galat diabaikan, mode opname mati
     ]);
     const error = [cats, its, dayRes, cnt, lat].find((r) => r.error)?.error;
     if (error) {
@@ -52,7 +56,8 @@ export function useStockData() {
     const latestMap = {};
     for (const r of lat.data || []) latestMap[r.item_id] = { ...r, qty: num(r.qty) };
     setCategories(cats.data || []);
-    setItems((its.data || []).map((i) => ({ ...i, min_qty: Number(i.min_qty) })));
+    setItems((its.data || []).map((i) => ({ ...i, min_qty: Number(i.min_qty), unit_cost: num(i.unit_cost) })));
+    setOpnameState(Boolean(!setRes.error && setRes.data?.opname_aktif));
     setDay(dayRes.data || null);
     setToday(d);
     setCounts(server);
@@ -71,6 +76,9 @@ export function useStockData() {
     () => categories.map((c) => ({ ...c, items: items.filter((i) => i.category_id === c.id) })),
     [categories, items],
   );
+
+  /** Master untuk MENGISI: saat mode opname aktif semua item wajib. Kelola dan Riwayat memakai `master` apa adanya. */
+  const fillMaster = useMemo(() => withOpname(master, opname), [master, opname]);
 
   /* ── isian harian ─────────────────────────────────────────────────── */
   const ensureDay = useCallback(async () => {
@@ -129,6 +137,13 @@ export function useStockData() {
     await reload();
   }, [reload]);
 
+  /** Nyalakan / matikan mode stok opname (owner). Menyalakan membuka kembali hasil hari ini yang belum hitungan penuh. */
+  const setOpname = useCallback(async (on) => {
+    const { error } = await supabase.rpc('stok_opname_set', { p_aktif: Boolean(on) });
+    if (error) throw new Error(isMissingTable(error) ? OPNAME_MIGRATION_HINT : `Gagal mengubah mode opname: ${error.message}`);
+    await reload();
+  }, [reload]);
+
   /* ── master (owner) ───────────────────────────────────────────────── */
   const addCategory = useCallback(async (name) => {
     const clean = String(name || '').trim();
@@ -182,6 +197,8 @@ export function useStockData() {
     if ('name' in clean) { clean.name = String(clean.name || '').trim(); if (!clean.name) throw new Error('Nama item wajib diisi.'); }
     if ('unit' in clean) clean.unit = String(clean.unit || '').trim() || 'pcs';
     if ('min_qty' in clean) clean.min_qty = Math.max(0, Number(clean.min_qty) || 0);
+    // Harga modal per satuan (owner): kosong = belum ada harga (null), angka = rupiah bulat >= 0.
+    if ('unit_cost' in clean) clean.unit_cost = clean.unit_cost === null || clean.unit_cost === '' ? null : Math.max(0, Math.round(Number(clean.unit_cost) || 0));
     const { error } = await supabase.from('stock_items').update(clean).eq('id', id);
     if (error) fail(error, 'Gagal mengubah item');
     setItems((cur) => cur.map((i) => (i.id === id ? { ...i, ...clean } : i)));
@@ -205,31 +222,45 @@ export function useStockData() {
   }, [items, writeOrder, reload]);
 
   return {
-    ...status, master, day, today, counts, latest,
+    ...status, master, fillMaster, opname, day, today, counts, latest,
     locked: Boolean(day?.saved_at), doneIds: day?.done_categories || [],
-    reload, setCount, persist, flush, finishCategory, save, reopenDay,
+    reload, setCount, persist, flush, finishCategory, save, reopenDay, setOpname,
     addCategory, renameCategory, deleteCategory, moveCategory, addItem, updateItem, deleteItem, moveItem,
   };
 }
 
-/** Riwayat beberapa hari terakhir yang SUDAH disimpan: [{ day, saved_by, saved_at, counts: [{ item_id, qty }] }]. */
-export function useStockHistory(enabled, limit = 14) {
-  const [state, setState] = useState({ loading: false, error: '', rows: [] });
+/**
+ * Riwayat hari yang SUDAH disimpan. `days` = SEMUA hari (ringan, tanpa isian; untuk "Pilih hari lain"); `rows` = `recent` hari terbaru
+ * lengkap dengan isiannya (untuk ringkasan habis/menipis). Isian hari lain dimuat saat dibuka lewat `loadCounts(day)` (batas 1000 baris
+ * per permintaan, jadi isian tidak dimuat massal): [{ item_id, qty }].
+ */
+export function useStockHistory(enabled, { recent = 3, limit = 400 } = {}) {
+  const [state, setState] = useState({ loading: false, error: '', days: [], counts: {} });
   const reload = useCallback(async () => {
     setState((s) => ({ ...s, loading: true }));
-    const { data: days, error } = await supabase.from('stock_days').select('day, saved_by, saved_at').not('saved_at', 'is', null).order('day', { ascending: false }).limit(limit);
-    if (error) { setState({ loading: false, error: isMissingTable(error) ? STOCK_MIGRATION_HINT : error.message, rows: [] }); return; }
-    const list = days || [];
-    let byDay = {};
-    if (list.length) {
-      const { data: cnt, error: e2 } = await supabase.from('stock_counts').select('day, item_id, qty').in('day', list.map((d) => d.day));
-      if (e2) { setState({ loading: false, error: e2.message, rows: [] }); return; }
+    const { data: days, error } = await supabase.from('stock_days').select('*').not('saved_at', 'is', null).order('day', { ascending: false }).limit(limit);
+    if (error) { setState({ loading: false, error: isMissingTable(error) ? STOCK_MIGRATION_HINT : error.message, days: [], counts: {} }); return; }
+    const list = (days || []).map((d) => ({ day: String(d.day).slice(0, 10), saved_by: d.saved_by, saved_at: d.saved_at, full_count: Boolean(d.full_count) }));
+    const byDay = {};
+    const eager = list.slice(0, recent).map((d) => d.day);
+    if (eager.length) {
+      const { data: cnt, error: e2 } = await supabase.from('stock_counts').select('day, item_id, qty').in('day', eager);
+      if (e2) { setState({ loading: false, error: e2.message, days: [], counts: {} }); return; }
       for (const r of cnt || []) (byDay[r.day] = byDay[r.day] || []).push({ item_id: r.item_id, qty: num(r.qty) });
+      for (const d of eager) byDay[d] = byDay[d] || [];
     }
-    setState({ loading: false, error: '', rows: list.map((d) => ({ ...d, counts: byDay[d.day] || [] })) });
-  }, [limit]);
+    setState({ loading: false, error: '', days: list, counts: byDay });
+  }, [limit, recent]);
   useEffect(() => { if (enabled) reload(); }, [enabled, reload]);
-  return { ...state, reload };
+
+  const loadCounts = useCallback(async (day) => {
+    const { data, error } = await supabase.from('stock_counts').select('item_id, qty').eq('day', day);
+    if (error) throw new Error(error.message);
+    return (data || []).map((r) => ({ item_id: r.item_id, qty: num(r.qty) }));
+  }, []);
+
+  const rows = useMemo(() => state.days.slice(0, recent).map((d) => ({ ...d, counts: state.counts[d.day] || [] })), [state.days, state.counts, recent]);
+  return { loading: state.loading, error: state.error, days: state.days, rows, loadCounts, reload };
 }
 
 /** Nama karyawan yang boleh dipilih sebagai pengisi checklist (dari tabel employees; lihat `pengisiNames`). */

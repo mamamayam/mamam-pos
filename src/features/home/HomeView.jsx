@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { TrendingUp, TrendingDown, Receipt, Wallet, DollarSign, ChevronRight } from 'lucide-react';
 import { formatRupiah } from '../../utils/formatters';
 import QuickEntrySection from './QuickEntrySection';
+import OpnameReminder from './OpnameReminder';
 import { useAuth } from '../../auth/AuthContext';
 import { useAppContext } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
@@ -141,6 +142,9 @@ const HomeView = () => {
 
     return (
         <div className="p-4 md:p-6 bg-slate-50 dark:bg-slate-950 flex-1 flex flex-col h-full overflow-y-auto pb-6 animate-in fade-in slide-in-from-bottom-4 duration-300 ease-out custom-scrollbar">
+
+            {/* Pengingat stok opname (owner, H-1 dan hari H; tiap kali aplikasi dibuka) */}
+            <OpnameReminder />
 
             {/* Hero Card — Total Penjualan Hari Ini */}
             <button type="button" onClick={() => navigate('riwayat')} aria-label="Buka riwayat penjualan"

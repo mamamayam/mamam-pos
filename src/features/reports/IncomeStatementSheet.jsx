@@ -11,13 +11,16 @@ import { percentOf, formatPercent } from './incomeStatementMath';
  * Rincian Beban Operasional = satu baris per kategori pengeluaran di app (nama kategori apa adanya), jadi kategori yang
  * ditambah / diganti di app ikut berubah di sini tanpa mengubah kode ini.
  *
- * Props: isOpen, onClose, statement (hasil `buildIncomeStatement`), periodLabel (teks periode di judul).
+ * Stok awal/akhir hanya ada untuk periode Bulanan (hitungan penuh stok opname): `monthly` false = chip "Hanya bulanan" bukan "Belum diisi".
+ * Waste mengurangi HPP dan dicatat lagi sebagai "Kerugian waste" di Beban Operasional (Net Profit tidak berubah karenanya).
+ *
+ * Props: isOpen, onClose, statement (hasil `buildIncomeStatement`), periodLabel (teks periode di judul), monthly (default true).
  */
 const COLS = 'grid grid-cols-[minmax(0,1fr)_auto_3.25rem] items-center gap-x-2';
 const LEVEL = { 1: 'pl-3', 2: 'pl-7' };
 const STRONG = 'font-bold text-slate-800 dark:text-slate-100';
 
-export default function IncomeStatementSheet({ isOpen, onClose, statement: s, periodLabel }) {
+export default function IncomeStatementSheet({ isOpen, onClose, statement: s, periodLabel, monthly = true }) {
   const { formatRupiah } = useAppContext();
   const total = s?.totalPendapatan ?? 0;
   const pc = (n) => formatPercent(percentOf(n, total));
@@ -40,9 +43,9 @@ export default function IncomeStatementSheet({ isOpen, onClose, statement: s, pe
     </div>
   );
 
-  const soon = (label) => line(label, 0, {
+  const soon = (label, chip = 'Belum diisi') => line(label, 0, {
     pending: true,
-    badge: <span className="ml-1.5 align-[1px] not-italic text-[9.5px] font-bold uppercase tracking-wide rounded-md px-1.5 py-px bg-accent-100 text-accent-700 dark:bg-accent-500/20 dark:text-accent-300">Menyusul</span>,
+    badge: <span className="ml-1.5 align-[1px] not-italic text-[9.5px] font-bold uppercase tracking-wide rounded-md px-1.5 py-px bg-accent-100 text-accent-700 dark:bg-accent-500/20 dark:text-accent-300">{chip}</span>,
   });
 
   const section = (title, hint) => (
@@ -98,11 +101,11 @@ export default function IncomeStatementSheet({ isOpen, onClose, statement: s, pe
 
         <div className="h-2" />
         {section('Harga Pokok Produksi (HPP)', 'Stok awal + belanja − stok akhir − waste')}
-        {h.pending.stokAwal ? soon('Stok awal bulan') : line('Stok awal bulan', h.stokAwal)}
+        {h.pending.stokAwal ? soon('Stok awal bulan', monthly ? 'Belum diisi' : 'Hanya bulanan') : line('Stok awal bulan', h.stokAwal, { testId: 'is-stok-awal' })}
         {line('+ Belanja bulan ini', h.belanja, { testId: 'is-belanja' })}
         {line('+ Bayar Ayam', h.bayarAyam, { testId: 'is-bayar-ayam' })}
-        {h.pending.stokAkhir ? soon('− Stok akhir bulan') : line('− Stok akhir bulan', h.stokAkhir)}
-        {h.pending.waste ? soon('− Waste') : line('− Waste', h.waste)}
+        {h.pending.stokAkhir ? soon('− Stok akhir bulan', monthly ? 'Belum diisi' : 'Hanya bulanan') : line('− Stok akhir bulan', h.stokAkhir, { testId: 'is-stok-akhir' })}
+        {h.pending.waste ? soon('− Waste') : line('− Waste', h.waste, { testId: 'is-waste' })}
         {totalRow('Total HPP', h.total, 'is-total-hpp')}
 
         <div className="h-2" />
@@ -113,7 +116,8 @@ export default function IncomeStatementSheet({ isOpen, onClose, statement: s, pe
         {line('Gaji karyawan', b.gaji.total, { strong: true, testId: 'is-gaji' })}
         {b.gaji.items.map((c) => line(c.category, c.total, { level: 2, testId: `is-gaji-${c.category}` }))}
         {b.operasional.items.map((c) => line(c.category, c.total, { testId: `is-beban-${c.category}` }))}
-        {b.operasional.items.length === 0 && <p className="px-4 py-1.5 pl-7 text-xs text-slate-400">Belum ada kategori biaya lain.</p>}
+        {!b.waste.pending && b.waste.total > 0 && line('Kerugian waste', b.waste.total, { testId: 'is-beban-waste' })}
+        {b.operasional.items.length === 0 && b.waste.total === 0 && <p className="px-4 py-1.5 pl-7 text-xs text-slate-400">Belum ada kategori biaya lain.</p>}
         {totalRow('Total Beban Operasional', b.total, 'is-total-beban')}
 
         <div className="h-2" />

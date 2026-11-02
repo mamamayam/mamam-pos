@@ -20,8 +20,11 @@ import { OJOL_PLATFORMS } from '../../lib/ojolPlatforms';
  * tampil di sini. Hanya TIGA aturan nama yang tetap: "Belanja" dan "Bayar Ayam" = HPP, "Gaji…" dan "Kasbon…" = gaji karyawan.
  * Jadi HPP (belanja + bayar ayam) + Beban Operasional SELALU sama dengan total Pengeluaran Laporan.
  *
- * Stok awal, stok akhir, dan waste: formulirnya belum ada. `stock.{awal,akhir,waste}` = null berarti "belum diisi"
- * (tampil "Menyusul", dihitung 0). Kalau formulirnya sudah ada, cukup kirim angkanya lewat argumen `stock`.
+ * Stok awal, stok akhir, dan waste datang dari Stok Belanja (stok opname bulanan dan catatan Waste): `stock.{awal,akhir,waste}`.
+ * null = "belum diisi" (tampil "Belum diisi", dihitung 0); 0 = sudah diisi nol.
+ * Waste mengurangi HPP (stok yang terbuang tidak ikut terjual), TAPI nilainya dicatat lagi sebagai baris **Kerugian waste** di
+ * Beban Operasional supaya Net Profit tidak membesar karena waste (laba kotor naik, beban naik sama besar). Jadi
+ * HPP + Beban Operasional = total Pengeluaran + stok awal − stok akhir (sama persis dengan Pengeluaran Laporan kalau stok kosong).
  */
 
 const num = (v) => Number(v) || 0;
@@ -130,7 +133,8 @@ export function buildIncomeStatement({ sales = [], expenses = [], categories = [
   const beban = {
     gaji: { total: gajiTotal, items: gajiItems },
     operasional: { total: operasionalTotal, items: operasionalItems },
-    total: gajiTotal + operasionalTotal,
+    waste: { total: waste, pending: pending.waste },   // Kerugian waste: kebalikan pengurang di HPP
+    total: gajiTotal + operasionalTotal + waste,
   };
 
   return { totalPendapatan, pendapatan, hpp, labaKotor, beban, netProfit: labaKotor - beban.total, totalPengeluaran };

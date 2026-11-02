@@ -4,9 +4,11 @@ import { Card, Button } from '../../components/ui';
 import { useAppContext } from '../../context/AppContext';
 import { showToast } from '../../lib/toast';
 import { parseQty, formatQty } from './stockMath';
+import StockKelolaCards from './StockKelolaCards';
 
 /**
- * StockManage — tab Kelola (owner, izin `stok.kelola`): kategori, item, satuan, batas menipis, wajib/opsional, urutan.
+ * StockManage — tab Kelola (owner, izin `stok.kelola`): dua card tertutup di atas (Wajib/opsional harian, Harga modal; `StockKelolaCards`),
+ * lalu kategori, item, satuan, batas menipis, wajib/opsional, urutan.
  * Tiap perubahan langsung tersimpan (seperti Kelola Kategori Pengeluaran): teks disimpan saat kolom ditinggalkan (blur).
  * Hapus = hard delete; menghapus item/kategori ikut menghapus riwayat isiannya.
  * Form TAMBAH tidak menutup: toast lalu dikosongkan untuk item berikutnya.
@@ -72,6 +74,7 @@ export default function StockManage({ stock }) {
 
   return (
     <div className="space-y-3" data-testid="stok-kelola">
+      <StockKelolaCards stock={stock} />
       {stock.master.map((c) => (
         <Card key={c.id} padding="md">
           <div className="flex items-center gap-2 mb-1">

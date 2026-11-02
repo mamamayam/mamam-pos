@@ -85,6 +85,24 @@ describe('buildIncomeStatement — stok awal / akhir / waste', () => {
     expect(r.hpp.pending).toEqual({ stokAwal: false, stokAkhir: false, waste: false });
     expect(r.labaKotor).toBe(1000000 - 530000);
   });
+  it('waste mengurangi HPP tapi masuk lagi sebagai Kerugian waste di beban, jadi Net Profit tidak berubah', () => {
+    const base = { sales: [sale(1000000, 'Tunai')], expenses: [exp('Belanja', 400000), exp('Biaya', 50000)] };
+    const without = buildIncomeStatement(base);
+    const withWaste = buildIncomeStatement({ ...base, stock: { waste: 20000 } });
+    expect(withWaste.hpp.total).toBe(without.hpp.total - 20000);
+    expect(withWaste.labaKotor).toBe(without.labaKotor + 20000);
+    expect(withWaste.beban.waste).toEqual({ total: 20000, pending: false });
+    expect(withWaste.beban.total).toBe(without.beban.total + 20000);
+    expect(withWaste.netProfit).toBe(without.netProfit);
+  });
+  it('stok awal dan akhir mengubah Net Profit; HPP + beban = pengeluaran + awal − akhir', () => {
+    const r = buildIncomeStatement({ sales: [sale(1000000, 'Tunai')], expenses: [exp('Belanja', 400000), exp('Biaya', 50000)], stock: { awal: 100000, akhir: 70000, waste: 5000 } });
+    expect(r.hpp.total + r.beban.total).toBe(r.totalPengeluaran + 100000 - 70000);
+    expect(r.netProfit).toBe(1000000 - (450000 + 100000 - 70000));
+  });
+  it('belum diisi: beban waste 0 dan pending', () => {
+    expect(buildIncomeStatement({}).beban.waste).toEqual({ total: 0, pending: true });
+  });
   it('stok 0 yang SUDAH diisi bukan "menyusul"; yang null tetap pending', () => {
     const r = buildIncomeStatement({ stock: { awal: 0, akhir: null } });
     expect(r.hpp.pending).toEqual({ stokAwal: false, stokAkhir: true, waste: true });
@@ -172,7 +190,7 @@ describe('buildIncomeStatement — beban operasional ikut kategori di app', () =
     expect(r.totalPendapatan).toBe(1000); expect(r.hpp.belanja).toBe(250); expect(r.netProfit).toBe(750);
     const e = buildIncomeStatement();
     expect(e.totalPendapatan).toBe(0); expect(e.netProfit).toBe(0);
-    expect(e.beban).toEqual({ gaji: { total: 0, items: [] }, operasional: { total: 0, items: [] }, total: 0 });
+    expect(e.beban).toEqual({ gaji: { total: 0, items: [] }, operasional: { total: 0, items: [] }, waste: { total: 0, pending: true }, total: 0 });
   });
 });
 

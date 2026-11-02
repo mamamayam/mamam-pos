@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, Check, Lock, Unlock, Minus, Plus, Save, ExternalLink, UserRound } from 'lucide-react';
+import { ChevronDown, ChevronUp, Check, Lock, Unlock, Minus, Plus, Save, ExternalLink, UserRound, ScanSearch } from 'lucide-react';
 import { Card, Button, Select, Modal, EmptyState, Alert } from '../../components/ui';
 import { useStockEmployees } from '../../hook/useStockData';
 import { showToast } from '../../lib/toast';
@@ -11,6 +11,7 @@ import {
 
 /**
  * StockFill — tab Isi (khusus staf): isian stok HARI INI per kategori. Owner tidak mengisi (tab Bypass dan Riwayat).
+ * Mode stok opname aktif (`stock.opname`): semua item wajib (`stock.fillMaster`) dan muncul banner; hasil penuh = dasar stok akhir bulan.
  * Sebelum mengisi, pengisi MEMILIH namanya dulu dari data karyawan (bukan otomatis dari siapa yang membuka Dompet; lihat stockPengisi.js).
  * Setelah semua kategori selesai dan hasil DISIMPAN, gate Absen Pulang di web absensi terbuka (hasil tetap di
  * aplikasi, tidak dikirim ke WhatsApp) dan muncul tautan ke web absensi.
@@ -124,7 +125,8 @@ function PengisiCard({ initial, today, onSubmit }) {
 }
 
 export default function StockFill({ stock }) {
-  const { master, counts, doneIds, locked, day, today } = stock;
+  const { counts, doneIds, locked, day, today, opname } = stock;
+  const master = stock.fillMaster || stock.master;      // mode opname: semua item wajib (fillMaster); Kelola/Riwayat memakai master asli
   const [pengisi, setPengisi] = useState(() => readPengisi(today));
   const [draft, setDraft] = useState('');                 // isi awal kolom nama saat "Ganti"
   useEffect(() => { setPengisi(readPengisi(today)); setDraft(''); }, [today]);   // ganti hari bisnis = tanya lagi
@@ -181,6 +183,13 @@ export default function StockFill({ stock }) {
           <a href={ABSENSI_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-bold underline" data-testid="stok-link-absen">
             Isi absen pulang sekarang <ExternalLink className="w-3.5 h-3.5" />
           </a>
+        </div>
+      )}
+
+      {opname && !locked && (
+        <div className="flex gap-2.5 text-xs font-medium text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-500/10 rounded-2xl px-3.5 py-3" data-testid="stok-opname-banner">
+          <ScanSearch className="w-4 h-4 shrink-0 mt-px" />
+          <p><span className="block font-bold">Mode stok opname</span>Owner meminta semua item dihitung ulang. Isi semuanya dulu, baru hasil bisa disimpan.</p>
         </div>
       )}
 

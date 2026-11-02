@@ -4,6 +4,9 @@ import { Card, Button } from '../../components/ui';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../auth/AuthContext';
 import { useReportData } from '../../hook/useReportData';
+import { useStatementStock } from '../../hook/useOpname';
+import { useWasteRange } from '../../hook/useWaste';
+import { sumWaste } from '../stock/wasteMath';
 import { summarizeSales, summarizeExpenses, topMenus, menuListView } from './reportsMath';
 import { buildIncomeStatement } from './incomeStatementMath';
 import IncomeStatementSheet from './IncomeStatementSheet';
@@ -17,22 +20,31 @@ import ReportGate from './ReportGate';
  * Kartu Laba Kotor hanya untuk yang berizin `laporan.labaKotor`.
  * Paling bawah: tombol Income Statement (izin `laporan.labaKotor` juga) yang membuka Laba Rugi bertingkat
  * (pendapatan, HPP, laba kotor, beban operasional, net profit) dari data yang sama. `periodLabel` = teks periode di judulnya.
+ * Stok awal/akhir dari stok opname hanya untuk periode Bulanan (`month` = 'YYYY-MM', null di periode lain); waste dari catatan Waste di rentang
+ * periode apa pun (tidak ada catatan = "belum diisi"). Keduanya hanya dibaca untuk yang berizin `laporan.labaKotor`.
  * Menu Terlaris menampilkan 10 teratas; tombol "Lainnya" di bawahnya membuka SEMUA menu yang terjual (urut porsi terbanyak) supaya
  * kelihatan menu mana yang laku dan mana yang tidak; "Ringkas" menutup lagi.
  */
-export default function LabaRugiTab({ range, periodLabel = '' }) {
+export default function LabaRugiTab({ range, periodLabel = '', month = null }) {
   const { formatRupiah } = useAppContext();
   const { can } = useAuth();
   const canProfit = can('laporan.labaKotor');
   const { sales, expenses, categories, loading, error, reload } = useReportData(range);
   const [statementOpen, setStatementOpen] = useState(false);
+  const { stock: opnameStock } = useStatementStock(month, canProfit && !!month);
+  const { catatan: wasteCatatan } = useWasteRange({ fromDate: range?.fromDate, toDate: range?.toDate, enabled: canProfit });
   const [allMenus, setAllMenus] = useState(false);
 
   const summary = useMemo(() => summarizeSales(sales), [sales]);
   const soldMenus = useMemo(() => topMenus(sales, Infinity), [sales]);
   const menuView = menuListView(soldMenus, allMenus);
   const expSummary = useMemo(() => summarizeExpenses(expenses), [expenses]);
-  const statement = useMemo(() => (canProfit ? buildIncomeStatement({ sales, expenses, categories }) : null), [canProfit, sales, expenses, categories]);
+  const stock = useMemo(() => ({
+    awal: opnameStock?.awal ?? null,
+    akhir: opnameStock?.akhir ?? null,
+    waste: wasteCatatan.length ? sumWaste(wasteCatatan).value : null,
+  }), [opnameStock, wasteCatatan]);
+  const statement = useMemo(() => (canProfit ? buildIncomeStatement({ sales, expenses, categories, stock }) : null), [canProfit, sales, expenses, categories, stock]);
   const pengeluaran = expSummary.total;
   const labaKotor = summary.total - pengeluaran;
 
@@ -81,7 +93,7 @@ export default function LabaRugiTab({ range, periodLabel = '' }) {
       {canProfit && (
         <>
           <Button size="full" icon={<BarChart3 className="w-4 h-4" />} onClick={() => setStatementOpen(true)} data-testid="btn-income-statement">Income Statement</Button>
-          <IncomeStatementSheet isOpen={statementOpen} onClose={() => setStatementOpen(false)} statement={statement} periodLabel={periodLabel} />
+          <IncomeStatementSheet isOpen={statementOpen} onClose={() => setStatementOpen(false)} statement={statement} periodLabel={periodLabel} monthly={!!month} />
         </>
       )}
     </ReportGate>

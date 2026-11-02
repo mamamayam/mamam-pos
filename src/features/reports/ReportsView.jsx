@@ -25,7 +25,7 @@ export default function ReportsView() {
       <div className="max-w-3xl w-full space-y-4 pb-10">
         <PeriodFilter value={period} onChange={setPeriod} />
         {range
-          ? <LabaRugiTab range={range} periodLabel={periodLabel(period)} />
+          ? <LabaRugiTab range={range} periodLabel={periodLabel(period)} month={period.mode === 'bulan' ? period.month : null} />
           : <Card className="text-center text-sm text-slate-400 py-8">Pilih tanggal dulu, atau pakai tombol cepat di atas.</Card>}
       </div>
     </div>

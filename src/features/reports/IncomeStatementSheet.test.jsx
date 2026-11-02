@@ -46,19 +46,25 @@ describe('IncomeStatementSheet', () => {
     expect(text(html)).toContain('Total Pendapatan Rp 1000 100,0%');
     expect(text(html)).toContain('Ojol Rp 250 25,0%');
   });
-  it('HPP: belanja + bayar ayam; stok awal/akhir dan waste tampil "Menyusul" (3x) sampai formulirnya ada', () => {
+  it('HPP: belanja + bayar ayam; stok awal/akhir dan waste tampil "Belum diisi" (3x) kalau belum ada datanya', () => {
     const t = text(render());
     expect(t).toContain('+ Belanja bulan ini Rp 300 30,0%');
     expect(t).toContain('+ Bayar Ayam Rp 200 20,0%');
     expect(t).toContain('Total HPP Rp 500 50,0%');
-    expect(t.match(/Menyusul/g)).toHaveLength(3);
+    expect(t.match(/Belum diisi/g)).toHaveLength(3);
   });
-  it('stok yang sudah diisi tampil sebagai angka, bukan "Menyusul"', () => {
+  it('stok yang sudah diisi tampil sebagai angka, bukan "Belum diisi"; waste ikut jadi Kerugian waste di beban', () => {
     const filled = buildIncomeStatement({ sales: [sale(1000, 'Tunai')], expenses: [exp('Belanja', 300)], stock: { awal: 100, akhir: 50, waste: 10 } });
     const t = text(render({ statement: filled }));
-    expect(t).not.toContain('Menyusul');
+    expect(t).not.toContain('Belum diisi');
     expect(t).toContain('− Stok akhir bulan Rp 50');
+    expect(t).toContain('Kerugian waste Rp 10');
     expect(t).toContain('Total HPP Rp 340');
+  });
+  it('periode bukan bulanan: stok awal/akhir bertanda "Hanya bulanan"', () => {
+    const t = text(render({ monthly: false }));
+    expect(t.match(/Hanya bulanan/g)).toHaveLength(2);
+    expect(t.match(/Belum diisi/g)).toHaveLength(1);
   });
   it('laba kotor, beban operasional (gaji = gaji mingguan + kasbon), dan net profit', () => {
     const t = text(render());

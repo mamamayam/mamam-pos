@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronRight, ChevronLeft, CalendarDays, AlertTriangle } from 'lucide-react';
+import { ChevronRight, ChevronLeft, CalendarDays, AlertTriangle, ShoppingCart } from 'lucide-react';
 import { Card, Badge, Alert, Button, EmptyState, Modal } from '../../components/ui';
 import { useAppContext } from '../../context/AppContext';
 import { useStockHistory } from '../../hook/useStockData';
@@ -9,6 +9,7 @@ import { shiftMonthKey, monthLabel, dayLabel as fullDayLabel } from '../reports/
 import { daySummary, dayItems, filterDayGroups, dayLabel, formatQty, businessDate, STATUS_META } from './stockMath';
 import { calendarCells, monthOf, opnameGroups, opnameValue, itemsWithoutPrice } from './opnameMath';
 import Switch from './Switch';
+import ShoppingListSheet from './ShoppingListSheet';
 
 const time = (iso) => { try { return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(':', '.'); } catch { return ''; } };
 const LBL = 'text-slate-400 dark:text-slate-500';
@@ -25,6 +26,7 @@ const FILTERS = [
 /** `counts` = isian hari itu ([{ item_id, qty }]); null = masih dimuat. */
 function DaySheet({ day, counts, master, onClose }) {
   const [filter, setFilter] = useState('semua');   // DaySheet dipasang ulang (key) tiap hari dibuka, jadi selalu mulai dari Semua
+  const [listOpen, setListOpen] = useState(false);
   const { groups: all, kosong } = useMemo(() => (day && counts ? dayItems(master, counts) : { groups: [], kosong: 0 }), [day, counts, master]);
   const summary = useMemo(() => (counts ? daySummary(master, counts) : { habis: 0, menipis: 0, aman: 0 }), [counts, master]);
   const groups = useMemo(() => filterDayGroups(all, filter), [all, filter]);
@@ -47,6 +49,9 @@ function DaySheet({ day, counts, master, onClose }) {
                   );
                 })}
               </div>
+              {summary.habis + summary.menipis > 0 && (
+                <Button variant="secondary" size="full" onClick={() => setListOpen(true)} icon={<ShoppingCart className="w-4 h-4" />} data-testid="stok-buat-belanja">Buat daftar belanja</Button>
+              )}
               {groups.map((g) => (
                 <div key={g.category.id}>
                   <p className="text-xs font-bold tracking-wide text-slate-400 dark:text-slate-500 mb-1.5">{g.category.name.toUpperCase()}</p>
@@ -65,6 +70,7 @@ function DaySheet({ day, counts, master, onClose }) {
               ))}
               {groups.length === 0 && <p className="text-center text-sm text-slate-400 py-6">{filter === 'semua' ? 'Tidak ada angka yang tersimpan pada hari ini.' : `Tidak ada item yang ${FILTERS.find((f) => f.key === filter).label} pada hari ini.`}</p>}
               {filter === 'semua' && kosong > 0 && groups.length > 0 && <p className="text-xs text-center text-slate-400 dark:text-slate-500">{kosong} item lain tidak diisi hari itu.</p>}
+              <ShoppingListSheet open={listOpen} onClose={() => setListOpen(false)} groups={all} dateLabel={dayLabel(businessDate())} sourceLabel={dayLabel(day.day)} />
             </>
           )}
         </div>

@@ -115,3 +115,16 @@ describe('komposisi', () => {
     await expect(repo.tambahMenuItem(db, { menuId: 'm1', urutan: 1, bahanId: 'b', qty: -1 })).rejects.toThrow();
   });
 });
+
+describe('ubahResep', () => {
+  it('mengubah nama / hasil_qty satu resep', async () => {
+    const db = fakeDb(() => sukses());
+    await repo.ubahResep(db, 'saos', { nama: 'Saos Baru', hasil_qty: 2000 });
+    expect(db.calls).toHaveLength(1);
+    expect(db.calls[0]).toMatchObject({ tabel: 'hpp_resep', op: 'update', v: { nama: 'Saos Baru', hasil_qty: 2000 }, eq: ['id', 'saos'] });
+  });
+  it('galat database dilempar sebagai Error berpesan Indonesia', async () => {
+    const db = fakeDb(() => ({ data: null, error: { code: '23505', message: 'duplicate key' } }));
+    await expect(repo.ubahResep(db, 'saos', { nama: 'Ayam goreng' })).rejects.toThrow(/sudah dipakai/);
+  });
+});

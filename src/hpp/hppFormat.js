@@ -2,7 +2,7 @@
 export function rupiah(n) {
   if (n === null || n === undefined || Number.isNaN(n)) return '-';
   const v = Math.round(n);
-  return `${v < 0 ? '-' : ''}Rp${Math.abs(v).toLocaleString('id-ID')}`;
+  return `${v < 0 ? '-' : ''}Rp ${Math.abs(v).toLocaleString('id-ID')}`;
 }
 
 /** Angka biasa, maksimal 2 desimal, koma Indonesia: 1410.5 -> "1.410,5". */
@@ -35,13 +35,13 @@ export function parseAngka(teks) {
 }
 
 /**
- * Harga per unit dasar (mis. per gr) yang sering kecil: Rp1,5 / Rp38,5 / Rp1.250. Mulai Rp100 dibulatkan seperti `rupiah`;
- * di bawah itu dipertahankan 1 desimal (Rp10 ke atas) atau 2 desimal (di bawah Rp10), supaya Rp1,5 tidak tampil sebagai Rp2.
+ * Harga per unit dasar (mis. per gr) yang sering kecil: Rp 1,5 / Rp 38,5 / Rp 1.250. Mulai Rp100 dibulatkan seperti `rupiah`;
+ * di bawah itu dipertahankan 1 desimal (Rp10 ke atas) atau 2 desimal (di bawah Rp10), supaya Rp 1,5 tidak tampil sebagai Rp 2.
  */
 export function rupiahUnit(n) {
   if (n === null || n === undefined || Number.isNaN(n)) return '-';
   if (Math.abs(n) >= 100) return rupiah(n);
-  return `Rp${n.toLocaleString('id-ID', { maximumFractionDigits: Math.abs(n) >= 10 ? 1 : 2 })}`;
+  return `Rp ${n.toLocaleString('id-ID', { maximumFractionDigits: Math.abs(n) >= 10 ? 1 : 2 })}`;
 }
 
 /** Satuan beli untuk tampilan: "kg (1.000 gr)"; kalau satuan = unit dasar dan isi 1 cukup unitnya ("pack"). */
@@ -49,9 +49,14 @@ export function labelSatuan(b) {
   return b.satuan === b.unit && b.isi === 1 ? b.unit : `${b.satuan} (${angka(b.isi)} ${b.unit})`;
 }
 
-/** Judul ringkas perubahan bahan: "Ayam: Rp38 → Rp40/gr" (per unit dasar, lewat `rupiahUnit`). Bahan yang belum berharga: "Ayam: harga Rp40/gr". */
+/** Judul ringkas perubahan bahan: "Ayam: Rp 38 → Rp 40/gr" (per unit dasar, lewat `rupiahUnit`). Bahan yang belum berharga: "Ayam: harga Rp 40/gr". */
 export function ringkasUbahBahan(b, harga, isi) {
   const baru = harga / isi;
   const lama = b.harga === null ? null : b.harga / b.isi;
   return lama === null ? `${b.nama}: harga ${rupiahUnit(baru)}/${b.unit}` : `${b.nama}: ${rupiahUnit(lama)} → ${rupiahUnit(baru)}/${b.unit}`;
+}
+
+/** Judul ringkas perubahan resep: "Saos: Rp 2 → Rp 3/gr" (per unit hasil; resep per porsi = per porsi). */
+export function ringkasUbahResep(nama, lama, baru, unit) {
+  return `${nama}: ${rupiahUnit(lama)} → ${rupiahUnit(baru)}/${unit}`;
 }

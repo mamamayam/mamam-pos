@@ -11,6 +11,8 @@
  *  - margin = (harga jual outlet - HPP) / harga jual outlet; HIGH jika >= batas atas, LOW jika < batas bawah.
  * Bahan tanpa harga dihitung 0 dan dilaporkan lewat menuBahanKosong().
  */
+import { parseAngka, persen } from './hppFormat';
+
 export const DEFAULT_MARGIN = { lo: 30, hi: 30 };
 export const DEFAULT_MARKUP = 1.25;
 
@@ -191,23 +193,6 @@ export function menusUsingResep(model, resepId) {
   return model.menu.filter((m) => m.items.some((it) => it.resepId && (it.resepId === resepId || resepMemuat(model, it.resepId, resepId))));
 }
 
-/** Biaya sebuah komponen pada takaran `qty`: { bahanId } atau { resepId }. */
-export function biayaKomponen(ctx, { bahanId = null, resepId = null, qty }) {
-  return bahanId ? qty * ctx.unitCost(bahanId) : ctx.resepCost(resepId, qty);
-}
-
-/** Dampak harga bahan berubah dari `hargaSebelum` ke harga sekarang pada tiap menu yang memakainya. */
-export function dampakHarga(model, bahanId, hargaSebelum) {
-  const before = makeCtx(model, { [bahanId]: hargaSebelum });
-  const after = makeCtx(model);
-  const rows = menusUsingBahan(model, bahanId).map((m) => {
-    const a = menuInfo(model, before, m);
-    const z = menuInfo(model, after, m);
-    return { menu: m, sebelum: a, sesudah: z, selisih: z.hpp - a.hpp, ganti: a.tier !== z.tier };
-  });
-  return { rows, ganti: rows.filter((r) => r.ganti).length };
-}
-
 /** Nama bahan tanpa harga yang dipakai (qty > 0) oleh menu ini, langsung atau lewat resep. */
 export function menuBahanKosong(model, m) {
   const kosong = new Set();
@@ -309,16 +294,13 @@ export function riwayatModalRows(model, { menuId = null, resepId = null }) {
 }
 
 /**
- * Dampak mengubah bahan (harga dan/atau isi per satuan beli) ke menu yang memakainya, TANPA mengubah model:
- * hanya menu yang modalnya berubah. rows: [{ menu, sebelum, sesudah, selisih, ganti }], urut perubahan terbesar.
+ * Dampak ke menu `menus` kalau model berubah jadi `sesudah` (model asli TIDAK diubah): hanya menu yang modalnya berubah.
+ * rows: [{ menu, sebelum, sesudah, selisih, ganti }], urut perubahan terbesar.
  */
-export function dampakUbah(model, bahanId, { harga, isi } = {}) {
-  const b = model.bahan[bahanId];
-  if (!b) return { rows: [], ganti: 0 };
-  const sesudah = { ...model, bahan: { ...model.bahan, [bahanId]: { ...b, harga: harga === undefined ? b.harga : harga, isi: isi === undefined ? b.isi : isi } } };
+function dampakAntara(model, sesudah, menus) {
   const before = makeCtx(model);
   const after = makeCtx(sesudah);
-  const rows = menusUsingBahan(model, bahanId).map((m) => {
+  const rows = menus.map((m) => {
     const a = menuInfo(model, before, m);
     const z = menuInfo(sesudah, after, m);
     return { menu: m, sebelum: a, sesudah: z, selisih: z.hpp - a.hpp, ganti: a.tier !== z.tier };
@@ -326,6 +308,30 @@ export function dampakUbah(model, bahanId, { harga, isi } = {}) {
     .sort((x, y) => Math.abs(y.selisih) - Math.abs(x.selisih));
   return { rows, ganti: rows.filter((r) => r.ganti).length };
 }
+
+/** Dampak mengubah bahan (harga dan/atau isi per satuan beli) ke menu yang memakainya. */
+export function dampakUbah(model, bahanId, { harga, isi } = {}) {
+  const b = model.bahan[bahanId];
+  if (!b) return { rows: [], ganti: 0 };
+  const sesudah = { ...model, bahan: { ...model.bahan, [bahanId]: { ...b, harga: harga === undefined ? b.harga : harga, isi: isi === undefined ? b.isi : isi } } };
+  return dampakAntara(model, sesudah, menusUsingBahan(model, bahanId));
+}
+
+/** Salinan model dengan resep `resepId` diganti: `hasilQty` dan/atau `items` ({ bahanId, subResepId, qty }). Model asli tidak diubah. */
+export function modelDenganResep(model, resepId, { hasilQty, items } = {}) {
+  const r = model.resep[resepId];
+  if (!r) return model;
+  return { ...model, resep: { ...model.resep, [resepId]: { ...r, hasilQty: hasilQty === undefined ? r.hasilQty : hasilQty, items: items === undefined ? r.items : items } } };
+}
+
+/** Dampak mengubah isi/hasil resep ke semua menu yang memakainya (langsung atau lewat resep lain). */
+export function dampakUbahResep(model, resepId, { hasilQty, items } = {}) {
+  if (!model.resep[resepId]) return { rows: [], ganti: 0 };
+  return dampakAntara(model, modelDenganResep(model, resepId, { hasilQty, items }), menusUsingResep(model, resepId));
+}
+
+/** Biaya resep per unit hasil: per batch = total / hasil; per porsi = totalnya. */
+export const resepPerUnit = (r, total) => (r.hasilQty ? total / r.hasilQty : total);
 
 /** Satuan beli yang ditawarkan di popup Update harga (tombol pilihan). Satuan bahan itu sendiri selalu ikut. */
 export const SATUAN_UMUM = ['kg', 'liter', 'pcs', 'pack', 'btl', 'renceng', 'galon', 'ekor', 'tabung', 'karton'];
@@ -335,4 +341,38 @@ export const opsiSatuan = (saatIni) => (saatIni && !SATUAN_UMUM.includes(saatIni
 export function isiBawaan(satuan, unitDasar) {
   if ((satuan === 'kg' && unitDasar === 'gr') || (satuan === 'liter' && unitDasar === 'ml')) return 1000;
   return null;
+}
+
+/**
+ * Baris draft form komposisi (Edit resep / Edit menu). Draft = salinan yang diubah di form; baru disimpan saat Simpan.
+ * Baris: { key, id (id baris di database, null = baru), kind: 'bahan' | 'resep', ref (id bahan / resep), qty (teks isian) }.
+ */
+export const draftDariMenu = (m) => m.items.map((it) => ({ key: it.id, id: it.id, kind: it.bahanId ? 'bahan' : 'resep', ref: it.bahanId ?? it.resepId, qty: String(it.qty) }));
+export const draftDariResep = (r) => r.items.map((it) => ({ key: it.id, id: it.id, kind: it.bahanId ? 'bahan' : 'resep', ref: it.bahanId ?? it.subResepId, qty: String(it.qty) }));
+
+/** Semua takaran draft angka valid dan lebih dari 0. */
+export const draftValid = (draft) => draft.every((d) => { const q = parseAngka(d.qty); return q !== null && q > 0; });
+
+/** Draft berbeda dari aslinya (baris ditambah/dihapus atau takaran berubah)? `asli` = hasil draftDariMenu/Resep. */
+export function draftBerubah(asli, draft) {
+  if (asli.length !== draft.length) return true;
+  return draft.some((d, i) => d.id !== asli[i].id || d.kind !== asli[i].kind || d.ref !== asli[i].ref || parseAngka(d.qty) !== parseAngka(asli[i].qty));
+}
+
+/** Draft -> item bentuk model ({ id, urutan, bahanId, resepId | subResepId, qty }) untuk dihitung atau disimpan. */
+export const itemsMenuDariDraft = (draft) => draft.map((d, i) => ({
+  id: d.id, urutan: i + 1, bahanId: d.kind === 'bahan' ? d.ref : null, resepId: d.kind === 'resep' ? d.ref : null, qty: parseAngka(d.qty) ?? 0,
+}));
+export const itemsResepDariDraft = (draft) => draft.map((d, i) => ({
+  id: d.id, urutan: i + 1, bahanId: d.kind === 'bahan' ? d.ref : null, subResepId: d.kind === 'resep' ? d.ref : null, qty: parseAngka(d.qty) ?? 0,
+}));
+
+/** Ringkasan di bawah judul halaman: margin rata-rata menu yang sudah berkomposisi dan jumlah menu LOW. */
+export function ringkasanDaftar(model) {
+  const isi = model.menu.filter((m) => m.items.length > 0);
+  if (!isi.length) return `${model.bahanList.length} bahan · ${Object.keys(model.resep).length} resep · ${model.menu.length} menu · komposisi belum diisi`;
+  const ctx = makeCtx(model);
+  const info = isi.map((m) => menuInfo(model, ctx, m));
+  const rata = info.reduce((a, i) => a + i.pct, 0) / info.length;
+  return `Margin rata-rata ${persen(rata)} · ${info.filter((i) => i.tier === 'LOW').length} menu LOW (di bawah ${persen(model.margin.lo, 0)})`;
 }

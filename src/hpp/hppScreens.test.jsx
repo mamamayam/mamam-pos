@@ -12,8 +12,9 @@ import BahanSheet from './BahanSheet.jsx';
 import ResepSheet from './ResepSheet.jsx';
 import DampakSheet from './DampakSheet.jsx';
 import SettingsSheet from './SettingsSheet.jsx';
-import KomposisiPicker from './KomposisiPicker.jsx';
-import { NumberField, NotifKeluar, Sheet, Snack, Sparkline, Stepper, statusIsian, durasiKeluar, DURASI_KELUAR_MS } from './ui.jsx';
+import KomposisiForm from './KomposisiForm.jsx';
+import { NotifKeluar, Sheet, Snack, Sparkline, Stepper, durasiKeluar, DURASI_KELUAR_MS } from './ui.jsx';
+import { draftDariMenu, draftDariResep } from './hppModel';
 
 const render = (el) => renderToString(el).replace(/<!-- -->/g, '');
 const noop = () => {};
@@ -31,11 +32,9 @@ describe('layar HPP (render server)', () => {
     expect(html).not.toContain('Ayam');
   });
 
-  it('tab Menu: kategori menguncup di awal; ada pencarian, tanpa chip kategori dan pil margin', () => {
+  it('tab Menu: kategori menguncup di awal; pencarian ada di bilah atas (prop q), bukan di tab; tanpa chip kategori', () => {
     const html = render(<MenuTab model={model} onOpen={noop} onAcuan={noop} adaPerubahan={false} />);
-    expect(html).toContain('Cari menu');
-    expect(html).not.toContain('Margin LOW');
-    expect(html).not.toContain('Margin HIGH');
+    expect(html).not.toContain('Cari menu');
     expect(html).not.toContain('aria-pressed');
     expect(html).not.toContain('Semua 2');
     expect(html).toContain('Paket · 1');
@@ -43,13 +42,15 @@ describe('layar HPP (render server)', () => {
     expect(html).not.toContain('Paket Ayam');                 // isi kategori belum terbuka
     expect(html).toContain('aria-expanded="false"');
     expect(html).not.toContain('Jadikan harga sekarang sebagai acuan');
+    expect(render(<MenuTab model={model} q="kemasan" onOpen={noop} onAcuan={noop} adaPerubahan={false} />)).toContain('Kemasan Saja');   // mencari membuka kategori yang cocok
+    expect(render(<MenuTab model={model} q="zzz" onOpen={noop} onAcuan={noop} adaPerubahan={false} />)).toContain('Tidak ada menu yang cocok');
   });
 
   it('tab Menu: kategori terbuka menampilkan modal, harga jual, dan margin per menu', () => {
     const html = render(<MenuTab model={model} onOpen={noop} onAcuan={noop} adaPerubahan={false} awalBuka />);
     expect(html).toContain('Paket Ayam');
-    expect(html).toContain('Modal Rp1.730');
-    expect(html).toContain('Jual Rp10.000');
+    expect(html).toContain('Rp 1.730');
+    expect(html).toContain('Jual Rp 10.000');
     expect(html).toContain('82,7% HIGH');
     expect(html).not.toContain('Riwayat modal');              // detail baris belum dibuka
   });
@@ -60,7 +61,7 @@ describe('layar HPP (render server)', () => {
     expect(html).toContain('Biaya lain');
     expect(html).toContain('Profit');
     expect(html).toContain('Riwayat modal');
-    expect(html).toContain('Rp1.704');                        // modal saat Ayam masih Rp800/kg
+    expect(html).toContain('Rp 1.704');                       // modal saat Ayam masih Rp800/kg
     expect(html).toContain('▲ 1,5%');
     expect(html).toContain('>Edit<');
   });
@@ -72,21 +73,23 @@ describe('layar HPP (render server)', () => {
     expect(html).toContain('Jadikan harga sekarang sebagai acuan');
   });
 
-  it('tab Bahan baku: kategori menguncup di awal, tanpa chip kategori', () => {
+  it('tab Bahan baku: kategori menguncup di awal, tanpa chip kategori, pencarian lewat prop q', () => {
     const html = render(<BahanTab model={model} onOpen={noop} />);
-    expect(html).toContain('Cari bahan');
+    expect(html).not.toContain('Cari bahan');
     expect(html).toContain('Primer · 1');
     expect(html).toContain('Lainnya · 1');
     expect(html).not.toContain('Semua 3');
-    expect(html).not.toContain('Rp50.000');                   // isi Packaging belum terbuka
+    expect(html).not.toContain('Rp 50.000');                  // isi Packaging belum terbuka
     expect(html).toContain('1 bahan');                        // catatan bahan tanpa harga
+    expect(render(<BahanTab model={model} q="ayam" onOpen={noop} />)).toContain('Ayam');
+    expect(render(<BahanTab model={model} q="zzz" onOpen={noop} />)).toContain('Tidak ada bahan yang cocok');
   });
 
   it('tab Bahan baku: baris menampilkan satuan, harga per unit dasar, perubahan terakhir, dan bahan tanpa harga', () => {
     const html = render(<BahanTab model={model} onOpen={noop} awalBuka />);
     expect(html).toContain('per kg (1.000 gr)');
-    expect(html).toContain('Rp1.000');
-    expect(html).toContain('≈ Rp1/gr');
+    expect(html).toContain('Rp 1.000');
+    expect(html).toContain('≈ Rp 1/gr');
     expect(html).toContain('▲ 25,0%');
     expect(html).toContain('Harga awal');                     // Kemasan belum pernah berubah
     expect(html).toContain('Belum diisi');
@@ -95,9 +98,11 @@ describe('layar HPP (render server)', () => {
     expect(html).not.toContain('Riwayat harga');              // detail baris belum dibuka
   });
 
-  it('tab Bahan baku: detail baris = riwayat terbaru dulu + tombol Update harga (Isi harga bila kosong)', () => {
+  it('tab Bahan baku: detail baris = riwayat terbaru dulu (nilai dengan satuan beli) + tombol Update harga (Isi harga bila kosong)', () => {
     const html = render(<BahanTab model={model} onOpen={noop} awalBuka awalTerbuka={['A', 'C']} />);
     expect(html).toContain('Riwayat harga');
+    expect(html).toContain('Rp 1.000/kg');
+    expect(html).toContain('Rp 800/kg');
     expect(html).toContain('Update harga');
     expect(html).toContain('Isi harga');
     expect(html).toContain('Harga belum diisi');
@@ -107,15 +112,16 @@ describe('layar HPP (render server)', () => {
 
   it('tab Resep: grup menguncup di awal; baris menampilkan hasil, modal, dan penanda belum diisi', () => {
     const tutup = render(<ResepTab model={model} onOpen={noop} />);
-    expect(tutup).toContain('Cari resep');
+    expect(tutup).not.toContain('Cari resep');
     expect(tutup).toContain('Menu utama · 1');
     expect(tutup).toContain('Saos · 1');
     expect(tutup).not.toContain('Hasil 1.000 gr');
     const buka = render(<ResepTab model={model} onOpen={noop} awalBuka />);
     expect(buka).toContain('Hasil 1.000 gr');
-    expect(buka).toContain('Rp2.600');
-    expect(buka).toContain('Per porsi · 2 bahan');
-    expect(buka).toContain('Rp230');
+    expect(buka).toContain('Rp 2.600');
+    expect(buka).toContain('Per porsi');
+    expect(buka).toContain('Rp 230');
+    expect(buka).toContain('▲');                              // chip perubahan modal terakhir (harga ayam naik)
     const kosong = buildModel({ ...RAW, resepItem: [] });
     expect(render(<ResepTab model={kosong} onOpen={noop} awalBuka />)).toContain('Belum diisi');
   });
@@ -126,30 +132,42 @@ describe('layar HPP (render server)', () => {
     expect(html).toContain('Total batch');
     expect(html).toContain('Per gr');
     expect(html).toContain('Riwayat modal');
-    expect(html).toContain('Rp2.480');                        // saat Ayam masih Rp800/kg
+    expect(html).toContain('Rp 2.480');                       // saat Ayam masih Rp800/kg
     expect(html).toContain('>Edit<');
   });
 
-  it('popup menu: modal, komposisi, biaya lain, dan saran harga minimal bila belum HIGH', () => {
+  it('form Edit menu: nama, kategori, harga jual (− +), komposisi, biaya lain, pratinjau modal, Simpan nonaktif sebelum ada perubahan', () => {
     const html = render(<MenuSheet model={model} menuId="m1" actions={actions} onClose={noop} />);
-    expect(html).toContain('Rp1.730');
-    expect(html).toContain('Komposisi modal');
+    expect(html).toContain('Edit menu');
+    expect(html).toContain('value="Paket Ayam"');
+    expect(html).toContain('Kategori menu');
+    expect(html).toContain('aria-label="Kurangi Harga jual outlet"');
+    expect(html).toContain('value="10000"');
+    expect(html).toContain('Komposisi');
     expect(html).toContain('Ayam goreng');
+    expect(html).toContain('Tambah komponen');
     expect(html).toContain('Biaya lain');
+    expect(html).toContain('value="500"');
+    expect(html).toContain('Modal Rp 1.730 → <b class="text-slate-900">Rp 1.730</b>');
     expect(html).not.toContain('harga jual minimal');
+    expect(html).toMatch(/disabled=""[^>]*>Simpan</);
+    expect(html).toContain('>Batal<');
+    expect(html).not.toContain('Ubah komposisi');             // tidak ada lagi mode ubah
     const low = buildModel({ ...RAW, setting: [{ key: 'margin', value: { lo: 90, hi: 90 } }] });
-    expect(render(<MenuSheet model={low} menuId="m1" actions={actions} onClose={noop} />)).toContain('harga jual minimal Rp17.500');
+    expect(render(<MenuSheet model={low} menuId="m1" actions={actions} onClose={noop} />)).toContain('harga jual minimal Rp 17.500');
   });
 
-  it('popup bahan = Update harga: harga per satuan dengan tombol − +, satuan disembunyikan di balik Ubah, tanpa persentase', () => {
+  it('form Update harga: nama, harga per satuan dengan tombol − +, satuan disembunyikan di balik Ubah, tanpa catatan dan persentase', () => {
     const html = render(<BahanSheet model={model} bahanId="A" actions={actions} onClose={noop} />);
     expect(html).toContain('Update harga');
+    expect(html).toContain('value="Ayam"');
     expect(html).toContain('Harga per kg');
     expect(html).toContain('aria-label="Kurangi Harga baru"');
     expect(html).toContain('aria-label="Tambah Harga baru"');
     expect(html).toContain('Satuan: <b class="text-slate-800">kg (1.000 gr)</b>');
     expect(html).toContain('>Ubah<');
-    expect(html).toContain('Rp1.000/kg ÷ 1.000 gr = <b class="text-slate-900">Rp1</b>/gr');
+    expect(html).toContain('Rp 1.000/kg ÷ 1.000 gr = <b class="text-slate-900">Rp 1</b>/gr');
+    expect(html).not.toContain('Catatan');
     expect(html).not.toContain('+10%');
     expect(html).not.toContain('−10%');
     expect(html).not.toContain('renceng');                    // pilihan satuan tersembunyi
@@ -158,7 +176,7 @@ describe('layar HPP (render server)', () => {
     expect(html).toMatch(/disabled=""[^>]*>Simpan</);         // belum ada perubahan = Simpan nonaktif
   });
 
-  it('popup bahan: tombol Ubah membuka pilihan satuan, isi per satuan, dan kategori', () => {
+  it('form Update harga: tombol Ubah membuka pilihan satuan, isi per satuan, dan kategori', () => {
     const html = render(<BahanSheet model={model} bahanId="A" actions={actions} onClose={noop} awalUbah />);
     expect(html).toContain('Satuan beli');
     expect(html).toContain('>renceng<');
@@ -168,36 +186,45 @@ describe('layar HPP (render server)', () => {
     expect(html).not.toContain('>Ubah<');
   });
 
-  it('popup bahan tanpa harga: kolom kosong, Simpan nonaktif', () => {
+  it('form Update harga tanpa harga: kolom kosong, Simpan nonaktif', () => {
     const html = render(<BahanSheet model={model} bahanId="C" actions={actions} onClose={noop} />);
-    expect(html).toContain('belum diisi');
-    expect(html).toContain('Isi harga dan isi per satuan');
+    expect(html).toContain('Isi nama, harga, dan isi per satuan');
     expect(html).toMatch(/disabled=""[^>]*>Simpan</);
   });
 
   it('popup menu terdampak: dikelompokkan per kategori menu, modal sebelum → sesudah dan persennya', () => {
     const d = dampakUbah(model, 'A', { harga: 2000 });
-    const html = render(<DampakSheet model={model} judul="Ayam: Rp1 → Rp2/gr" rows={d.rows} onClose={noop} />);
+    const html = render(<DampakSheet model={model} judul="Ayam: Rp 1 → Rp 2/gr" rows={d.rows} onClose={noop} />);
     expect(html).toContain('Menu terdampak');
-    expect(html).toContain('Ayam: Rp1 → Rp2/gr');
+    expect(html).toContain('Ayam: Rp 1 → Rp 2/gr');
     expect(html).toContain('Paket · 1');
     expect(html).toContain('Paket Ayam');
-    expect(html).toContain('Rp1.730 → Rp1.860');
+    expect(html).toContain('Rp 1.730 → Rp 1.860');
     expect(html).toContain('▲ 7,5%');
     expect(html).toContain('>Tutup<');
     expect(render(<DampakSheet model={model} judul="x" rows={[]} onClose={noop} />)).toContain('Tidak ada menu yang berubah modalnya');
   });
 
-  it('popup resep: modal, isi resep, dan tombol Ubah isi (mode ubah belum aktif)', () => {
+  it('form Edit resep (batch): nama, hasil per batch, komposisi, pratinjau per unit, Simpan nonaktif', () => {
+    const html = render(<ResepSheet model={model} resepId="saos" actions={actions} onClose={noop} />);
+    expect(html).toContain('Edit resep');
+    expect(html).toContain('value="Saos"');
+    expect(html).toContain('Hasil per batch');
+    expect(html).toContain('aria-label="Takaran Ayam"');
+    expect(html).toContain('Tambah komponen');
+    expect(html).toContain('Per gr: Rp 2,6 → <b class="text-slate-900">Rp 2,6</b>');
+    expect(html).toContain('Total batch Rp 2.600 → Rp 2.600');
+    expect(html).toMatch(/disabled=""[^>]*>Simpan</);
+    expect(html).not.toContain('Ubah isi');
+  });
+
+  it('form Edit resep (per porsi): tanpa kolom hasil per batch', () => {
     const html = render(<ResepSheet model={model} resepId="porsi" actions={actions} onClose={noop} />);
     expect(html).toContain('Ayam goreng');
-    expect(html).toContain('Modal per porsi');
-    expect(html).toContain('Rp230');
-    expect(html).toContain('Isi resep');
-    expect(html).toContain('Ubah isi');
-    expect(html).not.toContain('Tambah ke resep');
+    expect(html).not.toContain('Hasil per batch');
+    expect(html).toContain('Per porsi: Rp 230');
     const kosong = buildModel({ ...RAW, resepItem: [] });
-    expect(render(<ResepSheet model={kosong} resepId="saos" actions={actions} onClose={noop} />)).toContain('Isi resep belum diisi');
+    expect(render(<ResepSheet model={kosong} resepId="saos" actions={actions} onClose={noop} />)).toContain('Belum ada komponen.');
   });
 
   it('pengaturan: batas margin, harga online, dua editor kategori, tombol Keluar', () => {
@@ -211,54 +238,6 @@ describe('layar HPP (render server)', () => {
     expect(html).toContain('owner@x.test');
     expect(html).toContain('Keluar');
     expect(html).toContain('Saat ini: 0 LOW, 0 SEDANG, 2 HIGH dari 2 menu');
-  });
-});
-
-describe('isian harga: tersimpan hanya lewat tombol Simpan', () => {
-  it('statusIsian: belum diketik / valid beda / sama / tidak valid / negatif / kosong', () => {
-    expect(statusIsian(null, 1000)).toEqual({ kotor: false, valid: false, bisaSimpan: false, nilai: null });
-    expect(statusIsian('1.500', 1000)).toEqual({ kotor: true, valid: true, bisaSimpan: true, nilai: 1500 });
-    expect(statusIsian('1000', 1000)).toMatchObject({ kotor: true, valid: true, bisaSimpan: false });    // sama dengan yang tersimpan
-    expect(statusIsian('abc', 1000)).toMatchObject({ kotor: true, valid: false, bisaSimpan: false });
-    expect(statusIsian('-5', 1000)).toMatchObject({ valid: false, bisaSimpan: false });
-    expect(statusIsian('', 1000)).toMatchObject({ kotor: true, valid: false, bisaSimpan: false });       // dikosongkan: tidak boleh disimpan
-    expect(statusIsian('500', null)).toMatchObject({ bisaSimpan: true });                                // bahan yang belum berharga
-  });
-
-  it('belum diubah: hanya kolom, tanpa tombol Simpan/Batal', () => {
-    const html = render(<NumberField value={1000} ariaLabel="Harga Tes" onCommit={noop} />);
-    expect(html).toContain('value="1000"');
-    expect(html).not.toContain('Simpan');
-    expect(html).not.toContain('Batal');
-  });
-
-  it('sudah diketik: muncul Simpan (aktif) dan Batal, nilai ketikan tampil', () => {
-    const html = render(<NumberField value={1000} ariaLabel="Harga Tes" onCommit={noop} awal="1500" />);
-    expect(html).toContain('value="1500"');
-    expect(html).toContain('aria-label="Simpan Harga Tes"');
-    expect(html).toContain('aria-label="Batal ubah Harga Tes"');
-    expect(html).not.toMatch(/disabled=""[^>]*aria-label="Simpan Harga Tes"/);
-  });
-
-  it('ketikan tidak valid atau sama dengan yang tersimpan: Simpan nonaktif', () => {
-    expect(render(<NumberField value={1000} ariaLabel="Harga Tes" onCommit={noop} awal="abc" />)).toMatch(/disabled=""[^>]*aria-label="Simpan Harga Tes"/);
-    expect(render(<NumberField value={1000} ariaLabel="Harga Tes" onCommit={noop} awal="1000" />)).toMatch(/disabled=""[^>]*aria-label="Simpan Harga Tes"/);
-    expect(render(<NumberField value={1000} ariaLabel="Harga Tes" onCommit={noop} awal="abc" />)).toContain('aria-invalid="true"');
-  });
-
-  it('satuan (suffix) ikut tampil di samping kolom', () => {
-    expect(render(<NumberField value={1000} ariaLabel="Harga Tes" onCommit={noop} suffix={<i>/kg</i>} />)).toContain('<i>/kg</i>');
-  });
-
-  it('keluar dari kolom TIDAK menyimpan: tidak ada onBlur di NumberField', () => {
-    const src = fs.readFileSync(new URL('./ui.jsx', import.meta.url), 'utf8');
-    const nf = src.slice(src.indexOf('export function NumberField'), src.indexOf('/** Panel gelap'));
-    expect(nf).not.toMatch(/onBlur/);
-    expect(nf).toMatch(/onCommit\(s\.nilai\)/);
-  });
-
-  it('popup menu (belum ada yang diketik): tidak ada tombol Simpan yang menggantung', () => {
-    expect(render(<MenuSheet model={model} menuId="m1" actions={actions} onClose={noop} />)).not.toContain('>Simpan<');
   });
 });
 
@@ -328,21 +307,39 @@ describe('popup HPP: kerangka sama dengan app utama (Overlay)', () => {
     }
   });
 
-  it('HppApp: tiga tab (Bahan baku, Resep, Menu); notifikasi dampak setelah harga berubah membuka popup Menu terdampak', () => {
+  it('HppApp: tiga tab dengan jumlah, bilah tab + pencarian menempel (sticky), ringkasan margin; notifikasi dampak membuka popup Menu terdampak', () => {
     const src = baca('HppApp.jsx');
     expect(src).toMatch(/grid-cols-3/);
+    expect(src).toMatch(/sticky top-14/);
+    expect(src).toMatch(/ringkasanDaftar\(model\)/);
+    expect(src).toMatch(/\{jumlah\[t\.key\]\}/);
+    expect(src).toMatch(/placeholder="Cari bahan, saos, menu…"/);
     expect(src).toMatch(/tab === 'resep' && <ResepTab/);
     expect(src).toMatch(/<Snack /);
     expect(src).toMatch(/t: 'dampak'/);
     expect(src).toMatch(/<DampakSheet /);
   });
 
-  it('HppApp: tab Bahan baku / Resep adalah lapisan stack; alamat mengikuti tab lewat replaceState (bukan pushState)', () => {
+  it('HppApp: tab Resep / Menu adalah lapisan stack (Back kembali ke Bahan baku); alamat mengikuti tab lewat replaceState (bukan pushState)', () => {
     const src = baca('HppApp.jsx');
-    expect(src).toMatch(/useBackLayer\(tab !== 'menu', \(\) => setTab\('menu'\)\)/);
+    expect(src).toMatch(/useBackLayer\(tab !== 'bahan', \(\) => setTab\('bahan'\)\)/);
     expect(src).toMatch(/history\.replaceState\(window\.history\.state/);
     expect(src).not.toMatch(/history\.pushState\(/);
     expect(src).not.toMatch(/addEventListener\('popstate'/);
+  });
+
+  it('form Edit/Update tidak menyimpan apa pun sebelum Simpan: tidak ada aksi simpan yang dipanggil saat render atau saat mengetik', () => {
+    for (const f of ['BahanSheet.jsx', 'ResepSheet.jsx', 'MenuSheet.jsx']) {
+      const src = baca(f);
+      expect(src, f).not.toMatch(/onBlur/);
+      expect(src, f).toMatch(/actions\.simpan(Bahan|Resep|Menu)\(/);
+    }
+  });
+
+  it('daftar komposisi tidak mengubah database langsung: KomposisiForm tidak menerima actions', () => {
+    const src = baca('KomposisiForm.jsx');
+    expect(src).not.toMatch(/actions/);
+    expect(src).not.toMatch(/hppRepo/);
   });
 });
 
@@ -387,29 +384,27 @@ describe('notif keluar HPP (Back dari Menu): sama dengan ExitToast app utama', (
   });
 });
 
-describe('ubah komposisi', () => {
-  it('popup menu: tombol Ubah komposisi ada; mode ubah belum aktif (tanpa Tambah komponen)', () => {
-    const html = render(<MenuSheet model={model} menuId="m1" actions={actions} onClose={noop} />);
-    expect(html).toContain('Ubah komposisi');
-    expect(html).not.toContain('Tambah komponen');
-    expect(html).not.toContain('Hapus Kemasan');
+describe('daftar komposisi di form (KomposisiForm)', () => {
+  it('menu: baris dengan takaran − +, tombol hapus berlabel, dan Tambah komponen (pemilih belum terbuka)', () => {
+    const html = render(<KomposisiForm model={model} untuk={{ tipe: 'menu' }} draft={draftDariMenu(model.menu[0])} onChange={noop} />);
+    expect(html).toContain('Ayam goreng');
+    expect(html).toContain('Kemasan');
+    expect(html).toContain('aria-label="Takaran Kemasan"');
+    expect(html).toContain('aria-label="Hapus Kemasan"');
+    expect(html).toContain('>pcs<');
+    expect(html).toContain('>porsi<');
+    expect(html).toContain('Tambah komponen');
+    expect(html).not.toContain('Cari bahan');
   });
 
-  it('baris Biaya lain selalu ada, juga saat nilainya 0 (supaya bisa diisi lagi)', () => {
-    const nol = buildModel({ ...RAW, menu: RAW.menu.map((m) => (m.id === 'm1' ? { ...m, biaya_lain: 0 } : m)) });
-    const html = render(<MenuSheet model={nol} menuId="m1" actions={actions} onClose={noop} />);
-    expect(html).toContain('Biaya lain');
-    expect(html).toContain('aria-label="Biaya lain"');
+  it('draft kosong: tulisan "Belum ada komponen."', () => {
+    expect(render(<KomposisiForm model={model} untuk={{ tipe: 'menu' }} draft={[]} onChange={noop} />)).toContain('Belum ada komponen.');
   });
 
-  it('picker menu: tab Bahan/Resep, pencarian, daftar bahan; yang sudah ada dinonaktifkan; Tambah nonaktif sebelum memilih', () => {
-    const html = render(<KomposisiPicker model={model} untuk={{ tipe: 'menu' }} sudah={['b:B']} biayaLain={500} onTambah={noop} onBatal={noop} />);
-    expect(html).toContain('Cari bahan');
-    expect(html).toContain('>Bahan<');
-    expect(html).toContain('>Resep<');
-    expect(html).toContain('Ayam');
-    expect(html).toContain('sudah ada');
-    expect(html).toMatch(/disabled=""[^>]*>Tambah</);
+  it('resep: komponen berupa sub-resep memakai satuan hasil resep itu (gr)', () => {
+    const html = render(<KomposisiForm model={model} untuk={{ tipe: 'resep', resepId: 'porsi' }} draft={draftDariResep(model.resep.porsi)} onChange={noop} />);
+    expect(html).toContain('aria-label="Takaran Saos"');
+    expect(html).toContain('>gr<');
   });
 });
 

@@ -13,10 +13,10 @@ import { hppConfigured, hppDb } from './hppClient'
 import { keluar, masuk, pulihkanSesi } from './hppAuth'
 import { TABS, pathForTab, tabFromPath } from './hppRoutes'
 import { useHpp } from './useHpp'
-import { dampakUbah } from './hppModel'
+import { dampakUbah, ringkasanDaftar } from './hppModel'
 import { ringkasUbahBahan } from './hppFormat'
 import { setelahSinkron, useBackLayer, useExitHint } from './hppBackStack'
-import { NotifKeluar, Snack } from './ui'
+import { NotifKeluar, SearchBox, Snack } from './ui'
 
 /**
  * Root HPP (path /hpp dan /hpp/*). Dimuat lewat React.lazy dari src/main.jsx, jadi menjadi
@@ -26,7 +26,7 @@ import { NotifKeluar, Snack } from './ui'
  *  - Berkas di src/hpp hanya boleh mengimpor dari src/hpp, `react`, `lucide-react`, `@supabase/supabase-js`,
  *    ditambah dua modul bersama yang murni (tanpa kode POS): `lib/backStack` (hanya `createBackStack`, lewat
  *    `hppBackStack.js`) dan `components/ui/Overlay` (lewat `ui.jsx`). Jangan menyentuh `auth/*`, `app/*`, atau komponen POS lain.
- *  - Stack navigasi: Back menutup popup dulu, lalu tab Bahan baku / Resep -> Menu, lalu notif "Ketuk lagi untuk keluar" lalu keluar ke POS (hppBackStack.js).
+ *  - Stack navigasi: Back menutup popup dulu, lalu tab Resep / Menu -> Bahan baku (tab awal), lalu notif "Ketuk lagi untuk keluar" lalu keluar ke POS (hppBackStack.js).
  *  - Data HPP dijaga RLS di database (supabase/migrations/013_hpp.sql). Frontend hanya memakai anon key.
  */
 export default function HppApp() {
@@ -80,7 +80,8 @@ function Cangkang({ db, email, onKeluar }) {
   const { model, status, galat, pesan, actions: aksiDasar, raw } = useHpp(db)
   const [tab, setTab] = useState(() => tabFromPath(window.location.pathname))
   const [lembar, setLembar] = useState(null)   // { t: 'menu' | 'resep' | 'bahan' | 'set' | 'dampak', id } ('dampak' membawa judul dan rows)
-  const [snack, setSnack] = useState(null)     // { pesan, judul, rows } notifikasi setelah harga bahan berubah
+  const [snack, setSnack] = useState(null)     // { pesan, judul, rows } notifikasi setelah data tersimpan
+  const [q, setQ] = useState('')               // kata cari bilah atas, dipakai tab yang sedang tampil
   const tutupSnack = useCallback(() => setSnack(null), [])
 
   // Setelah harga/satuan bahan tersimpan: hitung menu yang ikut berubah (dari model SEBELUM perubahan) lalu tampilkan
@@ -97,30 +98,30 @@ function Cangkang({ db, email, onKeluar }) {
   }
   const actions = {
     ...aksiDasar,
-    async ubahHarga(arg) {
+    /** Simpan form Update harga (nama, harga, satuan, isi, kategori) lalu umumkan menu yang terdampak. */
+    async simpanBahan(bahanId, v) {
       const awal = model
-      const ok = await aksiDasar.ubahHarga(arg)
-      if (ok) umumkan(awal, arg.bahanId, { harga: arg.harga })
+      const ok = await aksiDasar.simpanBahan(bahanId, v)
+      if (ok) umumkan(awal, bahanId, { harga: v.harga, isi: v.isi })
       return ok
     },
-    /** Simpan sekaligus dari popup Update harga: satuan + isi, harga (riwayat dicatat trigger), kategori. */
-    async ubahBahan({ bahanId, harga, satuan, isi, kategoriId, catatan }) {
-      const awal = model
-      const b = awal.bahan[bahanId]
-      if (!b) return false
-      let ok = true
-      if (satuan !== b.satuan || isi !== b.isi) ok = await aksiDasar.ubahSatuan(bahanId, { satuan, isi })
-      if (ok && harga !== b.harga) ok = await aksiDasar.ubahHarga({ bahanId, harga, catatan, sumber: 'manual' })
-      if (ok && kategoriId && kategoriId !== b.kategoriId) aksiDasar.kategoriBahan(bahanId, kategoriId)
-      if (ok) umumkan(awal, bahanId, { harga, isi })
+    /** Simpan form Edit resep. `dampak` + `judul` dihitung form (sebelum disimpan) untuk notifikasi. */
+    async simpanResep(resepId, v, dampak, judul) {
+      const ok = await aksiDasar.simpanResep(resepId, v)
+      if (ok) setSnack({ pesan: dampak.rows.length ? `Tersimpan · ${dampak.rows.length} menu terdampak` : 'Tersimpan', judul, rows: dampak.rows })
+      return ok
+    },
+    async simpanMenu(menuId, v) {
+      const ok = await aksiDasar.simpanMenu(menuId, v)
+      if (ok) setSnack({ pesan: 'Tersimpan', judul: '', rows: [] })
       return ok
     },
   }
 
-  // Tab selain Menu = satu lapisan di stack navigasi (hppBackStack.js): Back dari Bahan baku / Resep kembali ke Menu,
-  // Back dari Menu memunculkan notif, Back kedua meninggalkan HPP (ke POS). Popup (Sheet) menumpuk di atasnya dan ditutup lebih dulu.
+  // Tab selain Bahan baku (tab awal) = satu lapisan di stack navigasi (hppBackStack.js): Back dari Resep / Menu kembali ke Bahan baku,
+  // Back dari Bahan baku memunculkan notif, Back kedua meninggalkan HPP (ke POS). Popup (Sheet) menumpuk di atasnya dan ditutup lebih dulu.
   const gantiTab = useCallback((key) => setTab(key), [])
-  useBackLayer(tab !== 'menu', () => setTab('menu'))
+  useBackLayer(tab !== 'bahan', () => setTab('bahan'))
   // Alamat mengikuti tab yang tampil (refresh / bagikan link tetap benar). replaceState, bukan pushState:
   // entri riwayat dikelola backStack, dan state-nya dipertahankan. Dijalankan SETELAH stack menyamakan entri
   // (setelahSinkron), supaya yang diganti entri lapisan tab, bukan entri Menu di bawahnya.
@@ -150,6 +151,7 @@ function Cangkang({ db, email, onKeluar }) {
     )
   }
 
+  const jumlah = { bahan: model.bahanList.length, resep: Object.keys(model.resep).length, menu: model.menu.length }
   const adaPerubahan = raw.bahan.some((b) => b.harga_acuan !== null && Number(b.harga_acuan) !== Number(b.harga))
 
   return (
@@ -165,21 +167,30 @@ function Cangkang({ db, email, onKeluar }) {
         </div>
       </header>
 
-      <div className="mx-auto max-w-3xl px-4 pb-16 pt-3.5">
-        <nav aria-label="Bagian HPP" className="relative mb-3.5 grid grid-cols-3 rounded-full bg-white shadow-md ring-1 ring-slate-200">
-          <span className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-gradient-to-r from-accent-600 to-accent-500 transition-transform duration-300"
-            style={{ transform: `translateX(${Math.max(0, TABS.findIndex((t) => t.key === tab)) * 100}%)` }} aria-hidden="true" />
-          {TABS.map((t) => (
-            <button key={t.key} type="button" onClick={() => gantiTab(t.key)} aria-current={tab === t.key ? 'page' : undefined}
-              className={`relative z-[1] rounded-full py-2.5 text-sm font-semibold transition-colors ${tab === t.key ? 'text-white' : 'text-slate-500'}`}>
-              {t.label}
-            </button>
-          ))}
-        </nav>
+      <div className="mx-auto max-w-3xl px-4 pb-16">
+        <div className="pb-2 pt-4">
+          <h1 className="font-heading text-xl font-bold text-slate-900">Daftar HPP</h1>
+          <p className="mt-0.5 text-xs text-slate-400">{ringkasanDaftar(model)}</p>
+        </div>
 
-        {tab === 'menu' && <MenuTab model={model} onOpen={(id) => setLembar({ t: 'menu', id })} onAcuan={actions.jadikanAcuan} adaPerubahan={adaPerubahan} />}
-        {tab === 'resep' && <ResepTab model={model} onOpen={(id) => setLembar({ t: 'resep', id })} />}
-        {tab === 'bahan' && <BahanTab model={model} onOpen={(id) => setLembar({ t: 'bahan', id })} />}
+        {/* Tab + pencarian ikut menempel di bawah header saat daftar digulir */}
+        <div className="sticky top-14 z-10 -mx-4 bg-slate-50 px-4 pb-1 pt-1.5">
+          <nav aria-label="Bagian HPP" className="relative mb-2.5 grid grid-cols-3 rounded-full bg-white shadow-md ring-1 ring-slate-200">
+            <span className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-gradient-to-r from-accent-600 to-accent-500 transition-transform duration-300"
+              style={{ transform: `translateX(${Math.max(0, TABS.findIndex((t) => t.key === tab)) * 100}%)` }} aria-hidden="true" />
+            {TABS.map((t) => (
+              <button key={t.key} type="button" onClick={() => gantiTab(t.key)} aria-current={tab === t.key ? 'page' : undefined}
+                className={`relative z-[1] rounded-full py-2.5 text-sm font-semibold transition-colors ${tab === t.key ? 'text-white' : 'text-slate-500'}`}>
+                {t.label}<small className="ml-1 font-medium opacity-70">{jumlah[t.key]}</small>
+              </button>
+            ))}
+          </nav>
+          <SearchBox value={q} onChange={setQ} placeholder="Cari bahan, saos, menu…" className="mb-1.5" />
+        </div>
+
+        {tab === 'bahan' && <BahanTab model={model} q={q} onOpen={(id) => setLembar({ t: 'bahan', id })} />}
+        {tab === 'resep' && <ResepTab model={model} q={q} onOpen={(id) => setLembar({ t: 'resep', id })} />}
+        {tab === 'menu' && <MenuTab model={model} q={q} onOpen={(id) => setLembar({ t: 'menu', id })} onAcuan={actions.jadikanAcuan} adaPerubahan={adaPerubahan} />}
       </div>
 
       {lembar?.t === 'menu' && <MenuSheet model={model} menuId={lembar.id} actions={actions} onClose={tutup} />}

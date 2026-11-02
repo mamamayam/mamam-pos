@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { angka, labelSatuan, parseAngka, persen, ringkasUbahBahan, rupiah, rupiahUnit, tanggal } from './hppFormat';
+import { angka, labelSatuan, parseAngka, persen, ringkasUbahBahan, ringkasUbahResep, rupiah, rupiahUnit, tanggal } from './hppFormat';
 
 describe('format', () => {
   it('rupiah', () => {
-    expect(rupiah(13622)).toBe('Rp13.622');
-    expect(rupiah(1462.4)).toBe('Rp1.462');
-    expect(rupiah(-537)).toBe('-Rp537');
+    expect(rupiah(13622)).toBe('Rp 13.622');
+    expect(rupiah(1462.4)).toBe('Rp 1.462');
+    expect(rupiah(-537)).toBe('-Rp 537');
     expect(rupiah(null)).toBe('-');
   });
   it('angka dan persen', () => {
@@ -39,17 +39,20 @@ describe('label satuan dan ringkasan ubah bahan', () => {
     expect(labelSatuan({ satuan: 'pack', isi: 50, unit: 'pcs' })).toBe('pack (50 pcs)');
   });
   it('rupiahUnit: harga per unit dasar yang kecil tetap punya desimal; mulai Rp100 dibulatkan', () => {
-    expect(rupiahUnit(1)).toBe('Rp1');
-    expect(rupiahUnit(1.5)).toBe('Rp1,5');
-    expect(rupiahUnit(0.04)).toBe('Rp0,04');
-    expect(rupiahUnit(38.46)).toBe('Rp38,5');
-    expect(rupiahUnit(1250.4)).toBe('Rp1.250');
+    expect(rupiahUnit(1)).toBe('Rp 1');
+    expect(rupiahUnit(1.5)).toBe('Rp 1,5');
+    expect(rupiahUnit(0.04)).toBe('Rp 0,04');
+    expect(rupiahUnit(38.46)).toBe('Rp 38,5');
+    expect(rupiahUnit(1250.4)).toBe('Rp 1.250');
     expect(rupiahUnit(null)).toBe('-');
   });
   it('ringkasUbahBahan: per unit dasar; bahan tanpa harga = harga baru', () => {
     const b = { nama: 'Ayam', harga: 38000, isi: 1000, unit: 'gr' };
-    expect(ringkasUbahBahan(b, 40000, 1000)).toBe('Ayam: Rp38 → Rp40/gr');
-    expect(ringkasUbahBahan({ ...b, harga: 1000 }, 1500, 1000)).toBe('Ayam: Rp1 → Rp1,5/gr');
-    expect(ringkasUbahBahan({ ...b, harga: null }, 40000, 1000)).toBe('Ayam: harga Rp40/gr');
+    expect(ringkasUbahBahan(b, 40000, 1000)).toBe('Ayam: Rp 38 → Rp 40/gr');
+    expect(ringkasUbahBahan({ ...b, harga: 1000 }, 1500, 1000)).toBe('Ayam: Rp 1 → Rp 1,5/gr');
+    expect(ringkasUbahBahan({ ...b, harga: null }, 40000, 1000)).toBe('Ayam: harga Rp 40/gr');
+  });
+  it('ringkasUbahResep: per unit hasil', () => {
+    expect(ringkasUbahResep('Saos', 2.6, 3.1, 'gr')).toBe('Saos: Rp 2,6 → Rp 3,1/gr');
   });
 });

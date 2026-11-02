@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { rupiah, tanggal } from './hppFormat'
-import { Card, DeltaPersen, SectionLabel, Sparkline } from './ui'
+import { Card, DeltaPersen, PilNetral, SectionLabel, Sparkline } from './ui'
 
 /**
  * Potongan daftar bersama tab Bahan baku, Resep, dan Menu.
  *  - DaftarKelompok: kelompok per kategori yang MENGUNCUP di awal (ketuk judul untuk membuka). Saat mencari, semua
  *    kelompok yang cocok terbuka. `awalBuka` hanya untuk tes (render server).
  *  - BarisLipat: satu baris ringkas; ketuk untuk membuka detailnya.
- *  - RiwayatMini: grafik kecil + 3 perubahan terakhir (+ "Lihat semua").
+ *  - RiwayatMini: grafik kecil + 3 perubahan terakhir (+ "Lihat semua"). `akhiran` = satuan di belakang nilai (mis. "/kg").
  */
 export default function DaftarKelompok({ grup, cari = '', awalBuka = false, renderItem, kosong = 'Tidak ada hasil' }) {
   const [terbuka, setTerbuka] = useState({})
@@ -64,7 +64,7 @@ export function useBarisTerbuka(awal = []) {
  * Riwayat singkat. `entri` terbaru dulu: [{ id?, pada, nilai, persen }] (persen null = yang paling awal).
  * Grafik memakai urutan lama -> baru. Tiga terbaru tampil; sisanya lewat "Lihat semua".
  */
-export function RiwayatMini({ judul, entri, awalSemua = false }) {
+export function RiwayatMini({ judul, entri, awalSemua = false, akhiran = '' }) {
   const [semua, setSemua] = useState(awalSemua)
   if (!entri.length) return null
   const tampil = semua ? entri : entri.slice(0, 3)
@@ -75,8 +75,8 @@ export function RiwayatMini({ judul, entri, awalSemua = false }) {
       {tampil.map((e) => (
         <div key={e.id ?? e.pada} className="flex items-center gap-2 py-1.5 text-sm">
           <span className="flex-1 text-slate-400">{tanggal(e.pada)}</span>
-          <span className="font-semibold tabular-nums text-slate-800">{rupiah(e.nilai)}</span>
-          {e.persen === null ? <span className="text-xs font-bold text-slate-400">awal</span> : <DeltaPersen nilai={e.persen} />}
+          <span className="font-semibold tabular-nums text-slate-800">{rupiah(e.nilai)}{akhiran}</span>
+          {e.persen === null ? <PilNetral>awal</PilNetral> : <DeltaPersen nilai={e.persen} />}
         </div>
       ))}
       {entri.length > 3 && (

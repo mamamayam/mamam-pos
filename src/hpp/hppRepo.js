@@ -63,6 +63,10 @@ export async function ubahBahan(db, id, patch) {
   ok(await db.from('hpp_bahan').update(patch).eq('id', id));
 }
 
+export async function ubahResep(db, id, patch) {
+  ok(await db.from('hpp_resep').update(patch).eq('id', id));
+}
+
 export async function ubahMenu(db, id, patch) {
   ok(await db.from('hpp_menu').update(patch).eq('id', id));
 }

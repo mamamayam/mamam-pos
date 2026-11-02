@@ -50,28 +50,46 @@ Bahan tanpa harga dihitung 0 dan menu yang memakainya diberi peringatan.
 
 ## Navigasi dan popup
 
-- **Back** (tombol Back HP, browser, atau geser mundur) menutup lapisan teratas: popup dulu, lalu tab **Bahan baku** atau **Resep**
-  kembali ke **Menu**. Dari Menu, Back pertama memunculkan notif **"Ketuk lagi untuk keluar"** (teks, bentuk, dan posisi sama dengan `ExitToast` app utama); Back kedua
+- **Back** (tombol Back HP, browser, atau geser mundur) menutup lapisan teratas: popup dulu, lalu tab **Resep** atau **Menu**
+  kembali ke **Bahan baku** (tab awal). Dari Bahan baku, Back pertama memunculkan notif **"Ketuk lagi untuk keluar"** (teks, bentuk, dan posisi sama dengan `ExitToast` app utama); Back kedua
   dalam 2 detik meninggalkan HPP (kembali ke POS). Cara kerjanya sama dengan "Ketuk lagi untuk keluar" di Beranda POS.
   Mesinnya `createBackStack` yang sama dengan POS, instance sendiri (`src/hpp/hppBackStack.js`).
-- Alamat mengikuti tab (`/hpp`, `/hpp/bahan`, `/hpp/resep`) lewat `replaceState`, jadi refresh dan link langsung tetap jalan.
+- Alamat mengikuti tab (`/hpp` = Bahan baku, `/hpp/resep`, `/hpp/menu`) lewat `replaceState`, jadi refresh dan link langsung tetap jalan. Alamat lama `/hpp/bahan` tetap membuka Bahan baku.
 - **Popup** memakai kerangka yang sama dengan app utama (`components/ui/Overlay`): lembar putih naik dari bawah di HP
   (laptop: dialog di tengah), ada handle bar dan tombol X bulat, dan bisa **ditarik ke bawah** untuk menutup.
   Menutup lewat X, tarik ke bawah, ketuk latar, Esc, atau Back.
 
 ## Tampilan daftar
 
-Tiga tab: **Bahan baku**, **Resep**, **Menu** (Menu = tab awal). Di semuanya:
+Judul **Daftar HPP** dengan ringkasan (margin rata-rata menu yang sudah berkomposisi dan jumlah menu LOW), lalu bilah tab +
+pencarian yang **menempel** saat daftar digulir. Tiga tab: **Bahan baku** (tab awal), **Resep**, **Menu**, masing-masing dengan
+jumlahnya. Satu kotak cari dipakai tab yang sedang tampil. Di semua tab:
 
 - Kategori (grup untuk Resep) **menguncup** di awal; ketuk judulnya untuk membuka. Pencarian membuka semua yang cocok.
-- Ketuk satu baris untuk membuka **detail**: riwayat (grafik kecil + 3 perubahan terakhir, **Lihat semua** untuk sisanya),
-  dan untuk resep/menu juga komposisi dan angka ringkas. Tombol di dalamnya membuka popup:
+- Ketuk satu baris untuk membuka **detail**: riwayat (grafik kecil + 3 perubahan terakhir, **Lihat semua** untuk sisanya;
+  riwayat harga bahan ditulis dengan satuan belinya, mis. Rp 38.000/kg), dan untuk resep/menu juga komposisi dan angka ringkas.
+  Baris resep dan menu juga punya chip perubahan modal terakhir. Tombol di dalamnya membuka form:
   **Update harga** (bahan), **Edit** (resep dan menu).
-- **Update harga**: ubah harga per satuan beli dengan tombol − / + (langkah Rp500) atau ketik langsung. Satuan beli, isi per
-  satuan, dan kategori ada di balik tombol **Ubah**. Pratinjau menunjukkan harga per unit dasar (mis. Rp38.000/kg ÷ 1.000 gr = Rp38/gr).
-  Riwayat harga tetap per satuan beli, jadi setelah satuan diganti bandingkan perubahannya per unit dasar.
-- **Menu terdampak**: tombol "Lihat menu terdampak" di popup sebelum simpan, dan notifikasi "Tersimpan · N menu terdampak"
-  (tombol **Lihat**) sesudahnya. Isinya menu per kategori dengan modal sebelum → sesudah, persen, dan margin.
+- Angka rupiah ditulis dengan spasi: `Rp 1.730`.
+
+## Form Update harga / Edit resep / Edit menu
+
+Ketiganya **form draft**: perubahan baru tersimpan saat **Simpan** ditekan, **Batal** (atau tutup popup) membuang. Simpan nonaktif
+selama belum ada perubahan atau ada isian yang tidak valid. Pratinjau di bawah form menunjukkan angka lama → baru.
+
+- **Update harga** (bahan): nama dan harga per satuan beli dengan tombol − / + (langkah Rp500) atau ketik langsung. Satuan beli, isi per
+  satuan, dan kategori ada di balik tombol **Ubah**. Pratinjau menunjukkan harga per unit dasar (mis. Rp 38.000/kg ÷ 1.000 gr = Rp 38/gr).
+  Riwayat harga tetap per satuan beli, jadi setelah satuan diganti bandingkan perubahannya per unit dasar. Tidak ada kolom catatan
+  dan tombol persentase.
+- **Edit resep**: nama, hasil per batch (hanya resep batch), dan komposisi. Berlaku untuk **semua menu** yang memakai resep itu.
+- **Edit menu**: nama, kategori, harga jual, komposisi, dan **Biaya lain** (sisa modal yang belum diuraikan; boleh 0). Pratinjau memuat
+  modal, margin (HIGH/SEDANG/LOW), profit, harga online, dan saran harga jual minimal bila belum HIGH.
+- **Komposisi** (resep dan menu): takaran dengan tombol − / + (gr dan ml per 5, satuan lain per 1) atau ketik, tombol × untuk
+  menghapus, dan **Tambah komponen** (pilih bahan atau resep, takaran awal 10 gr/ml atau 1). Resep tidak bisa memuat dirinya sendiri,
+  langsung maupun lewat resep lain. Kalau komponen yang ditambah sebelumnya sudah termasuk di "Biaya lain", kurangi sendiri kolom Biaya lain.
+- **Menu terdampak**: tombol "Lihat menu terdampak" di form Update harga dan Edit resep sebelum simpan, dan notifikasi
+  "Tersimpan · N menu terdampak" (tombol **Lihat**) sesudahnya. Isinya menu per kategori dengan modal sebelum → sesudah, persen, dan margin.
+  Edit menu cukup notifikasi "Tersimpan".
 - **Riwayat modal** resep dan menu tidak disimpan: dihitung ulang dari riwayat harga bahan yang dipakainya.
 
 ## Hasil migrasi dari file 27/11/2025
@@ -80,7 +98,7 @@ Dimigrasikan: **101 bahan** (94 di daftar + 7 yang hanya ada di sheet HPP), **37
 5 kategori bahan, 7 kategori menu. Daftar kontak pelanggan di PDF tidak dipakai dan tidak disimpan.
 
 - **HPP ke-54 menu sama persis dengan file** saat migrasi. Selisih antara HPP file dan komponen yang bisa
-  diuraikan disimpan di `biaya_lain` ("Biaya lain": packaging dkk). Isinya bisa diedit di popup menu.
+  diuraikan disimpan di `biaya_lain` ("Biaya lain": packaging dkk). Isinya bisa diedit di form Edit menu.
 - **Komposisi menu adalah perkiraan awal**: protein (Mamam Chicken / Wingers / Classic Chicken) + Nasi +
   Topping sesuai nama menu; Twins = 0,5 porsi Wingers. File tidak memuat rincian bahan per menu. Koreksi lewat SQL
   (contoh di bawah) kalau berbeda dengan praktik di dapur.
@@ -103,22 +121,14 @@ Cincang Minyak", "Saos Sachet Mamam", dan "Garam & Oregano (paket)" hanya ada di
 
 ## Mengubah komposisi modal
 
-Di popup menu, tekan **Ubah komposisi**:
-
-- **Takaran**: ubah angkanya lalu tekan Simpan (satuan mengikuti bahan: gr, ml, pcs; resep per porsi = jumlah porsi).
-- **Hapus komponen**: ikon tempat sampah.
-- **Tambah komponen**: pilih bahan atau resep, isi takaran, tekan Tambah. Kalau komponen itu sebelumnya sudah
-  termasuk di "Biaya lain", centang opsi pengurangannya supaya modal tidak dobel.
-- **Isi resep**: ketuk resep untuk membukanya, lalu ubah/hapus/tambah isinya dengan cara yang sama.
-  Perubahan isi resep berlaku untuk **semua menu** yang memakai resep itu (jumlahnya ditampilkan di atas isi resep).
-  Resep tidak bisa memuat dirinya sendiri, langsung maupun lewat resep lain.
-
-"Biaya lain" selalu tersedia dan bisa diubah, termasuk dikosongkan.
+Tekan **Edit** di detail menu atau resep, ubah takaran / hapus / tambah komponen, lalu **Simpan** (lihat bagian form di atas).
+Menyimpan menghapus baris yang dibuang, mengubah takaran yang berubah, dan menambah baris baru, lalu memuat ulang data.
+"Biaya lain" di form menu selalu tersedia dan bisa diubah, termasuk dikosongkan.
 
 ## Yang belum ada di halaman
 
 Membuat **bahan baru, resep baru, atau menu baru** belum bisa dari halaman (yang ada: ubah komposisi,
-harga bahan, harga jual, biaya lain, kategori, dan pengaturan). Sementara itu lewat SQL Editor, contoh bahan baru:
+nama, harga bahan, harga jual, biaya lain, kategori, dan pengaturan). Sementara itu lewat SQL Editor, contoh bahan baru:
 
 ```sql
 insert into hpp_bahan (nama, kategori_id, satuan, isi, unit_dasar, harga)

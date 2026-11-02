@@ -7,8 +7,6 @@ import './hppAnim.css'
 
 /** Potongan tampilan bersama halaman HPP. Gaya mengikuti app (accent, slate, rounded-2xl, font-heading). */
 
-export const WARNA_BAR = ['#f97316', '#fb923c', '#fdba74', '#94a3b8']
-
 const TIER_STYLE = {
   HIGH: 'bg-emerald-50 text-emerald-700',
   SEDANG: 'bg-blue-50 text-blue-700',
@@ -51,9 +49,9 @@ export function ChipRow({ children }) {
   return <div className="mb-3 flex gap-1.5 overflow-x-auto pb-0.5">{children}</div>
 }
 
-export function SearchBox({ value, onChange, placeholder }) {
+export function SearchBox({ value, onChange, placeholder, className = 'mb-3' }) {
   return (
-    <label className="mb-3 flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 text-slate-400 focus-within:border-accent-500 focus-within:ring-2 focus-within:ring-accent-500/20">
+    <label className={`${className} flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 text-slate-400 focus-within:border-accent-500 focus-within:ring-2 focus-within:ring-accent-500/20`}>
       <Search size={16} aria-hidden="true" />
       <input
         type="search" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} aria-label={placeholder}
@@ -75,99 +73,9 @@ export function SectionLabel({ children, className = '' }) {
   return <div className={`text-xs font-bold uppercase tracking-wider text-slate-400 ${className}`}>{children}</div>
 }
 
-/** Satu baris daftar dengan garis pemisah. */
-export function Row({ children, onClick, className = '' }) {
-  const base = `flex items-center justify-between gap-3 border-t border-slate-100 py-2.5 first:border-t-0 ${className}`
-  return onClick
-    ? <button type="button" onClick={onClick} className={`${base} w-full text-left active:opacity-70`}>{children}</button>
-    : <div className={base}>{children}</div>
-}
-
-/**
- * Status isian angka. `draft` = teks yang sedang diketik (null = belum diubah), `value` = nilai tersimpan.
- * Murni (dites): `kotor` = ada ketikan yang belum disimpan, `bisaSimpan` = angkanya valid dan beda dari yang tersimpan.
- */
-export function statusIsian(draft, value) {
-  if (draft === null) return { kotor: false, valid: false, bisaSimpan: false, nilai: null }
-  const nilai = parseAngka(draft)
-  return { kotor: true, valid: nilai !== null, bisaSimpan: nilai !== null && nilai !== value, nilai }
-}
-
-/**
- * Isian angka dengan tombol Simpan. Mengetik hanya mengubah isian; perubahan baru tersimpan saat Simpan (atau Enter)
- * ditekan. Keluar dari kolom TIDAK menyimpan. Batal (atau Esc) mengembalikan angka semula.
- * `onCommit` boleh async: kalau mengembalikan false (gagal), isian tetap terbuka supaya bisa dicoba lagi.
- * `suffix` = teks satuan di samping kolom. `awal` = isian awal (hanya untuk tes).
- */
-export function NumberField({ value, onCommit, ariaLabel, placeholder = '', className = '', align = 'right', gelap = false, suffix = null, awal = null }) {
-  const [draft, setDraft] = useState(awal)
-  const [menyimpan, setMenyimpan] = useState(false)
-  const s = statusIsian(draft, value)
-  const batal = () => setDraft(null)
-  const simpan = async () => {
-    if (!s.bisaSimpan || menyimpan) return
-    setMenyimpan(true)
-    let ok
-    try { ok = await onCommit(s.nilai) } finally { setMenyimpan(false) }
-    if (ok !== false) setDraft(null)
-  }
-  const tombol = 'rounded-xl px-3 py-1 text-xs font-bold transition-transform active:scale-95 disabled:opacity-45'
-  return (
-    <span className={`inline-flex flex-col gap-1.5 ${align === 'right' ? 'items-end' : 'items-start'} ${gelap ? 'w-full' : ''}`}>
-      <span className={`flex items-center gap-1.5 ${gelap ? 'w-full' : ''}`}>
-        <input
-          type="text" inputMode="decimal" aria-label={ariaLabel} placeholder={placeholder} aria-invalid={s.kotor && !s.valid ? 'true' : undefined}
-          value={draft ?? (value ?? '')}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') simpan()
-            if (e.key === 'Escape') batal()
-          }}
-          className={`w-24 rounded-xl border px-2.5 py-1.5 font-semibold tabular-nums outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20 ${
-            align === 'right' ? 'text-right' : 'text-left'
-          } ${gelap ? 'border-slate-700 bg-slate-800 text-white' : `bg-white ${s.kotor ? (s.valid ? 'border-accent-500 text-accent-700' : 'border-red-400 text-red-600') : 'border-slate-200 text-slate-800'}`} ${className}`}
-        />
-        {suffix}
-      </span>
-      {s.kotor && (
-        <span className="hpp-reveal flex items-center gap-1.5">
-          <button type="button" onClick={batal} disabled={menyimpan} aria-label={`Batal ubah ${ariaLabel}`}
-            className={`${tombol} ${gelap ? 'bg-slate-700 text-slate-200' : 'bg-slate-100 text-slate-600'}`}>Batal</button>
-          <button type="button" onClick={simpan} disabled={!s.bisaSimpan || menyimpan} aria-label={`Simpan ${ariaLabel}`}
-            className={`${tombol} bg-gradient-to-r from-accent-600 to-accent-500 text-white shadow shadow-accent-500/30`}>
-            {menyimpan ? 'Menyimpan…' : 'Simpan'}
-          </button>
-        </span>
-      )}
-    </span>
-  )
-}
-
 /** Panel gelap berisi angka utama (gaya "dark-elevated" di app). */
 export function Hero({ children, className = '' }) {
   return <div className={`mb-3 rounded-3xl bg-slate-900 p-4 text-white shadow-2xl ${className}`}>{children}</div>
-}
-export function HeroLabel({ children }) {
-  return <div className="text-xs font-bold uppercase tracking-wider text-slate-400">{children}</div>
-}
-
-/** Bar proporsi + legenda. parts: [{nama, biaya}] */
-export function ProporsiBar({ parts, total, gelap = false }) {
-  const aktif = parts.filter((p) => p.biaya > 0)
-  return (
-    <>
-      <div className={`my-3 flex h-2 gap-0.5 overflow-hidden rounded-full ${gelap ? 'bg-slate-800' : 'bg-slate-100'}`} role="img" aria-label="Proporsi komponen modal">
-        {aktif.map((p, i) => <div key={`${p.kind}-${p.id}-${i}`} style={{ flex: p.biaya, background: WARNA_BAR[i % WARNA_BAR.length] }} />)}
-      </div>
-      <div className={`flex flex-wrap gap-x-3 gap-y-1 text-xs ${gelap ? 'text-slate-300' : 'text-slate-500'}`}>
-        {aktif.map((p, i) => (
-          <span key={`${p.kind}-${p.id}-${i}`}>
-            <span style={{ color: WARNA_BAR[i % WARNA_BAR.length] }}>●</span> {p.nama} {total > 0 ? Math.round((p.biaya / total) * 100) : 0}%
-          </span>
-        ))}
-      </div>
-    </>
-  )
 }
 
 /** Lama menunggu animasi keluar Overlay (ms, sama dengan `motion.ms` varian responsive). */
@@ -258,18 +166,25 @@ export function Sparkline({ nilai, className = '' }) {
   const titik = nilai.map((v, i) => `${((i * 100) / (nilai.length - 1)).toFixed(1)},${(24 - ((v - min) / rentang) * 20).toFixed(1)}`).join(' ')
   return (
     <svg viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="Grafik riwayat" className={`my-1 block h-11 w-full ${className}`}>
-      <polyline points={titik} fill="none" stroke={WARNA_BAR[0]} strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      <polyline points={titik} fill="none" stroke="#f97316" strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
     </svg>
   )
 }
 
-/** Perubahan dalam persen: naik (makin mahal) oranye, turun hijau, hampir nol = "stabil". null = tidak tampil. */
+const PIL = 'inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums'
+
+/** Pil abu-abu netral ("Harga awal", "awal", "stabil"). */
+export function PilNetral({ children }) {
+  return <span className={`${PIL} bg-slate-100 text-slate-400`}>{children}</span>
+}
+
+/** Perubahan dalam persen sebagai pil: naik (makin mahal) merah, turun hijau, hampir nol = "stabil". null = tidak tampil. */
 export function DeltaPersen({ nilai, className = '' }) {
   if (nilai === null || nilai === undefined || !Number.isFinite(nilai)) return null
-  if (Math.abs(nilai) < 0.05) return <span className={`text-xs font-bold text-slate-400 ${className}`}>stabil</span>
+  if (Math.abs(nilai) < 0.05) return <PilNetral>stabil</PilNetral>
   const naik = nilai > 0
   return (
-    <span className={`text-xs font-bold tabular-nums ${naik ? 'text-accent-600' : 'text-emerald-600'} ${className}`}>
+    <span className={`${PIL} ${naik ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'} ${className}`}>
       {naik ? '▲' : '▼'} {persen(Math.abs(nilai))}
     </span>
   )
@@ -277,7 +192,7 @@ export function DeltaPersen({ nilai, className = '' }) {
 
 /** Pil kecil "Belum diisi" (kuning), sama dengan penanda bahan tanpa harga di daftar. */
 export function PilBelumDiisi() {
-  return <span className="inline-block whitespace-nowrap rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700">Belum diisi</span>
+  return <span className={`${PIL} bg-amber-50 text-amber-700`}>Belum diisi</span>
 }
 
 /** Satu kotak angka ringkas (label kecil + nilai). */
@@ -301,28 +216,76 @@ export function TombolAksi({ onClick, children }) {
 }
 
 /**
- * Isian angka besar dengan tombol − dan + (nyaman ditekan di HP). `value` = teks isian, `onChange(teks)`.
- * `step` = besar langkah tombol. `awalan` / `akhiran` = teks di dalam kolom (mis. "Rp", "gr").
+ * Isian angka dengan tombol − dan + (nyaman ditekan di HP). `value` = teks isian, `onChange(teks)`.
+ * `step` = besar langkah tombol. `awalan` / `akhiran` = teks di dalam kolom (mis. "Rp", "gr"). `kecil` = untuk baris komposisi.
  */
-export function Stepper({ value, onChange, step = 1, awalan = null, akhiran = null, ariaLabel }) {
+export function Stepper({ value, onChange, step = 1, awalan = null, akhiran = null, ariaLabel, kecil = false }) {
   const ubah = (arah) => {
     const v = parseAngka(value) ?? 0
     onChange(String(Math.max(0, Math.round((v + arah * step) * 100) / 100)))
   }
-  const tombol = 'flex h-12 w-12 flex-none items-center justify-center rounded-2xl border border-slate-200 bg-white text-2xl font-semibold text-slate-700 transition-transform active:scale-95'
+  const tombol = kecil
+    ? 'flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-slate-200 bg-white text-xl font-semibold text-slate-700 transition-transform active:scale-95'
+    : 'flex h-12 w-12 flex-none items-center justify-center rounded-2xl border border-slate-200 bg-white text-2xl font-semibold text-slate-700 transition-transform active:scale-95'
   return (
     <div className="flex items-stretch gap-2">
       <button type="button" aria-label={`Kurangi ${ariaLabel}`} onClick={() => ubah(-1)} className={tombol}>−</button>
-      <label className="flex min-w-0 flex-1 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 focus-within:border-accent-500 focus-within:ring-2 focus-within:ring-accent-500/20">
+      <label className={`flex min-w-0 flex-1 items-center gap-1.5 border border-slate-200 bg-white focus-within:border-accent-500 focus-within:ring-2 focus-within:ring-accent-500/20 ${kecil ? 'rounded-xl px-2' : 'rounded-2xl px-3'}`}>
         {awalan && <span className="text-sm font-semibold text-slate-400">{awalan}</span>}
         <input
           type="text" inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} aria-label={ariaLabel}
           aria-invalid={value !== '' && parseAngka(value) === null ? 'true' : undefined}
-          className="min-w-0 flex-1 bg-transparent py-2.5 text-right font-heading text-xl font-bold tabular-nums text-slate-900 outline-none"
+          className={`min-w-0 flex-1 bg-transparent text-right font-heading font-bold tabular-nums text-slate-900 outline-none ${kecil ? 'py-2 text-base' : 'py-2.5 text-xl'}`}
         />
         {akhiran && <span className="text-sm font-semibold text-slate-400">{akhiran}</span>}
       </label>
       <button type="button" aria-label={`Tambah ${ariaLabel}`} onClick={() => ubah(1)} className={tombol}>+</button>
+    </div>
+  )
+}
+
+/** Langkah tombol − / + untuk takaran: gr dan ml per 5, satuan lain per 1. */
+export const langkahUnit = (unit) => (unit === 'gr' || unit === 'ml' ? 5 : 1)
+/** Takaran awal komponen yang baru ditambah: 10 gr/ml, selain itu 1. */
+export const qtyAwal = (unit) => (unit === 'gr' || unit === 'ml' ? 10 : 1)
+
+/** Potongan form popup (Update harga / Edit resep / Edit menu). */
+export function FieldLabel({ children }) {
+  return <label className="mb-1.5 mt-3.5 block text-xs font-bold text-slate-400">{children}</label>
+}
+
+export function TextInput({ value, onChange, ariaLabel }) {
+  return (
+    <input type="text" value={value} onChange={(e) => onChange(e.target.value)} aria-label={ariaLabel}
+      className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-3 text-slate-800 outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20" />
+  )
+}
+
+/** Kotak pratinjau di bawah form (angka lama → baru). */
+export function Pratinjau({ children }) {
+  return <div className="mt-3.5 rounded-2xl bg-white px-3.5 py-3 text-sm text-slate-600" aria-live="polite">{children}</div>
+}
+
+/** Tombol "Lihat menu terdampak" di dalam Pratinjau. */
+export function TombolDampak({ n, onClick }) {
+  return (
+    <button type="button" onClick={onClick}
+      className="mt-2.5 w-full rounded-2xl border-[1.5px] border-accent-500 py-2.5 font-bold text-accent-600 active:scale-[0.98]">
+      Lihat menu terdampak ({n})
+    </button>
+  )
+}
+
+/** Batal + Simpan di bawah form. `bisa` = Simpan aktif. */
+export function TombolForm({ onBatal, onSimpan, bisa, proses = false }) {
+  return (
+    <div className="mt-4 flex gap-2.5">
+      <button type="button" onClick={onBatal}
+        className="flex-1 rounded-2xl bg-slate-200/70 py-3.5 font-bold text-slate-600 active:scale-[0.98]">Batal</button>
+      <button type="button" onClick={onSimpan} disabled={!bisa || proses}
+        className="flex-1 rounded-2xl bg-gradient-to-r from-accent-600 to-accent-500 py-3.5 font-bold text-white shadow-lg shadow-accent-500/30 transition-transform active:scale-[0.98] disabled:opacity-45 disabled:shadow-none">
+        {proses ? 'Menyimpan…' : 'Simpan'}
+      </button>
     </div>
   )
 }

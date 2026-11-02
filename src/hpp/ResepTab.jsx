@@ -1,23 +1,28 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { kelompokResep, makeCtx, resepRows, riwayatModalRows } from './hppModel'
 import { angka, rupiah, rupiahUnit } from './hppFormat'
-import { PilBelumDiisi, Sel, SearchBox, TombolAksi } from './ui'
+import { DeltaPersen, PilBelumDiisi, Sel, TombolAksi } from './ui'
 import DaftarKelompok, { BarisLipat, RiwayatMini, useBarisTerbuka } from './DaftarUi'
 
 /**
  * Tab Resep: resep per grup (Menu utama, Saos dan sambal, Topping, ...), grup menguncup di awal. Ketuk resep untuk
- * melihat isi dan riwayat modalnya; tombol Edit membuka popup isi resep (ResepSheet).
+ * melihat isi dan riwayat modalnya; tombol Edit membuka form resep (ResepSheet). `q` = kata cari dari bilah atas.
  */
-export default function ResepTab({ model, onOpen, awalBuka = false, awalTerbuka = [] }) {
-  const [q, setQ] = useState('')
+export default function ResepTab({ model, onOpen, q = '', awalBuka = false, awalTerbuka = [] }) {
   const [terbuka, toggle] = useBarisTerbuka(awalTerbuka)
   const ctx = useMemo(() => makeCtx(model), [model])
   const cari = q.trim().toLowerCase()
   const grup = kelompokResep(Object.values(model.resep).filter((r) => r.nama.toLowerCase().includes(cari)))
+  // Perubahan modal terakhir tiap resep (chip di baris), dihitung dari riwayat harga bahannya. Hanya resep yang tampil.
+  const perubahan = useMemo(() => {
+    const peta = new Map()
+    for (const g of grup) for (const r of g.items) peta.set(r.id, r.items.length ? (riwayatModalRows(model, { resepId: r.id })[0]?.persen ?? null) : null)
+    return peta
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model, cari])
 
   return (
     <section>
-      <SearchBox value={q} onChange={setQ} placeholder="Cari resep" />
       <DaftarKelompok grup={grup} cari={cari} awalBuka={awalBuka} kosong="Tidak ada resep yang cocok"
         renderItem={(r) => {
           const kosong = r.items.length === 0
@@ -25,8 +30,9 @@ export default function ResepTab({ model, onOpen, awalBuka = false, awalTerbuka 
           const unit = r.hasilUnit || 'porsi'
           return (
             <BarisLipat key={r.id} buka={terbuka.has(r.id)} onToggle={() => toggle(r.id)} judul={r.nama}
-              sub={r.hasilQty ? `Hasil ${angka(r.hasilQty)} ${unit}${kosong ? '' : ` · ≈ ${rupiahUnit(total / r.hasilQty)}/${unit}`}` : `Per porsi · ${r.items.length} bahan`}
-              nilai={kosong ? <PilBelumDiisi /> : <span className="font-bold tabular-nums text-slate-800">{rupiah(total)}</span>}>
+              sub={r.hasilQty ? `Hasil ${angka(r.hasilQty)} ${unit}${kosong ? '' : ` · ≈ ${rupiahUnit(total / r.hasilQty)}/${unit}`}` : 'Per porsi'}
+              nilai={kosong ? <PilBelumDiisi /> : <span className="font-bold tabular-nums text-slate-800">{rupiah(total)}</span>}
+              chip={kosong ? null : <DeltaPersen nilai={perubahan.get(r.id) ?? null} />}>
               <DetailResep model={model} ctx={ctx} r={r} total={total} unit={unit} />
               <TombolAksi onClick={() => onOpen(r.id)}>Edit</TombolAksi>
             </BarisLipat>
@@ -47,7 +53,7 @@ function DetailResep({ model, ctx, r, total, unit }) {
         <div key={row.itemId} className="flex items-center justify-between gap-3 border-t border-slate-100 py-1.5 text-sm first:border-t-0">
           <span className="min-w-0 truncate text-slate-700">{row.nama}</span>
           <span className="flex-none text-slate-400">{angka(row.qty)} {row.unit}</span>
-          <span className="w-20 flex-none text-right font-semibold tabular-nums text-slate-800">{rupiah(row.biaya)}</span>
+          <span className="w-24 flex-none text-right font-semibold tabular-nums text-slate-800">{rupiah(row.biaya)}</span>
         </div>
       ))}
       <div className={`mt-2 grid gap-2 ${r.hasilQty ? 'grid-cols-3' : 'grid-cols-2'}`}>

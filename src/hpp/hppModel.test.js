@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { RAW } from './fixture';
 import {
-  biayaKomponen, bisaTambahSub, buildModel, ctxAcuan, dampakHarga, dampakUbah, hargaMinimal, hargaPada, isiBawaan, kelompokResep, kelompokkan, makeCtx, marginPct,
-  menuBahanKosong, menuInfo, menuParts, menusUsingBahan, menusUsingResep, opsiSatuan, perubahanTerakhir, resepMemuat, resepRows, riwayatBahanRows,
+  bisaTambahSub, buildModel, ctxAcuan, dampakUbah, dampakUbahResep, draftBerubah, draftDariMenu, draftDariResep, draftValid, hargaMinimal, hargaPada, isiBawaan, kelompokResep, kelompokkan, makeCtx, marginPct,
+  itemsMenuDariDraft, itemsResepDariDraft, menuBahanKosong, menuInfo, menuParts, modelDenganResep, resepPerUnit, ringkasanDaftar, menusUsingBahan, menusUsingResep, opsiSatuan, perubahanTerakhir, resepMemuat, resepRows, riwayatBahanRows,
   riwayatModalRows, tierOf, tiersFor,
 } from './hppModel';
 
@@ -116,8 +116,7 @@ describe('struktur', () => {
 
 describe('dampak perubahan harga dan acuan', () => {
   it('ayam 1000 -> 2000: menu terdampak dihitung sebelum dan sesudah', () => {
-    const raw = { ...RAW, bahan: RAW.bahan.map((b) => (b.id === 'A' ? { ...b, harga: 2000 } : b)) };   // harga SEKARANG 2000
-    const d = dampakHarga(buildModel(raw), 'A', 1000);
+    const d = dampakUbah(buildModel(RAW), 'A', { harga: 2000 });
     expect(d.rows).toHaveLength(1);
     const r = d.rows[0];
     expect(r.sebelum.hpp).toBeCloseTo(1730);
@@ -127,12 +126,8 @@ describe('dampak perubahan harga dan acuan', () => {
   });
 
   it('menandai menu yang berpindah kategori margin', () => {
-    const raw = {
-      ...RAW,
-      setting: [{ key: 'margin', value: { lo: 82, hi: 82 } }],
-      bahan: RAW.bahan.map((b) => (b.id === 'A' ? { ...b, harga: 2000 } : b)),
-    };
-    const d = dampakHarga(buildModel(raw), 'A', 1000);
+    const raw = { ...RAW, setting: [{ key: 'margin', value: { lo: 82, hi: 82 } }] };
+    const d = dampakUbah(buildModel(raw), 'A', { harga: 2000 });
     expect(d.rows[0].sebelum.tier).toBe('HIGH');   // 82,7%
     expect(d.rows[0].sesudah.tier).toBe('LOW');    // 81,4%
     expect(d.ganti).toBe(1);
@@ -178,13 +173,6 @@ describe('komposisi: id baris, lingkaran, dan pemakai resep', () => {
     expect(menusUsingResep(m, 'porsi').map((x) => x.id)).toEqual(['m1']);
     expect(menusUsingResep(m, 'saos').map((x) => x.id)).toEqual(['m1']);   // saos ada di dalam porsi
     expect(menusUsingResep(m, 'tidak-ada')).toEqual([]);
-  });
-
-  it('biayaKomponen: bahan = qty x harga per unit; resep = biaya pada takaran itu', () => {
-    const c = makeCtx(model());
-    expect(biayaKomponen(c, { bahanId: 'B', qty: 3 })).toBe(3000);
-    expect(biayaKomponen(c, { resepId: 'saos', qty: 100 })).toBeCloseTo(260);     // 100 dari batch 1000, total 2600
-    expect(biayaKomponen(c, { resepId: 'porsi', qty: 2 })).toBeCloseTo(460);
   });
 
   it('menambah dan menghapus komponen mengubah HPP menu sesuai biayanya', () => {
@@ -276,5 +264,79 @@ describe('daftar HPP: kelompok resep, riwayat turunan, dampak ubah', () => {
     expect(isiBawaan('liter', 'ml')).toBe(1000);
     expect(isiBawaan('kg', 'pcs')).toBeNull();
     expect(isiBawaan('pack', 'gr')).toBeNull();
+  });
+});
+
+describe('draft form komposisi dan dampak resep', () => {
+  const m = buildModel(RAW);
+
+  it('draftDariMenu / draftDariResep: salinan baris dengan takaran teks; tidak berubah = draftBerubah false', () => {
+    const dm = draftDariMenu(m.menu[0]);
+    expect(dm).toEqual([
+      { key: 'j1', id: 'j1', kind: 'resep', ref: 'porsi', qty: '1' },
+      { key: 'j2', id: 'j2', kind: 'bahan', ref: 'B', qty: '1' },
+    ]);
+    const dr = draftDariResep(m.resep.porsi);
+    expect(dr.map((d) => [d.kind, d.ref, d.qty])).toEqual([['resep', 'saos', '50'], ['bahan', 'A', '100']]);
+    expect(draftBerubah(dm, draftDariMenu(m.menu[0]))).toBe(false);
+  });
+
+  it('draftBerubah: takaran beda, baris dihapus, baris ditambah; "1" dan "1,0" dianggap sama', () => {
+    const asli = draftDariMenu(m.menu[0]);
+    expect(draftBerubah(asli, asli.map((d, i) => (i ? { ...d, qty: '2' } : d)))).toBe(true);
+    expect(draftBerubah(asli, asli.slice(1))).toBe(true);
+    expect(draftBerubah(asli, [...asli, { key: 'baru-bahan-A', id: null, kind: 'bahan', ref: 'A', qty: '10' }])).toBe(true);
+    expect(draftBerubah(asli, asli.map((d) => ({ ...d, qty: '1,0' })))).toBe(false);
+  });
+
+  it('draftValid: semua takaran harus angka lebih dari 0', () => {
+    const asli = draftDariMenu(m.menu[0]);
+    expect(draftValid(asli)).toBe(true);
+    expect(draftValid([{ ...asli[0], qty: '0' }])).toBe(false);
+    expect(draftValid([{ ...asli[0], qty: '' }])).toBe(false);
+    expect(draftValid([{ ...asli[0], qty: 'abc' }])).toBe(false);
+    expect(draftValid([])).toBe(true);
+  });
+
+  it('itemsMenuDariDraft / itemsResepDariDraft: bentuk item model (resepId vs subResepId), urutan 1..n, takaran angka', () => {
+    expect(itemsMenuDariDraft(draftDariMenu(m.menu[0]))).toEqual([
+      { id: 'j1', urutan: 1, bahanId: null, resepId: 'porsi', qty: 1 },
+      { id: 'j2', urutan: 2, bahanId: 'B', resepId: null, qty: 1 },
+    ]);
+    expect(itemsResepDariDraft(draftDariResep(m.resep.porsi))).toEqual([
+      { id: 'i3', urutan: 1, bahanId: null, subResepId: 'saos', qty: 50 },
+      { id: 'i4', urutan: 2, bahanId: 'A', subResepId: null, qty: 100 },
+    ]);
+  });
+
+  it('modelDenganResep: model asli tidak berubah; hitungan ikut isi baru', () => {
+    const items = itemsResepDariDraft(draftDariResep(m.resep.porsi).map((d) => (d.ref === 'A' ? { ...d, qty: '200' } : d)));
+    const m2 = modelDenganResep(m, 'porsi', { items });
+    expect(m.resep.porsi.items.find((i) => i.bahanId === 'A').qty).toBe(100);
+    expect(makeCtx(m2).resepTotal('porsi')).toBeCloseTo(makeCtx(m).resepTotal('porsi') + 100 * 1);   // +100 gr ayam @ Rp1/gr
+  });
+
+  it('dampakUbahResep: menu pemakai berubah modalnya; hasil batch dibagi lebih besar = modal turun', () => {
+    const items = itemsResepDariDraft(draftDariResep(m.resep.saos).map((d) => (d.ref === 'A' ? { ...d, qty: '700' } : d)));
+    const d = dampakUbahResep(m, 'saos', { items });
+    expect(d.rows.map((r) => r.menu.id)).toEqual(['m1']);
+    expect(d.rows[0].selisih).toBeCloseTo((100 * 1 / 1000) * 50);          // +100 gr ayam di batch 1000, dipakai 50
+    const hasilBesar = dampakUbahResep(m, 'saos', { hasilQty: 2000 });
+    expect(hasilBesar.rows[0].selisih).toBeLessThan(0);
+    expect(dampakUbahResep(m, 'saos', {}).rows).toEqual([]);               // tidak ada perubahan = tidak ada dampak
+    expect(dampakUbahResep(m, 'tidak-ada', {}).rows).toEqual([]);
+  });
+
+  it('resepPerUnit: batch = total / hasil; per porsi = total', () => {
+    expect(resepPerUnit({ hasilQty: 1000 }, 2600)).toBeCloseTo(2.6);
+    expect(resepPerUnit({ hasilQty: null }, 230)).toBe(230);
+  });
+
+  it('ringkasanDaftar: margin rata-rata menu berkomposisi + jumlah LOW; belum ada komposisi = jumlah data', () => {
+    expect(ringkasanDaftar(m)).toMatch(/^Margin rata-rata \d+,\d% · 0 menu LOW \(di bawah 30%\)$/);
+    const kosong = buildModel({ ...RAW, menuItem: [] });
+    expect(ringkasanDaftar(kosong)).toBe('3 bahan · 2 resep · 2 menu · komposisi belum diisi');
+    const rendah = buildModel({ ...RAW, setting: [{ key: 'margin', value: { lo: 90, hi: 90 } }] });
+    expect(ringkasanDaftar(rendah)).toContain('2 menu LOW (di bawah 90%)');
   });
 });

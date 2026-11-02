@@ -72,14 +72,18 @@ describe('pulihkanSesi dan keluar', () => {
 });
 
 describe('route tab', () => {
-  it('path ke tab dan sebaliknya', () => {
-    expect(tabFromPath('/hpp')).toBe('menu');
-    expect(tabFromPath('/hpp/')).toBe('menu');
+  it('path ke tab dan sebaliknya; tab awal = Bahan baku', () => {
+    expect(tabFromPath('/hpp')).toBe('bahan');
+    expect(tabFromPath('/hpp/')).toBe('bahan');
+    expect(tabFromPath('/hpp/resep')).toBe('resep');
+    expect(tabFromPath('/hpp/menu')).toBe('menu');
+    expect(tabFromPath('/hpp/menu/')).toBe('menu');
+    expect(TABS.map((t) => t.key)).toEqual(['bahan', 'resep', 'menu']);
+    expect(tabFromPath('/hpp/apa-saja')).toBe('bahan');
+    for (const t of TABS) expect(tabFromPath(pathForTab(t.key))).toBe(t.key);
+  });
+  it('alamat lama /hpp/bahan tetap membuka Bahan baku', () => {
     expect(tabFromPath('/hpp/bahan')).toBe('bahan');
     expect(tabFromPath('/hpp/bahan/')).toBe('bahan');
-    expect(tabFromPath('/hpp/resep')).toBe('resep');
-    expect(TABS.map((t) => t.key)).toEqual(['bahan', 'resep', 'menu']);
-    expect(tabFromPath('/hpp/apa-saja')).toBe('menu');
-    for (const t of TABS) expect(tabFromPath(pathForTab(t.key))).toBe(t.key);
   });
 });

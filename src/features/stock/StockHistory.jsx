@@ -9,7 +9,7 @@ import { shiftMonthKey, monthLabel, dayLabel as fullDayLabel } from '../reports/
 import { daySummary, dayItems, filterDayGroups, dayLabel, formatQty, businessDate, STATUS_META } from './stockMath';
 import { calendarCells, monthOf, opnameGroups, opnameValue, itemsWithoutPrice } from './opnameMath';
 import Switch from './Switch';
-import ShoppingListSheet from './ShoppingListSheet';
+import { useShopping, ShopCheck, ShopQty, ShopExtras, ShopBar } from './ShoppingList';
 
 const time = (iso) => { try { return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(':', '.'); } catch { return ''; } };
 const LBL = 'text-slate-400 dark:text-slate-500';
@@ -26,12 +26,12 @@ const FILTERS = [
 /** `counts` = isian hari itu ([{ item_id, qty }]); null = masih dimuat. */
 function DaySheet({ day, counts, master, onClose }) {
   const [filter, setFilter] = useState('semua');   // DaySheet dipasang ulang (key) tiap hari dibuka, jadi selalu mulai dari Semua
-  const [listOpen, setListOpen] = useState(false);
   const { groups: all, kosong } = useMemo(() => (day && counts ? dayItems(master, counts) : { groups: [], kosong: 0 }), [day, counts, master]);
   const summary = useMemo(() => (counts ? daySummary(master, counts) : { habis: 0, menipis: 0, aman: 0 }), [counts, master]);
   const groups = useMemo(() => filterDayGroups(all, filter), [all, filter]);
+  const shop = useShopping(all, dayLabel(businessDate()));   // daftar belanja dicentang langsung di daftar ini (tanpa popup baru)
   return (
-    <Modal isOpen={!!day} onClose={onClose} sheet size="lg" maxHeight title={day ? fullDayLabel(day.day) : ''}>
+    <Modal isOpen={!!day} onClose={onClose} sheet size="lg" maxHeight title={day ? fullDayLabel(day.day) : ''} dirty={shop.dirty}>
       {day && (
         <div className="p-5 pt-2 space-y-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]" data-testid="stok-riwayat-detail">
           <p className="text-xs text-slate-500 dark:text-slate-400">Disimpan {day.saved_by ? `oleh ${day.saved_by} ` : ''}pukul {time(day.saved_at)}</p>
@@ -49,20 +49,36 @@ function DaySheet({ day, counts, master, onClose }) {
                   );
                 })}
               </div>
-              {summary.habis + summary.menipis > 0 && (
-                <Button variant="secondary" size="full" onClick={() => setListOpen(true)} icon={<ShoppingCart className="w-4 h-4" />} data-testid="stok-buat-belanja">Buat daftar belanja</Button>
+              {!shop.on && all.length > 0 && (
+                <Button variant="secondary" size="full" onClick={shop.start} icon={<ShoppingCart className="w-4 h-4" />} data-testid="stok-buat-belanja">Buat daftar belanja</Button>
+              )}
+              {shop.on && (
+                <div className="flex items-center justify-between gap-3" data-testid="belanja-mode">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Centang yang mau dibeli, lalu isi jumlahnya.</p>
+                  <Button variant="secondary" size="xs" onClick={shop.stop} data-testid="belanja-selesai">Selesai</Button>
+                </div>
               )}
               {groups.map((g) => (
                 <div key={g.category.id}>
                   <p className="text-xs font-bold tracking-wide text-slate-400 dark:text-slate-500 mb-1.5">{g.category.name.toUpperCase()}</p>
                   <Card padding="none" className="divide-y divide-slate-100 dark:divide-slate-800">
                     {g.rows.map((r) => (
-                      <div key={r.item.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 min-w-0 truncate">{r.item.name}</p>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <p className="text-sm font-bold text-slate-900 dark:text-slate-50">{formatQty(r.qty)}<span className="text-xs font-semibold text-slate-400 dark:text-slate-500"> {r.item.unit}</span></p>
-                          <Badge variant={STATUS_META[r.status].badge}>{STATUS_META[r.status].label}</Badge>
+                      <div key={r.item.id} className="px-4 py-2.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            {shop.on && <ShopCheck checked={shop.isOn(r.item.id)} onToggle={() => shop.toggle(r.item.id)} label={`Beli ${r.item.name}`} testId={`belanja-cek-${r.item.id}`} />}
+                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 min-w-0 truncate">{r.item.name}</p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <p className="text-sm font-bold text-slate-900 dark:text-slate-50">{formatQty(r.qty)}<span className="text-xs font-semibold text-slate-400 dark:text-slate-500"> {r.item.unit}</span></p>
+                            <Badge variant={STATUS_META[r.status].badge}>{STATUS_META[r.status].label}</Badge>
+                          </div>
                         </div>
+                        {shop.on && shop.isOn(r.item.id) && (
+                          <div className="pl-9">
+                            <ShopQty value={shop.qtyOf(r.item.id)} onChange={(v) => shop.setQty(r.item.id, v)} label={`Jumlah beli ${r.item.name}`} testId={`belanja-jumlah-${r.item.id}`} />
+                          </div>
+                        )}
                       </div>
                     ))}
                   </Card>
@@ -70,7 +86,8 @@ function DaySheet({ day, counts, master, onClose }) {
               ))}
               {groups.length === 0 && <p className="text-center text-sm text-slate-400 py-6">{filter === 'semua' ? 'Tidak ada angka yang tersimpan pada hari ini.' : `Tidak ada item yang ${FILTERS.find((f) => f.key === filter).label} pada hari ini.`}</p>}
               {filter === 'semua' && kosong > 0 && groups.length > 0 && <p className="text-xs text-center text-slate-400 dark:text-slate-500">{kosong} item lain tidak diisi hari itu.</p>}
-              <ShoppingListSheet open={listOpen} onClose={() => setListOpen(false)} groups={all} dateLabel={dayLabel(businessDate())} sourceLabel={dayLabel(day.day)} />
+              {shop.on && <ShopExtras shop={shop} />}
+              {shop.on && <ShopBar shop={shop} />}
             </>
           )}
         </div>

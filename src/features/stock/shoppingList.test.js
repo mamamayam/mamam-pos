@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { suggestShoppingItems, addCustomItem, checkedCount, shoppingText, isLeftoverCategory } from './shoppingList';
+import { isLeftoverCategory, initialSelection, findRowId, addExtra, selectedItems, shoppingText } from './shoppingList';
 import { dayItems } from './stockMath';
 
 const item = (id, name, unit, min = 0) => ({ id, name, unit, min_qty: min, required: true });
@@ -24,87 +24,96 @@ describe('isLeftoverCategory', () => {
   });
 });
 
-describe('suggestShoppingItems', () => {
-  it('hanya Habis dan Menipis; yang Aman tidak ikut', () => {
-    const names = suggestShoppingItems(groups).map((i) => i.name);
-    expect(names).not.toContain('Lunchbox L');
-    expect(names).toEqual(expect.arrayContaining(['BLD', 'Karkas/Classic', 'Lunchbox M', 'Sendok']));
+describe('initialSelection', () => {
+  it('mencentang item Habis dan Menipis di kategori belanja saja', () => {
+    expect(Object.keys(initialSelection(groups)).sort()).toEqual(['p2', 'p3', 'r1', 'r3']);
   });
-  it('item belanja dicentang dan didahulukan; sisa masak di bawah dan tidak dicentang', () => {
-    const list = suggestShoppingItems(groups);
-    const bought = list.filter((i) => i.checked).map((i) => i.id);
-    expect(bought).toEqual(['r1', 'r3', 'p2', 'p3']);
-    const tail = list.slice(bought.length);
-    expect(tail.map((i) => i.id)).toEqual(['m1', 'm2']);
-    expect(tail.every((i) => !i.checked)).toBe(true);
+  it('yang Aman dan sisa masak tidak dicentang; jumlah awal kosong', () => {
+    const sel = initialSelection(groups);
+    expect(sel.p1).toBeUndefined();   // Lunchbox L aman
+    expect(sel.r2).toBeUndefined();   // Wings mentah aman
+    expect(sel.m1).toBeUndefined();   // Mamam matang habis, tapi sisa masak
+    expect(sel.r1).toEqual({ on: true, qty: '' });
   });
-  it('Wings mentah yang Aman tidak ikut walau namanya sama dengan Wings matang yang habis', () => {
-    const wings = suggestShoppingItems(groups).filter((i) => i.name === 'Wings');
-    expect(wings).toHaveLength(1);
-    expect(wings[0].category).toBe('Ayam Matang Sisa');
-  });
-  it('tanpa data = daftar kosong', () => {
-    expect(suggestShoppingItems()).toEqual([]);
-    expect(suggestShoppingItems([])).toEqual([]);
+  it('tanpa data = kosong', () => {
+    expect(initialSelection()).toEqual({});
+    expect(initialSelection([])).toEqual({});
   });
 });
 
-describe('addCustomItem', () => {
-  const base = suggestShoppingItems(groups);
-  it('menambah item baru yang langsung dicentang', () => {
-    const next = addCustomItem(base, '  Kantong   kresek ');
-    const added = next[next.length - 1];
-    expect(added).toMatchObject({ name: 'Kantong kresek', checked: true, custom: true, qty: '' });
-    expect(next).toHaveLength(base.length + 1);
+describe('findRowId', () => {
+  it('mencari item stok menurut nama tanpa peduli huruf besar/kecil dan spasi ganda', () => {
+    expect(findRowId(groups, 'sendok')).toBe('p3');
+    expect(findRowId(groups, '  lunchbox   m ')).toBe('p2');
+  });
+  it('nama tidak dikenal atau kosong = null', () => {
+    expect(findRowId(groups, 'Kantong kresek')).toBeNull();
+    expect(findRowId(groups, '   ')).toBeNull();
+    expect(findRowId(groups, undefined)).toBeNull();
+  });
+});
+
+describe('addExtra', () => {
+  it('menambah item baru yang langsung dicentang, nama dirapikan', () => {
+    const next = addExtra([], '  Kantong   kresek ');
+    expect(next).toEqual([{ id: 'x:kantong kresek', name: 'Kantong kresek', on: true, qty: '' }]);
   });
   it('nama kosong tidak mengubah apa pun', () => {
-    expect(addCustomItem(base, '   ')).toBe(base);
-    expect(addCustomItem(base, undefined)).toBe(base);
+    const base = [];
+    expect(addExtra(base, '   ')).toBe(base);
+    expect(addExtra(base, undefined)).toBe(base);
   });
-  it('nama yang sudah ada hanya dicentang, tidak dobel', () => {
-    const next = addCustomItem(base, 'sendok');
-    expect(next).toHaveLength(base.length);
-    expect(next.find((i) => i.id === 'p3').checked).toBe(true);
-    const leftover = addCustomItem(base, 'mamam');
-    expect(leftover.find((i) => i.id === 'm1').checked).toBe(true);
+  it('nama sama (beda huruf besar/kecil) tidak dobel, hanya dicentang lagi', () => {
+    const off = addExtra([], 'Kresek').map((e) => ({ ...e, on: false }));
+    const next = addExtra(off, 'KRESEK');
+    expect(next).toHaveLength(1);
+    expect(next[0].on).toBe(true);
   });
-  it('nama sama dua kali tidak dobel', () => {
-    const once = addCustomItem(base, 'Kresek');
-    expect(addCustomItem(once, 'KRESEK')).toHaveLength(once.length);
+});
+
+describe('selectedItems', () => {
+  it('mengikuti urutan daftar stok, lalu item tambahan; hanya yang dicentang', () => {
+    const sel = { ...initialSelection(groups), r1: { on: true, qty: '5 kg' }, p2: { on: false, qty: '' } };
+    const extras = [{ id: 'x:kresek', name: 'Kresek', on: true, qty: '2 pak' }, { id: 'x:plastik', name: 'Plastik', on: false, qty: '' }];
+    expect(selectedItems(groups, sel, extras)).toEqual([
+      { id: 'r1', name: 'BLD', qty: '5 kg' },
+      { id: 'r3', name: 'Karkas/Classic', qty: '' },
+      { id: 'p3', name: 'Sendok', qty: '' },
+      { id: 'x:kresek', name: 'Kresek', qty: '2 pak' },
+    ]);
+  });
+  it('item aman atau sisa masak bisa dicentang manual dan ikut di urutan master', () => {
+    const sel = { ...initialSelection(groups), m1: { on: true, qty: '' }, p1: { on: true, qty: '10' } };
+    const names = selectedItems(groups, sel).map((i) => i.name);
+    expect(names[0]).toBe('Mamam');
+    expect(names).toContain('Lunchbox L');
+  });
+  it('tanpa pilihan = kosong', () => {
+    expect(selectedItems(groups, {}, [])).toEqual([]);
+    expect(selectedItems()).toEqual([]);
   });
 });
 
 describe('shoppingText', () => {
-  it('hanya item tercentang, bernomor, dengan jumlah bila diisi', () => {
-    const list = suggestShoppingItems(groups).map((i) => (i.id === 'r1' ? { ...i, qty: '5 kg' } : i));
-    expect(shoppingText(list, 'Sel, 3 Nov')).toBe(
+  it('bernomor, dengan jumlah bila diisi', () => {
+    const sel = { ...initialSelection(groups), r1: { on: true, qty: '5 kg' } };
+    expect(shoppingText(selectedItems(groups, sel), 'Sel, 3 Nov')).toBe(
       ['*Belanja MamamAyam*', 'Sel, 3 Nov', '', '1. BLD - 5 kg', '2. Karkas/Classic', '3. Lunchbox M', '4. Sendok'].join('\n'),
     );
   });
-  it('item yang tidak dicentang tidak ikut; jumlah hanya spasi dianggap kosong', () => {
-    const list = suggestShoppingItems(groups).map((i) => (i.id === 'p2' ? { ...i, checked: false } : i.id === 'p3' ? { ...i, qty: '   ' } : i));
-    const text = shoppingText(list);
-    expect(text).not.toContain('Lunchbox M');
-    expect(text).toContain('3. Sendok');
+  it('jumlah hanya spasi dianggap kosong', () => {
+    const text = shoppingText([{ id: 'a', name: 'Sendok', qty: '   ' }]);
+    expect(text).toContain('1. Sendok');
     expect(text).not.toContain('Sendok -');
   });
   it('tanpa tanggal: baris tanggal tidak ada', () => {
-    expect(shoppingText([{ id: 'a', name: 'A', checked: true, qty: '' }]).split('\n')).toEqual(['*Belanja MamamAyam*', '', '1. A']);
+    expect(shoppingText([{ id: 'a', name: 'A', qty: '' }]).split('\n')).toEqual(['*Belanja MamamAyam*', '', '1. A']);
   });
-  it('tidak ada yang dicentang: keterangan kosong, bukan daftar kosong', () => {
-    const none = suggestShoppingItems(groups).map((i) => ({ ...i, checked: false }));
-    expect(shoppingText(none, 'Sel, 3 Nov')).toContain('Belum ada item dipilih.');
+  it('tidak ada yang dipilih: keterangan, bukan teks kosong', () => {
+    expect(shoppingText([], 'Sel, 3 Nov')).toContain('Belum ada item dipilih.');
   });
   it('item tambahan dengan jumlah ikut di teks', () => {
-    const list = addCustomItem([], 'Kantong kresek').map((i) => ({ ...i, qty: '2 pak' }));
-    expect(shoppingText(list)).toContain('1. Kantong kresek - 2 pak');
-  });
-});
-
-describe('checkedCount', () => {
-  it('menghitung item tercentang', () => {
-    const list = suggestShoppingItems(groups);
-    expect(checkedCount(list)).toBe(4);
-    expect(checkedCount([])).toBe(0);
+    const items = selectedItems([], {}, addExtra([], 'Kantong kresek').map((e) => ({ ...e, qty: '2 pak' })));
+    expect(shoppingText(items)).toContain('1. Kantong kresek - 2 pak');
   });
 });

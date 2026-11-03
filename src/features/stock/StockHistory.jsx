@@ -9,7 +9,7 @@ import { shiftMonthKey, monthLabel, dayLabel as fullDayLabel } from '../reports/
 import { daySummary, dayItems, filterDayGroups, dayLabel, formatQty, businessDate, STATUS_META } from './stockMath';
 import { calendarCells, monthOf, opnameGroups, opnameValue, itemsWithoutPrice } from './opnameMath';
 import Switch from './Switch';
-import { useShopping, ShopCheck, ShopQty, ShopExtras, ShopBar } from './ShoppingList';
+import { useShopping, ShopCheck, ShopExtras, ShopBar } from './ShoppingList';
 
 const time = (iso) => { try { return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(':', '.'); } catch { return ''; } };
 const LBL = 'text-slate-400 dark:text-slate-500';
@@ -54,7 +54,7 @@ function DaySheet({ day, counts, master, onClose }) {
               )}
               {shop.on && (
                 <div className="flex items-center justify-between gap-3" data-testid="belanja-mode">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Centang yang mau dibeli, lalu isi jumlahnya.</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Centang yang mau dibeli. Sisa stoknya ikut ke teks WhatsApp.</p>
                   <Button variant="secondary" size="xs" onClick={shop.stop} data-testid="belanja-selesai">Selesai</Button>
                 </div>
               )}
@@ -63,22 +63,15 @@ function DaySheet({ day, counts, master, onClose }) {
                   <p className="text-xs font-bold tracking-wide text-slate-400 dark:text-slate-500 mb-1.5">{g.category.name.toUpperCase()}</p>
                   <Card padding="none" className="divide-y divide-slate-100 dark:divide-slate-800">
                     {g.rows.map((r) => (
-                      <div key={r.item.id} className="px-4 py-2.5">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3 min-w-0">
-                            {shop.on && <ShopCheck checked={shop.isOn(r.item.id)} onToggle={() => shop.toggle(r.item.id)} label={`Beli ${r.item.name}`} testId={`belanja-cek-${r.item.id}`} />}
-                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 min-w-0 truncate">{r.item.name}</p>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <p className="text-sm font-bold text-slate-900 dark:text-slate-50">{formatQty(r.qty)}<span className="text-xs font-semibold text-slate-400 dark:text-slate-500"> {r.item.unit}</span></p>
-                            <Badge variant={STATUS_META[r.status].badge}>{STATUS_META[r.status].label}</Badge>
-                          </div>
+                      <div key={r.item.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {shop.on && <ShopCheck checked={shop.isOn(r.item.id)} onToggle={() => shop.toggle(r.item.id)} label={`Beli ${r.item.name}`} testId={`belanja-cek-${r.item.id}`} />}
+                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 min-w-0 truncate">{r.item.name}</p>
                         </div>
-                        {shop.on && shop.isOn(r.item.id) && (
-                          <div className="pl-9">
-                            <ShopQty value={shop.qtyOf(r.item.id)} onChange={(v) => shop.setQty(r.item.id, v)} label={`Jumlah beli ${r.item.name}`} testId={`belanja-jumlah-${r.item.id}`} />
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <p className="text-sm font-bold text-slate-900 dark:text-slate-50">{formatQty(r.qty)}<span className="text-xs font-semibold text-slate-400 dark:text-slate-500"> {r.item.unit}</span></p>
+                          <Badge variant={STATUS_META[r.status].badge}>{STATUS_META[r.status].label}</Badge>
+                        </div>
                       </div>
                     ))}
                   </Card>

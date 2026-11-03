@@ -4,24 +4,13 @@
  *
  * Bentuk data:
  *   groups = hasil `dayItems(...).groups` (belum disaring): [{ category, rows: [{ item, qty, status }] }]
- *   sel    = { [itemId]: { on: boolean, qty: string } }   (centang + jumlah beli; teks bebas "5 kg")
- *   extras = [{ id, name, on, qty }]                       (item di luar stok, mis. "Kantong kresek")
+ *   sel    = { [itemId]: true }                  (item stok yang dicentang; tidak ada centang otomatis)
+ *   extras = [{ id, name, on }]                  (item di luar stok, mis. "Kantong kresek")
+ * Jumlah beli sengaja tidak ada: pemilik menentukannya sendiri di WhatsApp.
  */
+import { formatQty } from './stockMath';
 
-/** Kategori sisa masak (mis. "Ayam Matang Sisa") bukan barang belanja: tampil, tapi tidak dicentang otomatis. */
-export const isLeftoverCategory = (name) => /matang/i.test(String(name || ''));
-
-/** Centang awal: item Habis dan Menipis di kategori belanja. Sisa masak dan yang Aman tidak dicentang. */
-export function initialSelection(groups = []) {
-  const sel = {};
-  for (const g of groups) {
-    if (isLeftoverCategory(g.category.name)) continue;
-    for (const r of g.rows) {
-      if (r.status === 'habis' || r.status === 'menipis') sel[r.item.id] = { on: true, qty: '' };
-    }
-  }
-  return sel;
-}
+const normalize = (s) => String(s ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
 
 /** Id item stok (yang punya angka hari itu) dengan nama ini, tanpa peduli huruf besar/kecil dan spasi ganda; tidak ada = null. */
 export function findRowId(groups = [], name) {
@@ -33,8 +22,6 @@ export function findRowId(groups = [], name) {
   return null;
 }
 
-const normalize = (s) => String(s ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
-
 /** Tambah item di luar stok. Nama kosong = tidak berubah; nama yang sudah ada di extras hanya dicentang (tidak dobel). */
 export function addExtra(extras, name) {
   const clean = String(name ?? '').trim().replace(/\s+/g, ' ');
@@ -42,32 +29,36 @@ export function addExtra(extras, name) {
   const key = clean.toLowerCase();
   const found = extras.find((e) => e.name.toLowerCase() === key);
   if (found) return extras.map((e) => (e === found ? { ...e, on: true } : e));
-  return [...extras, { id: `x:${key}`, name: clean, on: true, qty: '' }];
-}
-
-/** Item terpilih berurutan: item stok mengikuti urutan kategori/item di daftar, lalu item tambahan. Bentuk { id, name, qty }. */
-export function selectedItems(groups = [], sel = {}, extras = []) {
-  const out = [];
-  for (const g of groups) {
-    for (const r of g.rows) {
-      const s = sel[r.item.id];
-      if (s?.on) out.push({ id: r.item.id, name: r.item.name, qty: s.qty ?? '' });
-    }
-  }
-  for (const e of extras) if (e.on) out.push({ id: e.id, name: e.name, qty: e.qty ?? '' });
-  return out;
+  return [...extras, { id: `x:${key}`, name: clean, on: true }];
 }
 
 /**
- * Teks untuk ditempel di WhatsApp dari `selectedItems(...)`: bernomor, urutan seperti di daftar.
- * Format: "1. BLD - 5 kg" (tanpa " - ..." kalau jumlah kosong). `dateLabel` mis. "Sel, 3 Nov".
+ * Item terpilih dikelompokkan per kategori stok (urutan daftar), lalu item tambahan sebagai kelompok terakhir.
+ * Kelompok tanpa item dibuang. Bentuk: [[{ id, name, stock }]] — `stock` = sisa stok hari itu ("0 gr"), null untuk item tambahan.
  */
-export function shoppingText(items, dateLabel = '') {
+export function selectedGroups(groups = [], sel = {}, extras = []) {
+  const out = [];
+  for (const g of groups) {
+    const picked = g.rows
+      .filter((r) => sel[r.item.id])
+      .map((r) => ({ id: r.item.id, name: r.item.name, stock: `${formatQty(r.qty)} ${r.item.unit}`.trim() }));
+    if (picked.length) out.push(picked);
+  }
+  const more = extras.filter((e) => e.on).map((e) => ({ id: e.id, name: e.name, stock: null }));
+  if (more.length) out.push(more);
+  return out;
+}
+
+export const countSelected = (selGroups) => selGroups.reduce((n, g) => n + g.length, 0);
+
+/**
+ * Teks untuk ditempel di WhatsApp dari `selectedGroups(...)`. Tiap item membawa sisa stoknya: "1. BLD (sisa 0 gr)".
+ * Kelompok (kategori) dipisah SATU BARIS KOSONG (enter dua kali), tanpa menulis nama kategori; nomor mulai dari 1 di tiap kelompok.
+ * Item tambahan tanpa keterangan sisa. `dateLabel` mis. "Sel, 3 Nov".
+ */
+export function shoppingText(selGroups, dateLabel = '') {
   const head = `*Belanja MamamAyam*${dateLabel ? `\n${dateLabel}` : ''}`;
-  if (!items.length) return `${head}\n\nBelum ada item dipilih.`;
-  const lines = items.map((i, n) => {
-    const qty = String(i.qty ?? '').trim();
-    return `${n + 1}. ${i.name}${qty ? ` - ${qty}` : ''}`;
-  });
-  return [head, '', ...lines].join('\n');
+  if (!countSelected(selGroups)) return `${head}\n\nBelum ada item dipilih.`;
+  const blocks = selGroups.map((g) => g.map((i, n) => `${n + 1}. ${i.name}${i.stock ? ` (sisa ${i.stock})` : ''}`).join('\n'));
+  return `${head}\n\n${blocks.join('\n\n')}`;
 }

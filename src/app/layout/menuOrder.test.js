@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   orderMenus, moveId, itemAtPoint, normalizeLayout, resolveMenuLayout, togglePin, moveCompact, moveExpanded,
-  readMenuLayout, saveMenuLayout, clearMenuOrder, DEFAULT_PINNED_COUNT,
+  readMenuLayout, saveMenuLayout, clearMenuOrder, DEFAULT_PINNED_COUNT, staggerDelay,
 } from './menuOrder';
 
 const items = ['a', 'b', 'c', 'd'].map((id) => ({ id, label: id.toUpperCase() }));
@@ -149,5 +149,27 @@ describe('simpan / baca per peran', () => {
     expect(readMenuLayout('staff', s)).toBeNull();
     s.setItem('mamam-pos-menu-order:owner', JSON.stringify(['x', 'y']));   // format lama
     expect(readMenuLayout('owner', s)).toEqual({ pinned: null, full: ['x', 'y'] });
+  });
+});
+
+describe('staggerDelay (jeda masuk tile saat Lainnya dibuka)', () => {
+  it('tile pertama 50 ms, lalu naik 25 ms per tile', () => {
+    expect(staggerDelay(0)).toBe(0.05);
+    expect(staggerDelay(1)).toBe(0.075);
+    expect(staggerDelay(4)).toBe(0.15);
+  });
+  it('berhenti naik di tile ke-9 (250 ms) supaya daftar panjang tidak terasa lambat', () => {
+    expect(staggerDelay(8)).toBe(0.25);
+    expect(staggerDelay(9)).toBe(0.25);
+    expect(staggerDelay(40)).toBe(0.25);
+  });
+  it('nilai tidak valid dianggap tile pertama', () => {
+    expect(staggerDelay(-1)).toBe(0.05);
+    expect(staggerDelay(NaN)).toBe(0.05);
+    expect(staggerDelay(undefined)).toBe(0.05);
+  });
+  it('tidak pernah menurun seiring urutan', () => {
+    const d = Array.from({ length: 14 }, (_, i) => staggerDelay(i));
+    expect(d.every((v, i) => i === 0 || v >= d[i - 1])).toBe(true);
   });
 });

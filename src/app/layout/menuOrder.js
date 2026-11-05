@@ -116,3 +116,12 @@ export function saveMenuLayout(role, layout, storage = globalThis.localStorage) 
 export function clearMenuOrder(role, storage = globalThis.localStorage) {
   try { storage?.removeItem(keyFor(role)); } catch { /* abaikan */ }
 }
+
+/**
+ * Jeda masuk (detik) tile ke-`i` di antara tile yang baru muncul saat Lainnya dibuka: 50 ms + 25 ms per tile,
+ * tile ke-9 dan seterusnya sama dengan ke-9 supaya daftar panjang tidak terasa lambat. `i` < 0 / bukan angka dianggap 0.
+ */
+export function staggerDelay(i) {
+  const n = Number.isFinite(i) ? Math.min(Math.max(i, 0), 8) : 0;
+  return Math.round((0.05 + 0.025 * n) * 1000) / 1000;
+}

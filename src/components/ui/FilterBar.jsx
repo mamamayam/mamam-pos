@@ -5,7 +5,8 @@ import Modal from './Modal';
 import Button from './Button';
 import SortModal from './SortModal';
 import { Input } from './Input';
-import { PERIOD_OPTIONS, periodLabel } from '../../utils/listFilters';
+import MonthGrid from './MonthGrid';
+import { PERIOD_OPTIONS, periodLabel, monthRange, fullMonthOf } from '../../utils/listFilters';
 import { toLocalDateString } from '../../utils/formatters';
 
 /**
@@ -47,10 +48,12 @@ function PeriodSheet({ isOpen, onClose, period, onChange }) {
   const [showDates, setShowDates] = useState(false);
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
+  const [year, setYear] = useState(() => new Date().getFullYear());   // tahun yang ditampilkan di pemilih bulan
 
   useEffect(() => {
     if (!isOpen) return;
     const today = toLocalDateString();
+    setYear((fullMonthOf(period.start, period.end) || { year: Number(today.slice(0, 4)) }).year);
     setShowDates(period.mode === 'tanggal-terpilih');
     setStart(period.start || today);
     setEnd(period.end || period.start || today);
@@ -61,6 +64,11 @@ function PeriodSheet({ isOpen, onClose, period, onChange }) {
     onChange({ mode: key, start: '', end: '' });
     onClose();
   };
+  const pickMonth = (m) => {
+    onChange({ mode: 'tanggal-terpilih', ...monthRange(year, m) });
+    onClose();
+  };
+  const now = (() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; })();
   const apply = () => {
     const [a, b] = start && end && start > end ? [end, start] : [start, end];
     onChange({ mode: 'tanggal-terpilih', start: a, end: b || a });
@@ -68,7 +76,7 @@ function PeriodSheet({ isOpen, onClose, period, onChange }) {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Periode" size="md" sheet>
+    <Modal isOpen={isOpen} onClose={onClose} title="Periode" size="md" sheet maxHeight>
       <div className="px-2 pb-3">
         {PERIOD_OPTIONS.map((p) => {
           const active = showDates ? p.key === 'tanggal-terpilih' : period.mode === p.key;
@@ -81,6 +89,12 @@ function PeriodSheet({ isOpen, onClose, period, onChange }) {
         })}
         {showDates && (
           <div className="px-2 pt-2 space-y-3">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 pt-1">Pilih bulan</p>
+            <MonthGrid
+              year={year} onYearChange={setYear} now={now} onPick={pickMonth}
+              selected={period.mode === 'tanggal-terpilih' ? fullMonthOf(period.start, period.end) : null}
+            />
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 pt-2">Atau pilih rentang tanggal</p>
             <div className="grid grid-cols-2 gap-2">
               <Input label="Dari" type="date" value={start} max={end || undefined} onChange={(e) => setStart(e.target.value)} />
               <Input label="Sampai" type="date" value={end} min={start || undefined} onChange={(e) => setEnd(e.target.value)} />

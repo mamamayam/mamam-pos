@@ -9,7 +9,7 @@ import {
   resolveMenuLayout, togglePin, moveCompact, moveExpanded,
   readMenuLayout, saveMenuLayout, clearMenuOrder, staggerDelay,
 } from './menuOrder';
-import { useGridReorder } from './useGridReorder';
+import { useGridReorder, SETTLE_MS } from './useGridReorder';
 import { fetchMenuOrder, pushMenuOrder, deleteMenuOrder } from './menuOrderSync';
 import { supabase } from '../../lib/supabase';
 import { roleLabel } from '../../auth/permissions';
@@ -38,7 +38,16 @@ import { versionLabel } from '../../lib/appVersion';
  * tile yang baru muncul memudar + membesar bergantian (stagger), tile Lainnya memudar keluar, tile yang berpindah
  * tempat (urutan Diperluas berbeda dari Ringkas) meluncur ke posisi barunya (`layout="position"`), tinggi sheet
  * diukur lalu dianimasikan (`AnimatedHeight`) supaya tepi atasnya naik/turun halus, dan tombol Ringkas ikut
- * melebar/menguncup. Easing + durasi sama dengan Overlay (0.2, 0, 0, 1 / 300 ms). Mode "Atur" tidak dianimasikan.
+ * melebar/menguncup. Easing + durasi sama dengan Overlay (0.2, 0, 0, 1 / 300 ms).
+ *
+ * ANIMASI mode "Atur" (permintaan pemilik 5 Nov 2026; sebelumnya drag-drop dan perpindahan tile terasa patah):
+ * - tile yang berpindah urutan (digeser) atau berpindah bagian (−/+ atau ketuk di "Di dalam Lainnya") MELUNCUR ke tempat
+ *   barunya (`layout` + `layoutId` di tab Ringkas, jadi terbang antar dua grid); tile tetap dibungkus SEL polos yang
+ *   posisinya tidak ikut animasi, dan sel itulah yang didaftarkan ke `useGridReorder` (penentu tujuan memakai posisi akhir,
+ *   bukan posisi tile yang sedang meluncur, supaya urutan tidak bolak-balik);
+ * - bayangan yang diseret "terangkat" (membesar) saat disentuh dan MENDARAT ke slotnya saat dilepas (`SETTLE_MS`);
+ * - pindah tab Ringkas <-> Diperluas dan masuk/keluar Atur = pudar bergantian (`AnimatePresence mode="wait"`), tinggi
+ *   sheet mengikuti dengan halus (satu `AnimatedHeight` di atas semuanya; jangan ditumpuk, nanti ukurannya dikejar terus).
  * `prefers-reduced-motion`: semua durasi 0.
  */
 
@@ -62,7 +71,8 @@ const tileMotion = (delay, reduce) => ({
  * pengamat ukuran (cadangan) DAN diukur ulang di commit yang sama saat `watch` berubah (ketuk Lainnya/Ringkas), supaya gerakan
  * mulai pada frame itu juga tanpa jeda. Sebelum terukur (render pertama) tinggi mengikuti isi apa adanya: tidak ada animasi saat sheet dibuka.
  * `pt-2 pb-1` di dalam + margin negatif di luar memberi ruang untuk badge merah (menjorok 6px di atas tile) dan bayangan
- * tile supaya tidak terpotong `overflow-hidden`, tanpa menggeser tata letak.
+ * tile supaya tidak terpotong `overflow-hidden`, tanpa menggeser tata letak. `px-1` + `-mx-1` sama untuk cincin putus-putus
+ * dan tombol −/+ di mode Atur yang menjorok keluar tile.
  */
 function AnimatedHeight({ children, watch }) {
   const reduce = useReducedMotion();
@@ -83,10 +93,10 @@ function AnimatedHeight({ children, watch }) {
       initial={false}
       animate={h === null ? {} : { height: h }}
       transition={{ duration: reduce ? 0 : 0.3, ease: EASE }}
-      className="overflow-hidden -mt-2 -mb-1"
+      className="overflow-hidden -mt-2 -mb-1 -mx-1"
       data-testid="menu-grid-wrap"
     >
-      <div ref={inner} className="pt-2 pb-1">{children}</div>
+      <div ref={inner} className="pt-2 pb-1 px-1">{children}</div>
     </motion.div>
   );
 }
@@ -129,6 +139,35 @@ function PinToggle({ id, label, pinned, onClick }) {
     >
       <Icon className="w-3.5 h-3.5" strokeWidth={3} />
     </button>
+  );
+}
+
+/** Pudar masuk/keluar satu blok (ganti mode Atur, ganti tab). Dipakai dengan `AnimatePresence mode="wait"`. */
+const fadeMotion = (reduce) => ({
+  initial: { opacity: 0 },
+  animate: { opacity: 1, transition: { duration: reduce ? 0 : 0.18, ease: EASE } },
+  exit: { opacity: 0, transition: { duration: reduce ? 0 : 0.1 } },
+});
+
+/**
+ * Bayangan tile yang diseret: ikut jari, membesar sedikit begitu muncul ("terangkat"), lalu saat dilepas (`drag.settling`)
+ * mengecil dan meluncur ke slot akhirnya. `py-1` sama dengan tile di grid supaya mendarat tepat di atasnya.
+ */
+function GhostTile({ drag, item, isActive, reduce }) {
+  const [up, setUp] = useState(false);
+  useEffect(() => { const f = requestAnimationFrame(() => setUp(true)); return () => cancelAnimationFrame(f); }, []);
+  const settle = drag.settling && !reduce;
+  return (
+    <div
+      className="fixed z-[9999] pointer-events-none flex flex-col items-center gap-2 py-1 opacity-95" data-testid="menu-ghost"
+      data-settling={drag.settling ? 'true' : undefined}
+      style={{
+        left: drag.x - drag.dx, top: drag.y - drag.dy, width: drag.w,
+        transition: settle ? `left ${SETTLE_MS}ms cubic-bezier(0.2,0,0,1), top ${SETTLE_MS}ms cubic-bezier(0.2,0,0,1)` : undefined,
+      }}
+    >
+      <MenuTile item={item} isActive={isActive} ghost={up && !drag.settling} />
+    </div>
   );
 }
 
@@ -217,32 +256,51 @@ export default function BottomSheetMenu({
   };
 
   /**
-   * Satu tile. `draggable` = bisa digeser (mode Atur); `pin` = 'on' | 'off' | undefined (tombol −/+ di mode Atur);
-   * `onTap` menggantikan aksi ketuk bawaan (mis. mode Atur: ketuk menu di Lainnya = tampilkan di menu ringkas);
-   * `delay` (detik) = tile ini ikut animasi masuk/keluar/pindah grid ringkas↔Lainnya, masuknya tertunda sekian detik
-   * (tanpa `delay` = tile biasa, tanpa animasi: mode Atur).
+   * Satu tile di tampilan biasa. `delay` (detik) = masuknya tertunda sekian detik (animasi masuk/keluar/pindah grid
+   * ringkas↔Lainnya, lihat `tileMotion`).
    */
-  const renderTile = (item, { draggable = false, pin, onTap, delay } = {}) => {
-    const isActive = currentView === item.id;
+  const renderTile = (item, { delay = 0 } = {}) => (
+    <motion.div key={item.id} className="relative" {...tileMotion(delay, reduce)}>
+      <button
+        data-testid={`menu-${item.id}`}
+        onClick={() => handleSelect(item.id)}
+        className="w-full flex flex-col items-center gap-2 group rounded-2xl select-none"
+      >
+        <MenuTile item={item} isActive={currentView === item.id} badge={badges[item.id] || 0} />
+      </button>
+    </motion.div>
+  );
+
+  /**
+   * Satu tile di mode Atur. `draggable` = bisa digeser; `pin` = 'on' | 'off' | undefined (tombol −/+); `onTap` = aksi ketuk
+   * (ketuk menu di Lainnya = tampilkan di menu ringkas); `shared` = tab Ringkas: `layoutId` yang sama di kedua grid, jadi
+   * tile yang pindah bagian TERBANG dari grid satu ke grid lain.
+   * Sel luar (`div`) polos dan itulah yang didaftarkan ke `useGridReorder` (posisi akhir tata letak); yang meluncur adalah
+   * `motion.div` di dalamnya.
+   */
+  const renderEditTile = (item, { draggable = false, pin, onTap, shared = false } = {}) => {
     const isDragged = drag?.id === item.id;
-    const ring = editing ? (draggable ? 'py-1 cursor-grab ring-1 ring-dashed ring-accent-300 dark:ring-accent-500/40' : 'py-1 ring-1 ring-dashed ring-slate-200 dark:ring-slate-700') : '';
-    const Wrap = delay === undefined ? 'div' : motion.div;
+    const ring = draggable ? 'py-1 cursor-grab ring-1 ring-dashed ring-accent-300 dark:ring-accent-500/40' : 'py-1 ring-1 ring-dashed ring-slate-200 dark:ring-slate-700';
     return (
-      <Wrap key={item.id} className="relative" {...(delay === undefined ? {} : tileMotion(delay, reduce))}>
-        <button
-          ref={draggable ? registerRef(item.id) : undefined}
-          data-testid={`menu-${item.id}`}
-          onClick={onTap || (() => handleSelect(item.id))}
-          onPointerDown={editing && draggable ? startDrag(item.id) : undefined}
-          style={editing && draggable ? { touchAction: 'none' } : undefined}
-          className={`w-full flex flex-col items-center gap-2 group rounded-2xl select-none ${ring} ${isDragged ? 'opacity-30' : ''}`}
+      <div key={item.id} ref={draggable ? registerRef(item.id) : undefined} data-testid={`menu-cell-${item.id}`}>
+        <motion.div
+          layout="position" layoutId={shared ? `r-${item.id}` : undefined} className="relative"
+          transition={{ layout: reduce ? { duration: 0 } : { duration: 0.25, ease: EASE } }}
         >
-          <MenuTile item={item} isActive={isActive} badge={badges[item.id] || 0} />
-        </button>
-        {editing && pin && (
-          <PinToggle id={item.id} label={item.label} pinned={pin === 'on'} onClick={() => change((items, prev) => togglePin(items, prev, item.id))} />
-        )}
-      </Wrap>
+          <button
+            data-testid={`menu-${item.id}`}
+            onClick={onTap || (() => {})}
+            onPointerDown={draggable ? startDrag(item.id) : undefined}
+            style={draggable ? { touchAction: 'none' } : undefined}
+            className={`w-full flex flex-col items-center gap-2 group rounded-2xl select-none ${ring} ${isDragged ? 'opacity-30' : ''}`}
+          >
+            <MenuTile item={item} isActive={currentView === item.id} badge={badges[item.id] || 0} />
+          </button>
+          {pin && (
+            <PinToggle id={item.id} label={item.label} pinned={pin === 'on'} onClick={() => change((items, prev) => togglePin(items, prev, item.id))} />
+          )}
+        </motion.div>
+      </div>
     );
   };
 
@@ -279,94 +337,108 @@ export default function BottomSheetMenu({
           </div>
         </div>
 
-        {editing ? (
-          <>
-            <SegmentedControl
-              size="sm"
-              className="mb-2"
-              value={editTab}
-              onChange={setEditTab}
-              options={[{ value: 'ringkas', label: 'Ringkas' }, { value: 'diperluas', label: 'Diperluas' }]}
-            />
-            <p className="text-xs text-slate-400 dark:text-slate-500 mb-4" data-testid="menu-edit-hint">
-              {editTab === 'ringkas'
-                ? 'Pilih menu yang tampil di atas dan atur urutannya. Sisanya masuk Lainnya.'
-                : 'Atur urutan semua menu saat Lainnya dibuka.'}
-            </p>
+        {/* Satu AnimatedHeight untuk semua isi (tampilan biasa / Atur / tab): ganti mode atau tab = pudar bergantian,
+            tinggi sheet menyesuaikan dengan halus. */}
+        <AnimatedHeight watch={`${editing}:${editTab}:${expanded}:${gridMenus.length}`}>
+          <AnimatePresence initial={false} mode="wait">
+            {editing ? (
+              <motion.div key="edit" {...fadeMotion(reduce)}>
+                <SegmentedControl
+                  size="sm"
+                  className="mb-2"
+                  value={editTab}
+                  onChange={setEditTab}
+                  options={[{ value: 'ringkas', label: 'Ringkas' }, { value: 'diperluas', label: 'Diperluas' }]}
+                />
+                <p className="text-xs text-slate-400 dark:text-slate-500 mb-4" data-testid="menu-edit-hint">
+                  {editTab === 'ringkas'
+                    ? 'Pilih menu yang tampil di atas dan atur urutannya. Sisanya masuk Lainnya.'
+                    : 'Atur urutan semua menu saat Lainnya dibuka.'}
+                </p>
 
-            {editTab === 'ringkas' ? (
-              <>
-                <p className={SECTION_TITLE}>Menu ringkas</p>
-                <div className={GRID} data-no-swipe="" data-testid="menu-grid">
-                  {compact.map((item) => renderTile(item, { draggable: true, pin: 'on' }))}
-                  <div className="flex flex-col items-center gap-2 py-1 rounded-2xl ring-1 ring-dashed ring-slate-200 dark:ring-slate-700 opacity-60" data-testid="menu-lainnya-fixed">
-                    <MenuTile item={LAINNYA} isActive={false} />
-                  </div>
-                </div>
+                <AnimatePresence initial={false} mode="wait">
+                  {editTab === 'ringkas' ? (
+                    <motion.div key="tab-ringkas" {...fadeMotion(reduce)}>
+                      <p className={SECTION_TITLE}>Menu ringkas</p>
+                      <div className={GRID} data-no-swipe="" data-testid="menu-grid">
+                        {compact.map((item) => renderEditTile(item, { draggable: true, pin: 'on', shared: true }))}
+                        <motion.div
+                          layout="position" className="flex flex-col items-center gap-2 py-1 rounded-2xl ring-1 ring-dashed ring-slate-200 dark:ring-slate-700 opacity-60"
+                          transition={{ layout: reduce ? { duration: 0 } : { duration: 0.25, ease: EASE } }} data-testid="menu-lainnya-fixed"
+                        >
+                          <MenuTile item={LAINNYA} isActive={false} />
+                        </motion.div>
+                      </div>
 
-                <p className={`${SECTION_TITLE} mt-6`}>Di dalam Lainnya{hidden.length > 0 ? ` (${hidden.length})` : ''}</p>
-                {hidden.length > 0 ? (
-                  <div className={GRID} data-no-swipe="" data-testid="menu-hidden-grid">
-                    {hidden.map((item) => renderTile(item, { pin: 'off', onTap: () => change((items, prev) => togglePin(items, prev, item.id)) }))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-400 dark:text-slate-500">Semua menu tampil di menu ringkas, jadi tile Lainnya disembunyikan.</p>
-                )}
-              </>
-            ) : (
-              <div className={GRID} data-no-swipe="" data-testid="menu-grid">
-                {allMenus.map((item) => renderTile(item, { draggable: true }))}
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            {/* Grid menu 3 kolom: ringkas (menu pilihan + Lainnya) atau semua menu bila Lainnya dibuka.
-                popLayout: tile yang keluar langsung lepas dari alur grid (memudar di tempatnya), jadi sisanya tidak menunggu. */}
-            <AnimatedHeight watch={`${expanded}:${gridMenus.length}`}>
-              <div className={`${GRID} relative`} data-testid="menu-grid">
-                <AnimatePresence initial={false} mode="popLayout">
-                  {gridMenus.map((item) => renderTile(item, { delay: delayOf(item.id) }))}
-                  {!expanded && showLainnyaTile && (
-                    <motion.div key={LAINNYA.id} className="relative" {...tileMotion(0.1, reduce)}>
-                      <button
-                        type="button"
-                        data-testid="menu-lainnya"
-                        aria-expanded="false"
-                        onClick={() => setExpanded(true)}
-                        className="w-full flex flex-col items-center gap-2 group rounded-2xl select-none"
-                      >
-                        <MenuTile item={LAINNYA} isActive={hiddenActive} badge={hiddenBadge} />
-                      </button>
+                      <p className={`${SECTION_TITLE} mt-6`}>Di dalam Lainnya{hidden.length > 0 ? ` (${hidden.length})` : ''}</p>
+                      {hidden.length > 0 ? (
+                        <div className={GRID} data-no-swipe="" data-testid="menu-hidden-grid">
+                          {hidden.map((item) => renderEditTile(item, { pin: 'off', shared: true, onTap: () => change((items, prev) => togglePin(items, prev, item.id)) }))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 dark:text-slate-500">Semua menu tampil di menu ringkas, jadi tile Lainnya disembunyikan.</p>
+                      )}
+                    </motion.div>
+                  ) : (
+                    <motion.div key="tab-diperluas" {...fadeMotion(reduce)}>
+                      <div className={GRID} data-no-swipe="" data-testid="menu-grid">
+                        {allMenus.map((item) => renderEditTile(item, { draggable: true }))}
+                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </div>
-            </AnimatedHeight>
-            <AnimatePresence initial={false}>
-              {expanded && showLainnyaTile && (
-                <motion.div
-                  key="ringkas"
-                  initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                  animate={{ opacity: 1, height: 'auto', marginTop: 20 }}
-                  exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                  transition={{ duration: reduce ? 0 : 0.3, ease: EASE }}
-                  className="flex justify-center overflow-hidden"
-                >
-                  <button
-                    type="button"
-                    data-testid="menu-ringkas"
-                    aria-expanded="true"
-                    onClick={() => setExpanded(false)}
-                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 active:scale-95 transition-all"
-                  >
-                    <ChevronUp className="w-3.5 h-3.5" />Ringkas
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </>
-        )}
+              </motion.div>
+            ) : (
+              <motion.div key="view" {...fadeMotion(reduce)}>
+                {/* Grid menu 3 kolom: ringkas (menu pilihan + Lainnya) atau semua menu bila Lainnya dibuka.
+                    popLayout: tile yang keluar langsung lepas dari alur grid (memudar di tempatnya), jadi sisanya tidak menunggu. */}
+                <div className={`${GRID} relative`} data-testid="menu-grid">
+                  <AnimatePresence initial={false} mode="popLayout">
+                    {gridMenus.map((item) => renderTile(item, { delay: delayOf(item.id) }))}
+                    {!expanded && showLainnyaTile && (
+                      <motion.div key={LAINNYA.id} className="relative" {...tileMotion(0.1, reduce)}>
+                        <button
+                          type="button"
+                          data-testid="menu-lainnya"
+                          aria-expanded="false"
+                          onClick={() => setExpanded(true)}
+                          className="w-full flex flex-col items-center gap-2 group rounded-2xl select-none"
+                        >
+                          <MenuTile item={LAINNYA} isActive={hiddenActive} badge={hiddenBadge} />
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+                {/* Tombol Ringkas hanya memudar (popLayout, padding bukan margin supaya posisi keluarnya tepat): ruangnya
+                    sudah dihitung AnimatedHeight, jadi tinggi sheet yang bergerak halus, bukan tombolnya sendiri. */}
+                <div className="relative">
+                  <AnimatePresence initial={false} mode="popLayout">
+                    {expanded && showLainnyaTile && (
+                      <motion.div
+                        key="ringkas"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1, transition: { duration: reduce ? 0 : 0.25, delay: reduce ? 0 : 0.1 } }}
+                        exit={{ opacity: 0, transition: { duration: reduce ? 0 : 0.12 } }}
+                        className="flex justify-center pt-5"
+                      >
+                        <button
+                          type="button"
+                          data-testid="menu-ringkas"
+                          aria-expanded="true"
+                          onClick={() => setExpanded(false)}
+                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 active:scale-95 transition-all"
+                        >
+                          <ChevronUp className="w-3.5 h-3.5" />Ringkas
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </AnimatedHeight>
 
         <div className="mt-5 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1">
           <p className="text-center text-xs text-slate-400 dark:text-slate-500">Masuk sebagai <span className="font-bold text-slate-600 dark:text-slate-300" data-testid="role-label">{roleLabel(role)}</span></p>
@@ -374,10 +446,7 @@ export default function BottomSheetMenu({
         </div>
       </div>
       {drag && draggedItem && createPortal(
-        <div className="fixed z-[9999] pointer-events-none flex flex-col items-center gap-2 opacity-95" data-testid="menu-ghost"
-          style={{ left: drag.x - drag.dx, top: drag.y - drag.dy, width: drag.w }}>
-          <MenuTile item={draggedItem} isActive={currentView === draggedItem.id} ghost />
-        </div>,
+        <GhostTile drag={drag} item={draggedItem} isActive={currentView === draggedItem.id} reduce={reduce} />,
         document.body
       )}
     </Modal>

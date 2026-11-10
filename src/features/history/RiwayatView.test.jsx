@@ -12,20 +12,45 @@ const sales = [
   { id: 't2', display_number: '0002', customer_name: 'Sari', order_type: 'Dine-in', payment_method: 'QRIS', total: 30000, created_at: today, paid_at: today },
 ];
 vi.mock('../../hook/useReportData', () => ({ useReportData: () => ({ sales, loading: false, error: null, updatedAt: new Date(), reload: () => {}, deleteTransaction: async () => {}, bulkDeleteTransactions: async () => {} }) }));
-vi.mock('../../hook/useDeleteRequests', () => ({ useDeleteRequestIndex: () => ({ index: new Map([['t2', { status: 'menunggu', requestedBy: 'Andi', reason: 'Dobel' }]]), reload: () => {} }) }));
+// Indeks pengajuan bisa diganti per tes (dibaca saat render, bukan saat vi.mock dipasang).
+const reqs = { index: new Map([['t2', { status: 'menunggu', requestedBy: 'Andi', reason: 'Dobel' }]]) };
+vi.mock('../../hook/useDeleteRequests', () => ({ useDeleteRequestIndex: () => ({ index: reqs.index, reload: () => {} }) }));
 vi.mock('./DeleteRequestSheet', () => ({ default: () => null }));
 
 import RiwayatView from './RiwayatView';
 
 const render = () => renderToString(<RiwayatView />).replace(/<!-- -->/g, '');
-beforeEach(() => { auth.owner = false; });
+beforeEach(() => {
+  auth.owner = false;
+  reqs.index = new Map([['t2', { status: 'menunggu', requestedBy: 'Andi', reason: 'Dobel' }]]);
+});
+
+// Baris transaksi (data-testid="hist-row"); potongan sebelum baris pertama (chip, ringkasan) tidak ikut.
+const rowsOf = (html) => html.split('data-testid="hist-row"').slice(1);
 
 describe('Riwayat untuk staf', () => {
   it('menampilkan transaksi, badge "Menunggu hapus" hanya di transaksi yang diajukan', () => {
     const html = render();
     expect(html).toContain('Budi');
     expect(html).toContain('Sari');
-    expect((html.match(/Menunggu hapus/g) || []).length).toBe(1);
+    const rows = rowsOf(html);
+    expect(rows.length).toBe(2);
+    const badged = rows.filter(r => r.includes('Menunggu hapus'));
+    expect(badged.length).toBe(1);
+    expect(badged[0]).toContain('Sari');
+  });
+  it('chip "Menunggu hapus · N" tampil kalau ada yang tertahan, tapi TIDAK menyembunyikan transaksi apa pun', () => {
+    const html = render();
+    expect(html).toContain('data-testid="filter-menunggu-hapus"');
+    expect(html).toContain('Menunggu hapus · 1');
+    expect(html).toMatch(/data-testid="filter-menunggu-hapus"[^>]*aria-pressed="false"|aria-pressed="false"[^>]*data-testid="filter-menunggu-hapus"/);
+    expect(rowsOf(html).length).toBe(2);   // belum disaring: semua transaksi tetap tampil
+  });
+  it('tanpa pengajuan yang menunggu (atau hanya yang ditolak), chip tidak tampil', () => {
+    reqs.index = new Map();
+    expect(render()).not.toContain('filter-menunggu-hapus');
+    reqs.index = new Map([['t2', { status: 'ditolak', rejectReason: 'Tidak boleh' }]]);
+    expect(render()).not.toContain('filter-menunggu-hapus');
   });
   it('staf tidak punya "Pilih Banyak" (hapus langsung/massal hanya owner)', () => {
     expect(render()).not.toContain('riwayat-pilih');

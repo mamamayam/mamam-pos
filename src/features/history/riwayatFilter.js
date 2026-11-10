@@ -40,6 +40,15 @@ export function filterSales(sales, { type = 'semua', query = '', device = 'semua
   });
 }
 
+/**
+ * Transaksi ini sedang diajukan hapus dan menunggu keputusan owner?
+ * requests = Map idTransaksi -> pengajuan (indeks dari useDeleteRequestIndex; yang ditolak tidak dihitung).
+ */
+export const isPendingDelete = (requests, id) => requests?.get(id)?.status === 'menunggu';
+
+/** Hanya transaksi yang menunggu keputusan owner untuk dihapus (urutan asli dipertahankan). */
+export const pendingDeleteOnly = (sales, requests) => sales.filter((s) => isPendingDelete(requests, s.id));
+
 /** Ringkasan per metode bayar, terbesar dulu. -> [{ key, count, total }] */
 export function paymentStats(sales) {
   const map = new Map();

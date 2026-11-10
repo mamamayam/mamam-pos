@@ -12,7 +12,7 @@ import { useDeleteRequestIndex } from '../../hook/useDeleteRequests';
 import DeleteRequestSheet from './DeleteRequestSheet';
 import { receiptFromSale } from '../pos/receiptModel';
 import { shareReceiptWithAlert } from '../pos/shareReceipt';
-import { filterSales, paymentStats, sortSales, methodOf, splitPartsOf, isTimeSort, SORT_OPTIONS, DEFAULT_SORT } from './riwayatFilter';
+import { filterSales, paymentStats, sortSales, methodOf, splitPartsOf, isTimeSort, isPendingDelete, pendingDeleteOnly, SORT_OPTIONS, DEFAULT_SORT } from './riwayatFilter';
 
 /**
  * RiwayatView — Riwayat transaksi lunas, layar tersendiri (dulu tab di Laporan).
@@ -25,6 +25,9 @@ import { filterSales, paymentStats, sortSales, methodOf, splitPartsOf, isTimeSor
  *  - Hapus = permanen dan hanya Owner (izin laporan.hapusTransaksi). Staf yang membuka Riwayat hanya bisa
  *    MENGAJUKAN hapus per transaksi (alasan + nama wajib); owner memutuskan di sheet Persetujuan.
  *    Transaksi yang sedang diajukan diberi badge "Menunggu hapus"; yang ditolak menampilkan alasan penolakan di Detail.
+ *    Chip "Menunggu hapus · N" (hanya muncul kalau ada, di periode/filter yang sedang dilihat) menyaring daftar jadi transaksi
+ *    yang tertahan itu saja; ringkasan per metode bayar ikut menunjukkan nilai yang tertahan. Transaksi TIDAK disembunyikan:
+ *    tanpa chip aktif, semuanya tetap tampil dan tetap dihitung di Dompet/Laporan sampai owner memutuskan.
  *  - Online-first: data dibaca langsung dari Supabase; "Perbarui" = muat ulang.
  */
 const PAGE = 100;
@@ -53,6 +56,7 @@ export default function RiwayatView() {
   const [query, setQuery] = useState('');
   const [methodFilter, setMethodFilter] = useState('semua');
   const [deviceFilter, setDeviceFilter] = useState('semua');
+  const [pendingOnly, setPendingOnly] = useState(false);   // chip "Menunggu hapus"
   const [limit, setLimit] = useState(PAGE);
   const [detail, setDetail] = useState(null);
   const [isSelecting, setIsSelecting] = useState(false);
@@ -74,10 +78,18 @@ export default function RiwayatView() {
   const activeDevice = deviceFilter === 'semua' || deviceOptions.some(o => o.key === deviceFilter) ? deviceFilter : 'semua';
 
   const resetPaging = () => setLimit(PAGE);
-  const isDirty = period.mode !== 'hari-ini' || typeFilter !== 'semua' || sortKey !== DEFAULT_SORT || query.trim() !== '' || methodFilter !== 'semua' || activeDevice !== 'semua';
 
-  // Daftar setelah tipe order + pencarian (BELUM metode bayar) — dasar ringkasan per metode.
-  const base = useMemo(() => filterSales(sales, { type: typeFilter, query, device: activeDevice }), [sales, typeFilter, query, activeDevice]);
+  // Setelah tipe order + perangkat + pencarian, sebelum chip "Menunggu hapus" dan metode bayar.
+  const matched = useMemo(() => filterSales(sales, { type: typeFilter, query, device: activeDevice }), [sales, typeFilter, query, activeDevice]);
+  // Berapa yang menunggu keputusan owner di antara yang cocok. Chip hanya ada kalau > 0; kalau jumlahnya jadi 0 (diputuskan, atau
+  // filter lain berubah) chip yang menyala dianggap mati, daftar kembali normal (sama seperti pilihan metode bayar yang hilang).
+  const pendingCount = useMemo(() => matched.filter(s => isPendingDelete(requests, s.id)).length, [matched, requests]);
+  const activePending = pendingOnly && pendingCount > 0;
+
+  const isDirty = period.mode !== 'hari-ini' || typeFilter !== 'semua' || sortKey !== DEFAULT_SORT || query.trim() !== '' || methodFilter !== 'semua' || activeDevice !== 'semua' || activePending;
+
+  // Dasar ringkasan per metode bayar (BELUM metode bayar); dengan chip aktif ringkasannya hanya yang tertahan.
+  const base = useMemo(() => (activePending ? pendingDeleteOnly(matched, requests) : matched), [matched, requests, activePending]);
   const methodStats = useMemo(() => paymentStats(base), [base]);
   const grandTotal = useMemo(() => base.reduce((sum, s) => sum + (Number(s.total) || 0), 0), [base]);
 
@@ -166,6 +178,18 @@ export default function RiwayatView() {
             <p className="text-xs text-slate-400">{error}</p>
             <Button onClick={reload}>Coba Lagi</Button>
           </Card>
+        )}
+
+        {/* Chip "Menunggu hapus": saring hanya transaksi yang diajukan hapus dan belum diputuskan owner */}
+        {!error && !loading && pendingCount > 0 && (
+          <button
+            type="button" onClick={() => { setPendingOnly(v => !v); setMethodFilter('semua'); resetPaging(); }}
+            aria-pressed={activePending} data-testid="filter-menunggu-hapus"
+            className={`h-10 px-4 rounded-full border text-xs font-bold flex items-center gap-1.5 transition-all duration-300 active:scale-95 ${activePending ? 'border-accent-500 bg-accent-50 dark:bg-accent-500/10 text-accent-600 dark:text-accent-400' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400'}`}
+          >
+            <Trash2 className="w-4 h-4 shrink-0" />
+            <span>Menunggu hapus · {pendingCount}</span>
+          </button>
         )}
 
         {/* Ringkasan per metode bayar: ketuk untuk menyaring (Semua = total periode ini) */}

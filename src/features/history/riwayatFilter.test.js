@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filterSales, paymentStats, sortSales, isTimeSort, methodOf, splitPartsOf } from './riwayatFilter';
+import { filterSales, paymentStats, sortSales, isTimeSort, methodOf, splitPartsOf, isPendingDelete, pendingDeleteOnly } from './riwayatFilter';
 
 const S = [
   { id: 'a1', display_number: 101, customer_name: 'Budi', order_type: 'Takeaway', payment_method: 'Tunai', total: 30000, paid_at: '2026-10-10T03:00:00Z' },
@@ -54,6 +54,35 @@ describe('riwayatFilter', () => {
     expect(filterSales(D, { query: 'kasir depan' }).map((s) => s.id)).toEqual(['a1']);
     expect(filterSales(D, { device: 'dev-2', query: 'budi' }).map((s) => s.id)).toEqual(['b2']);
     expect(filterSales(D, { device: 'dev-2', query: 'kasir' })).toEqual([]);
+  });
+});
+
+describe('pengajuan hapus (chip "Menunggu hapus")', () => {
+  const requests = new Map([
+    ['b2', { status: 'menunggu', requestedBy: 'Andi', reason: 'Dobel' }],
+    ['d4', { status: 'ditolak', rejectReason: 'Tidak boleh' }],
+  ]);
+
+  it('isPendingDelete: hanya status menunggu; ditolak, tidak ada pengajuan, atau indeks kosong = bukan', () => {
+    expect(isPendingDelete(requests, 'b2')).toBe(true);
+    expect(isPendingDelete(requests, 'd4')).toBe(false);
+    expect(isPendingDelete(requests, 'a1')).toBe(false);
+    expect(isPendingDelete(new Map(), 'b2')).toBe(false);
+    expect(isPendingDelete(undefined, 'b2')).toBe(false);
+  });
+
+  it('pendingDeleteOnly: menyaring yang menunggu saja, urutan asli tetap, array asli tidak berubah', () => {
+    const two = new Map([['d4', { status: 'menunggu' }], ['a1', { status: 'menunggu' }]]);
+    expect(pendingDeleteOnly(S, two).map((s) => s.id)).toEqual(['a1', 'd4']);
+    expect(pendingDeleteOnly(S, requests).map((s) => s.id)).toEqual(['b2']);
+    expect(pendingDeleteOnly(S, new Map())).toEqual([]);
+    expect(S.length).toBe(4);
+  });
+
+  it('bisa digabung dengan filterSales + paymentStats (nilai yang tertahan per metode)', () => {
+    const held = pendingDeleteOnly(filterSales(S, { type: 'Ojol' }), requests);
+    expect(paymentStats(held)).toEqual([{ key: 'Ojol', count: 1, total: 50000 }]);
+    expect(pendingDeleteOnly(filterSales(S, { type: 'Takeaway' }), requests)).toEqual([]);
   });
 });
 

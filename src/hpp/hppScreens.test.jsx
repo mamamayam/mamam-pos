@@ -518,3 +518,86 @@ describe('salin komposisi dari menu lain (form Edit menu)', () => {
     expect(komp).not.toMatch(/actions\.|simpanMenu|simpanResep|simpanBahan/);
   });
 });
+
+describe('form tambah bahan / resep / menu baru (render server)', () => {
+  const baca = (f) => fs.readFileSync(new URL(`./${f}`, import.meta.url), 'utf8');
+
+  it('Bahan baru: nama kosong, satuan/isi/kategori langsung terbuka, harga boleh kosong, Simpan nonaktif sampai nama diisi', () => {
+    const html = render(<BahanSheet model={model} baru actions={actions} onClose={noop} />);
+    expect(html).toContain('Bahan baru');
+    expect(html).not.toContain('Update harga');
+    expect(html).toMatch(/aria-label="Nama bahan"[^>]*value=""/);
+    expect(html).toContain('boleh dikosongkan dulu');
+    expect(html).toContain('Satuan beli');                    // tidak disembunyikan di balik tombol Ubah
+    expect(html).toContain('Satuan pembagi');
+    expect(html).toContain('Kategori bahan');
+    expect(html).toContain('Isi per kg (dibagi per gr)');     // bawaan: satuan pertama kg, pembagi gr, isi 1.000
+    expect(html).not.toContain('>Ubah<');
+    expect(html).toMatch(/disabled=""[^>]*>Simpan</);
+    expect(html).not.toContain('Takaran di resep/menu');      // peringatan konversi hanya untuk bahan yang sudah dipakai
+  });
+
+  it('Bahan baru memakai satuan pertama dari Pengaturan sebagai bawaan', () => {
+    const atur = buildModel({ ...RAW, setting: [...RAW.setting, { key: 'satuan_beli', value: ['pack', 'kg'] }, { key: 'satuan_dasar', value: ['pcs', 'gr'] }] });
+    const html = render(<BahanSheet model={atur} baru actions={actions} onClose={noop} />);
+    expect(html).toContain('Harga per pack');
+    expect(html).toContain('Isi per pack (dibagi per pcs)');
+  });
+
+  it('Resep baru: pilih Per porsi / Per batch, grup (chip grup yang ada + isian), komposisi kosong, Simpan nonaktif', () => {
+    const html = render(<ResepSheet model={model} baru actions={actions} onClose={noop} />);
+    expect(html).toContain('Resep baru');
+    expect(html).not.toContain('Edit resep');
+    expect(html).toMatch(/aria-label="Nama resep"[^>]*value=""/);
+    expect(html).toContain('Jenis resep');
+    expect(html).toContain('>Per porsi<');
+    expect(html).toContain('>Per batch<');
+    expect(html).not.toContain('Hasil per batch');            // bawaan Per porsi: kolom hasil baru muncul saat Per batch dipilih
+    expect(html).toContain('Grup');
+    expect(html).toContain('>Saos<');                         // grup yang sudah ada jadi pilihan cepat
+    expect(html).toContain('>Menu utama<');
+    expect(html).toMatch(/aria-label="Grup resep"[^>]*value="Saos"/);   // grup pertama jadi bawaan
+    expect(html).toContain('Belum ada komponen.');
+    expect(html).toContain('Isi nama, grup, dan takaran semua komponen');
+    expect(html).toMatch(/disabled=""[^>]*>Simpan</);
+  });
+
+  it('Resep baru di database tanpa resep sama sekali: grup bawaan "Resep"', () => {
+    const html = render(<ResepSheet model={buildModel({ ...RAW, resep: [], resepItem: [], menu: [], menuItem: [] })} baru actions={actions} onClose={noop} />);
+    expect(html).toMatch(/aria-label="Grup resep"[^>]*value="Resep"/);
+  });
+
+  it('Menu baru: nama dan harga kosong, kategori boleh kosong, ada "Salin dari menu lain", Simpan nonaktif', () => {
+    const html = render(<MenuSheet model={model} baru actions={actions} onClose={noop} />);
+    expect(html).toContain('Menu baru');
+    expect(html).not.toContain('Edit menu');
+    expect(html).toMatch(/aria-label="Nama menu"[^>]*value=""/);
+    expect(html).toContain('Pilih kategori (boleh kosong)');
+    expect(html).toMatch(/aria-label="Harga jual outlet"[^>]*value=""/);
+    expect(html).toContain('Belum ada komponen.');
+    expect(html).toContain('Salin dari menu lain');
+    expect(html).toContain('Isi nama, harga jual, dan takaran');
+    expect(html).toMatch(/disabled=""[^>]*>Simpan</);
+  });
+
+  it('form edit tidak berubah: judul lama, tidak ada isian khusus form baru', () => {
+    expect(render(<BahanSheet model={model} bahanId="A" actions={actions} onClose={noop} />)).not.toContain('boleh dikosongkan');
+    const resep = render(<ResepSheet model={model} resepId="saos" actions={actions} onClose={noop} />);
+    expect(resep).toContain('Edit resep');
+    expect(resep).not.toContain('Jenis resep');
+    expect(resep).not.toContain('Grup resep');
+    expect(render(<MenuSheet model={model} menuId="m1" actions={actions} onClose={noop} />)).toContain('Edit menu');
+  });
+
+  it('HppApp: tombol Tambah di bilah atas membuka form baru sesuai tab, dan simpan memunculkan notifikasi nama yang ditambahkan', () => {
+    const src = baca('HppApp.jsx');
+    expect(src).toMatch(/setLembar\(\{ t: `\$\{tab\}-baru` \}\)/);
+    expect(src).toMatch(/aria-label=\{`Tambah \$\{LABEL_TAMBAH\[tab\]\}`\}/);
+    expect(src).toMatch(/LABEL_TAMBAH = \{ bahan: 'bahan baku', resep: 'resep', menu: 'menu' \}/);
+    expect(src).toMatch(/lembar\?\.t === 'bahan-baru' && <BahanSheet model=\{model\} baru/);
+    expect(src).toMatch(/lembar\?\.t === 'resep-baru' && <ResepSheet model=\{model\} baru/);
+    expect(src).toMatch(/lembar\?\.t === 'menu-baru' && <MenuSheet model=\{model\} baru/);
+    for (const k of ['buatBahan', 'buatResep', 'buatMenu']) expect(src).toContain(`async ${k}(v)`);
+    expect(src).toMatch(/Bahan "\$\{v\.nama\}" ditambahkan/);
+  });
+});

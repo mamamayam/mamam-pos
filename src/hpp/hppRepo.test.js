@@ -128,3 +128,45 @@ describe('ubahResep', () => {
     await expect(repo.ubahResep(db, 'saos', { nama: 'Ayam goreng' })).rejects.toThrow(/sudah dipakai/);
   });
 });
+
+describe('tambah bahan / resep / menu baru', () => {
+  const dariInsert = (st) => (st.op === 'insert' ? sukses([{ id: 'baru', ...st.v }]) : sukses());
+
+  it('tambahBahan: menyimpan nama, kategori, satuan, isi, unit dasar, harga; mengembalikan baris dengan id', async () => {
+    const db = fakeDb(dariInsert);
+    const b = await repo.tambahBahan(db, { nama: 'Keju', kategoriId: 'kb1', satuan: 'kg', isi: 1000, unit: 'gr', harga: 120000 });
+    expect(db.calls[0]).toMatchObject({ tabel: 'hpp_bahan', op: 'insert', v: { nama: 'Keju', kategori_id: 'kb1', satuan: 'kg', isi: 1000, unit_dasar: 'gr', harga: 120000 } });
+    expect(b.id).toBe('baru');
+  });
+  it('tambahBahan tanpa harga/kategori: dikirim null (bahan tampil "Belum diisi")', async () => {
+    const db = fakeDb(dariInsert);
+    await repo.tambahBahan(db, { nama: 'Garam', satuan: 'pack', isi: 250, unit: 'gr' });
+    expect(db.calls[0].v).toMatchObject({ harga: null, kategori_id: null });
+  });
+  it('tambahResep: per porsi = hasil kosong; batch = hasil + satuan', async () => {
+    const db = fakeDb(dariInsert);
+    await repo.tambahResep(db, { nama: 'Ayam geprek', grup: 'Menu utama', urutan: 5 });
+    await repo.tambahResep(db, { nama: 'Saos BBQ', grup: 'Saos', hasilQty: 3000, hasilUnit: 'gr', urutan: 6 });
+    expect(db.calls[0]).toMatchObject({ tabel: 'hpp_resep', op: 'insert', v: { nama: 'Ayam geprek', grup: 'Menu utama', hasil_qty: null, hasil_unit: null, urutan: 5 } });
+    expect(db.calls[1].v).toMatchObject({ hasil_qty: 3000, hasil_unit: 'gr', urutan: 6 });
+  });
+  it('tambahMenu: nama, kategori, harga jual, urutan (kolom biaya_lain tidak disentuh)', async () => {
+    const db = fakeDb(dariInsert);
+    await repo.tambahMenu(db, { nama: 'Ricebox BBQ', kategoriId: 'km1', hargaOutlet: 25000, urutan: 9 });
+    expect(db.calls[0]).toMatchObject({ tabel: 'hpp_menu', op: 'insert', v: { nama: 'Ricebox BBQ', kategori_id: 'km1', harga_outlet: 25000, urutan: 9 } });
+    expect(Object.keys(db.calls[0].v)).not.toContain('biaya_lain');
+  });
+  it('hapusResep / hapusMenu: hapus satu baris berdasarkan id (pembatalan item baru yang gagal diisi)', async () => {
+    const db = fakeDb(() => sukses());
+    await repo.hapusResep(db, 'r9');
+    await repo.hapusMenu(db, 'm9');
+    expect(db.calls[0]).toMatchObject({ tabel: 'hpp_resep', op: 'delete', eq: ['id', 'r9'] });
+    expect(db.calls[1]).toMatchObject({ tabel: 'hpp_menu', op: 'delete', eq: ['id', 'm9'] });
+  });
+  it('nama kembar dari database = pesan "Nama itu sudah dipakai."', async () => {
+    const db = fakeDb(() => ({ data: null, error: { code: '23505', message: 'duplicate key value' } }));
+    await expect(repo.tambahBahan(db, { nama: 'Ayam', satuan: 'kg', isi: 1000, unit: 'gr' })).rejects.toThrow('Nama itu sudah dipakai.');
+    await expect(repo.tambahResep(db, { nama: 'Saos', grup: 'Saos', urutan: 1 })).rejects.toThrow('Nama itu sudah dipakai.');
+    await expect(repo.tambahMenu(db, { nama: 'Paket Ayam', hargaOutlet: 1, urutan: 1 })).rejects.toThrow('Nama itu sudah dipakai.');
+  });
+});

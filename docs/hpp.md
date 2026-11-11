@@ -126,13 +126,18 @@ Cincang Minyak", "Saos Sachet Mamam", dan "Garam & Oregano (paket)" hanya ada di
 Tekan **Edit** di detail menu atau resep, ubah takaran / hapus / tambah komponen, lalu **Simpan** (lihat bagian form di atas).
 Menyimpan menghapus baris yang dibuang, mengubah takaran yang berubah, dan menambah baris baru, lalu memuat ulang data.
 
-## Yang belum ada di halaman
+## Menambah bahan, resep, dan menu baru
 
-Membuat **bahan baru, resep baru, atau menu baru** belum bisa dari halaman (yang ada: ubah komposisi,
-nama, harga bahan, harga jual, kategori, dan pengaturan). Sementara itu lewat SQL Editor, contoh bahan baru:
+Di tiap tab ada tombol **+** di sebelah kotak cari (Bahan baku, Resep, Menu). Formnya sama dengan form Update harga / Edit resep / Edit menu,
+hanya mulai dari kosong, dan tetap draft + Simpan/Batal:
 
-```sql
-insert into hpp_bahan (nama, kategori_id, satuan, isi, unit_dasar, harga)
-select 'Keju Mozzarella', k.id, 'kg', 1000, 'gr', 120000
-from hpp_kategori k where k.jenis = 'bahan' and k.nama = 'Primer';
-```
+- **Bahan baru**: nama, harga per satuan beli (boleh dikosongkan dulu, tampil "Belum diisi"), satuan beli, satuan pembagi, isi, kategori (opsional).
+  Harga awal tercatat otomatis oleh trigger di riwayat harga (catatan "Harga awal").
+- **Resep baru**: nama, jenis **Per porsi** atau **Per batch** (hasil + satuan), grup (pilih yang ada atau ketik grup baru), lalu komposisi.
+- **Menu baru**: nama, kategori (boleh kosong, masuk "Lainnya"), harga jual, komposisi. Komposisi bisa disusun lewat **Salin dari menu lain**.
+
+Aturan: nama kembar ditolak (bahan dan resep: nama unik; menu: unik dalam satu kategori). Komposisi resep/menu boleh diisi nanti lewat Edit;
+yang kosong tampil "Belum diisi". Resep/menu dibuat dulu, baru komponennya; kalau penyimpanan komponen gagal, induknya dihapus lagi (`buatDenganItems` di `useHpp.js`)
+supaya tidak ada resep/menu setengah jadi. Tidak perlu migrasi: kebijakan RLS `hpp_admin_all_*` sudah mengizinkan insert untuk admin HPP.
+
+Menghapus bahan/resep/menu belum ada di UI (fungsi `hapusResep` / `hapusMenu` di `hppRepo.js` hanya dipakai untuk membatalkan pembuatan yang gagal).

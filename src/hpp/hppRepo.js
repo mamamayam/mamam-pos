@@ -71,6 +71,33 @@ export async function ubahMenu(db, id, patch) {
   ok(await db.from('hpp_menu').update(patch).eq('id', id));
 }
 
+/**
+ * Item BARU (form Tambah di tab Bahan baku / Resep / Menu). Mengembalikan baris yang dibuat (dengan id).
+ * Harga awal bahan (kalau diisi) dicatat sebagai riwayat harga oleh trigger database.
+ */
+export async function tambahBahan(db, { nama, kategoriId = null, satuan, isi, unit, harga = null }) {
+  const rows = ok(await db.from('hpp_bahan').insert({ nama, kategori_id: kategoriId, satuan, isi, unit_dasar: unit, harga }).select());
+  return rows[0];
+}
+
+export async function tambahResep(db, { nama, grup, hasilQty = null, hasilUnit = null, urutan }) {
+  const rows = ok(await db.from('hpp_resep').insert({ nama, grup, hasil_qty: hasilQty, hasil_unit: hasilUnit, urutan }).select());
+  return rows[0];
+}
+/** Hapus resep (isinya ikut terhapus lewat cascade). Dipakai membatalkan resep baru yang gagal diisi. */
+export async function hapusResep(db, id) {
+  ok(await db.from('hpp_resep').delete().eq('id', id));
+}
+
+export async function tambahMenu(db, { nama, kategoriId = null, hargaOutlet, urutan }) {
+  const rows = ok(await db.from('hpp_menu').insert({ nama, kategori_id: kategoriId, harga_outlet: hargaOutlet, urutan }).select());
+  return rows[0];
+}
+/** Hapus menu (komposisinya ikut terhapus lewat cascade). Dipakai membatalkan menu baru yang gagal diisi. */
+export async function hapusMenu(db, id) {
+  ok(await db.from('hpp_menu').delete().eq('id', id));
+}
+
 export async function tambahKategori(db, { jenis, nama, urutan }) {
   const rows = ok(await db.from('hpp_kategori').insert({ jenis, nama, urutan }).select());
   return rows[0];

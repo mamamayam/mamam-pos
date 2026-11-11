@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { bisaTambahSub, buildModel, rapikanSatuan } from './hppModel';
+import { bisaTambahSub, buildModel, namaSudahDipakai, rapikanSatuan, urutanBerikut } from './hppModel';
 import * as repo from './hppRepo';
 
 const KOSONG = { kategori: [], bahan: [], riwayat: [], resep: [], resepItem: [], menu: [], menuItem: [], setting: [] };
@@ -23,6 +23,24 @@ export async function terapkanItems(lama, baru, { hapus, ubah, tambah }) {
       await tambah(it, urutan);
     }
   }
+}
+
+/**
+ * Buat induk baru (resep / menu) lalu baris komposisinya satu per satu (urutan 1, 2, ...). Kalau ada baris yang gagal, induk yang
+ * baru dibuat dihapus lagi (`batalkan`; baris yang sudah masuk ikut terhapus lewat cascade) supaya tidak tertinggal resep/menu
+ * setengah jadi. Melempar galat pertama (galat pembatalan sendiri diabaikan: data dimuat ulang dan hasilnya terlihat di daftar).
+ * Mengembalikan baris induk yang dibuat.
+ */
+export async function buatDenganItems({ buat, tambahItem, batalkan, items }) {
+  const induk = await buat();
+  try {
+    let urutan = 0;
+    for (const it of items) { urutan += 1; await tambahItem(induk, it, urutan); }
+  } catch (e) {
+    try { await batalkan(induk); } catch { /* abaikan */ }
+    throw e;
+  }
+  return induk;
 }
 
 /**
@@ -146,6 +164,63 @@ export function useHpp(db) {
           hapus: (id) => repo.hapusMenuItem(db, id),
           ubah: (id, qty) => repo.ubahMenuItem(db, id, { qty }),
           tambah: (it, urutan) => repo.tambahMenuItem(db, { menuId, urutan, bahanId: it.bahanId, resepId: it.resepId, qty: it.qty }),
+        });
+      } catch (e) { setPesan(e.message); await muat(); return false; }
+      await muat();
+      return true;
+    },
+
+    /**
+     * Bahan BARU. harga boleh null (muncul "Belum diisi" sampai diisi dari Update harga). Nama kembar ditolak.
+     * Setelah tersimpan data dimuat ulang (id baru dan riwayat harga awal dari trigger ikut). false = tidak tersimpan (pesan sudah tampil).
+     */
+    async buatBahan({ nama, harga = null, satuan, isi, unit, kategoriId = null }) {
+      const n = String(nama || '').trim();
+      const s = String(satuan || '').trim();
+      const u = String(unit || '').trim();
+      if (!n || !s || !u || !(isi > 0) || (harga !== null && (Number.isNaN(harga) || harga < 0))) return false;
+      if (namaSudahDipakai(raw.bahan.map((b) => b.nama), n)) { setPesan('Nama itu sudah dipakai.'); return false; }
+      try {
+        await repo.tambahBahan(db, { nama: n, kategoriId: kategoriId || null, satuan: s, isi, unit: u, harga });
+      } catch (e) { setPesan(e.message); return false; }
+      await muat();
+      return true;
+    },
+
+    /**
+     * Resep BARU: hasilQty null = resep per porsi, angka = resep batch (hasilUnit wajib). items = [{ bahanId, subResepId, qty }].
+     * Resep dan isinya disimpan berurutan; kalau ada isi yang gagal, resepnya dibatalkan lagi (buatDenganItems).
+     */
+    async buatResep({ nama, grup, hasilQty = null, hasilUnit = null, items }) {
+      const n = String(nama || '').trim();
+      const g = String(grup || '').trim() || 'Resep';
+      const batch = hasilQty !== null;
+      const unit = String(hasilUnit || '').trim();
+      if (!n || (batch && (!(hasilQty > 0) || !unit)) || items.some((i) => !(i.qty > 0))) return false;
+      if (namaSudahDipakai(Object.values(model.resep).map((r) => r.nama), n)) { setPesan('Nama itu sudah dipakai.'); return false; }
+      try {
+        await buatDenganItems({
+          items,
+          buat: () => repo.tambahResep(db, { nama: n, grup: g, hasilQty: batch ? hasilQty : null, hasilUnit: batch ? unit : null, urutan: urutanBerikut(Object.values(model.resep)) }),
+          tambahItem: (resep, it, urutan) => repo.tambahResepItem(db, { resepId: resep.id, urutan, bahanId: it.bahanId, subResepId: it.subResepId, qty: it.qty }),
+          batalkan: (resep) => repo.hapusResep(db, resep.id),
+        });
+      } catch (e) { setPesan(e.message); await muat(); return false; }
+      await muat();
+      return true;
+    },
+
+    /** Menu BARU: nama, kategori (boleh kosong = "Lainnya"), harga jual, dan komposisi (items = [{ bahanId, resepId, qty }], boleh kosong). Nama kembar dalam kategori yang sama ditolak. */
+    async buatMenu({ nama, kategoriId = null, hargaOutlet, items }) {
+      const n = String(nama || '').trim();
+      if (!n || !(hargaOutlet > 0) || items.some((i) => !(i.qty > 0))) return false;
+      if (namaSudahDipakai(model.menu.filter((m) => (m.kategoriId ?? null) === (kategoriId || null)).map((m) => m.nama), n)) { setPesan('Nama itu sudah dipakai.'); return false; }
+      try {
+        await buatDenganItems({
+          items,
+          buat: () => repo.tambahMenu(db, { nama: n, kategoriId: kategoriId || null, hargaOutlet, urutan: urutanBerikut(model.menu) }),
+          tambahItem: (menu, it, urutan) => repo.tambahMenuItem(db, { menuId: menu.id, urutan, bahanId: it.bahanId, resepId: it.resepId, qty: it.qty }),
+          batalkan: (menu) => repo.hapusMenu(db, menu.id),
         });
       } catch (e) { setPesan(e.message); await muat(); return false; }
       await muat();

@@ -411,6 +411,22 @@ export const itemsResepDariDraft = (draft) => draft.map((d, i) => ({
   id: d.id, urutan: i + 1, bahanId: d.kind === 'bahan' ? d.ref : null, subResepId: d.kind === 'resep' ? d.ref : null, qty: parseAngka(d.qty) ?? 0,
 }));
 
+/** Nomor urut untuk baris baru di akhir daftar (resep / menu): terbesar yang ada + 1. */
+export const urutanBerikut = (daftar) => Math.max(0, ...daftar.map((x) => Number(x.urutan) || 0)) + 1;
+
+/**
+ * Nama `nama` sudah ada di `daftar` (teks)? Huruf besar/kecil dan spasi di ujung diabaikan, jadi "ayam " dan "Ayam" dianggap kembar.
+ * Dipakai form tambah bahan / resep / menu (database juga menolak nama kembar, ini supaya pesannya muncul sebelum Simpan). Nama kosong = bukan kembar.
+ */
+export function namaSudahDipakai(daftar, nama) {
+  const k = String(nama ?? '').trim().toLowerCase();
+  if (!k) return false;
+  return (daftar || []).some((x) => String(x ?? '').trim().toLowerCase() === k);
+}
+
+/** Nama grup resep yang sudah ada, urut seperti di tab Resep. Dipakai pilihan cepat grup di form Resep baru. */
+export const daftarGrupResep = (model) => kelompokResep(Object.values(model.resep)).map((g) => g.nama);
+
 /** Ringkasan di bawah judul halaman: margin rata-rata menu yang sudah berkomposisi dan jumlah menu LOW. */
 export function ringkasanDaftar(model) {
   const isi = model.menu.filter((m) => m.items.length > 0);

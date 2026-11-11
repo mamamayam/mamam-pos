@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { terapkanItems } from './useHpp';
+import { terapkanItems, buatDenganItems } from './useHpp';
 
 /** Pencatat panggilan palsu untuk terapkanItems. */
 function pencatat({ gagalPada = null } = {}) {
@@ -60,5 +60,53 @@ describe('terapkanItems: samakan baris komposisi di database dengan draft form',
     const { log, op } = pencatat({ gagalPada: 'hapus' });
     await expect(terapkanItems(lama, [{ id: 'a', qty: 99 }], op)).rejects.toThrow('gagal hapus');
     expect(log).toEqual([['hapus', 'b']]);
+  });
+});
+
+describe('buatDenganItems: induk baru + isinya, dibatalkan kalau isinya gagal', () => {
+  const pasang = ({ gagalItemKe = null, gagalBatal = false } = {}) => {
+    const log = [];
+    return {
+      log,
+      op: {
+        buat: async () => { log.push(['buat']); return { id: 'baru' }; },
+        tambahItem: async (induk, it, urutan) => {
+          log.push(['item', induk.id, it.ref, urutan]);
+          if (gagalItemKe === urutan) throw new Error(`gagal item ${urutan}`);
+        },
+        batalkan: async (induk) => { log.push(['batal', induk.id]); if (gagalBatal) throw new Error('gagal batal'); },
+      },
+    };
+  };
+  const items = [{ ref: 'A' }, { ref: 'B' }, { ref: 'C' }];
+
+  it('induk dibuat dulu, lalu item berurutan 1, 2, 3; mengembalikan induk', async () => {
+    const { log, op } = pasang();
+    const induk = await buatDenganItems({ ...op, items });
+    expect(induk).toEqual({ id: 'baru' });
+    expect(log).toEqual([['buat'], ['item', 'baru', 'A', 1], ['item', 'baru', 'B', 2], ['item', 'baru', 'C', 3]]);
+  });
+
+  it('tanpa isi: hanya membuat induk (resep/menu boleh diisi nanti)', async () => {
+    const { log, op } = pasang();
+    await buatDenganItems({ ...op, items: [] });
+    expect(log).toEqual([['buat']]);
+  });
+
+  it('induk gagal dibuat: galat dilempar dan tidak ada item/pembatalan', async () => {
+    const { log, op } = pasang();
+    await expect(buatDenganItems({ ...op, buat: async () => { throw new Error('gagal buat'); }, items })).rejects.toThrow('gagal buat');
+    expect(log).toEqual([]);
+  });
+
+  it('item ke-2 gagal: induk dibatalkan, item ke-3 tidak dicoba, galat item yang dilempar', async () => {
+    const { log, op } = pasang({ gagalItemKe: 2 });
+    await expect(buatDenganItems({ ...op, items })).rejects.toThrow('gagal item 2');
+    expect(log).toEqual([['buat'], ['item', 'baru', 'A', 1], ['item', 'baru', 'B', 2], ['batal', 'baru']]);
+  });
+
+  it('pembatalan ikut gagal: galat item asli tetap yang dilempar (bukan galat pembatalan)', async () => {
+    const { op } = pasang({ gagalItemKe: 1, gagalBatal: true });
+    await expect(buatDenganItems({ ...op, items })).rejects.toThrow('gagal item 1');
   });
 });

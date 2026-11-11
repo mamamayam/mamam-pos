@@ -3,7 +3,7 @@ import { RAW } from './fixture';
 import {
   bisaTambahSub, buildModel, ctxAcuan, dampakUbah, dampakUbahResep, draftBerubah, draftDariMenu, draftDariResep, draftValid, hargaMinimal, hargaPada, isiBawaan, kelompokResep, kelompokkan, makeCtx, marginPct,
   itemsMenuDariDraft, itemsResepDariDraft, draftSalinDariMenu, menuSumberSalin, menuBahanKosong, menuInfo, menuParts, modelDenganResep, resepPerUnit, ringkasanDaftar, menusUsingBahan, menusUsingResep, opsiSatuan, pemakaiSatuan, rapikanSatuan, SATUAN_DASAR_UMUM, SATUAN_UMUM, perubahanTerakhir, resepMemuat, resepRows, riwayatBahanRows,
-  riwayatModalRows, tierOf, tiersFor,
+  riwayatModalRows, tierOf, tiersFor, urutanBerikut, namaSudahDipakai, daftarGrupResep,
 } from './hppModel';
 
 const model = () => buildModel(RAW);
@@ -409,5 +409,51 @@ describe('salin komposisi dari menu lain', () => {
     expect(menuSumberSalin(m, 'zzz', 'tidak-ada-menu-ini')).toEqual([]);
     const kosong = { ...m, menu: m.menu.map((x) => (x.id === 'm2' ? { ...x, items: [] } : x)) };
     expect(menuSumberSalin(kosong, 'm1').map((x) => x.id)).not.toContain('m2');
+  });
+});
+
+describe('tambah bahan / resep / menu baru: bantuan murni', () => {
+  it('urutanBerikut: terbesar + 1; daftar kosong = 1; urutan kosong/aneh dianggap 0', () => {
+    expect(urutanBerikut([])).toBe(1);
+    expect(urutanBerikut([{ urutan: 1 }, { urutan: 7 }, { urutan: 3 }])).toBe(8);
+    expect(urutanBerikut([{ urutan: '4' }, { urutan: null }, {}])).toBe(5);
+  });
+
+  it('namaSudahDipakai: huruf besar/kecil dan spasi di ujung diabaikan; nama kosong bukan kembar', () => {
+    const daftar = ['Ayam', 'Keju Mozzarella'];
+    expect(namaSudahDipakai(daftar, 'ayam')).toBe(true);
+    expect(namaSudahDipakai(daftar, '  KEJU mozzarella ')).toBe(true);
+    expect(namaSudahDipakai(daftar, 'Keju')).toBe(false);          // sebagian nama bukan kembar
+    expect(namaSudahDipakai(daftar, '')).toBe(false);
+    expect(namaSudahDipakai(daftar, '   ')).toBe(false);
+    expect(namaSudahDipakai(daftar, null)).toBe(false);
+    expect(namaSudahDipakai(undefined, 'Ayam')).toBe(false);
+  });
+
+  it('daftarGrupResep: nama grup yang ada, urut seperti tab Resep', () => {
+    expect(daftarGrupResep(model())).toEqual(['Saos', 'Menu utama']);
+    expect(daftarGrupResep({ resep: {} })).toEqual([]);
+  });
+
+  it('resep baru (per porsi dan batch) dihitung dari draft tanpa menyentuh model asli', () => {
+    const m = model();
+    const BARU = '__baru__';
+    const items = itemsResepDariDraft([
+      { key: 'a', id: null, kind: 'bahan', ref: 'A', qty: '200' },      // 200 gr x Rp1 = 200
+      { key: 'b', id: null, kind: 'resep', ref: 'saos', qty: '100' },   // 100/1000 hasil x total saos (600 + 2 x 1000 = 2600) = 260
+    ]);
+    const batas = (hasilQty) => ({ ...m, resep: { ...m.resep, [BARU]: { id: BARU, nama: '', grup: '', hasilQty, hasilUnit: null, urutan: 0, items } } });
+    const porsi = makeCtx(batas(null)).resepTotal(BARU);
+    expect(porsi).toBe(460);
+    expect(resepPerUnit({ hasilQty: null }, porsi)).toBe(460);
+    const batch = makeCtx(batas(500)).resepTotal(BARU);
+    expect(resepPerUnit({ hasilQty: 500 }, batch)).toBeCloseTo(0.92, 10);   // total 460 / hasil 500
+    expect(m.resep[BARU]).toBeUndefined();                              // model asli tidak berubah
+  });
+
+  it('resep baru tidak pernah membuat lingkaran: kosong kalau belum ada yang memakainya', () => {
+    const m = model();
+    expect(bisaTambahSub(m, null, 'saos')).toBe(true);
+    expect(bisaTambahSub(m, null, 'porsi')).toBe(true);
   });
 });

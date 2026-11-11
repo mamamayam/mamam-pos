@@ -1,8 +1,15 @@
 import { useMemo, useState } from 'react'
-import { dampakUbah, isiBawaan, menusUsingBahan, opsiSatuan } from './hppModel'
+import { dampakUbah, isiBawaan, menusUsingBahan, namaSudahDipakai, opsiSatuan } from './hppModel'
 import { angka, labelSatuan, parseAngka, ringkasUbahBahan, rupiah, rupiahUnit } from './hppFormat'
 import { Chip, ChipRow, DeltaPersen, Dropdown, FieldLabel, Pratinjau, Sheet, Stepper, TextInput, TombolDampak, TombolForm } from './ui'
 import DampakSheet from './DampakSheet'
+
+/** Isian awal form Bahan baru: satuan pertama dari daftar di Pengaturan (bawaan kg / gr, isi 1.000), harga kosong. */
+const bahanKosong = (model) => {
+  const satuan = model.satuanBeli[0] ?? 'kg'
+  const unit = model.satuanDasar[0] ?? 'gr'
+  return { id: null, nama: '', harga: null, satuan, unit, isi: isiBawaan(satuan, unit) ?? 1, kategoriId: null }
+}
 
 /**
  * Form "Update harga" satu bahan: nama, harga per satuan beli (tombol − / +, langkah Rp500), dan pratinjau harga per unit dasar.
@@ -10,32 +17,37 @@ import DampakSheet from './DampakSheet'
  * Sebelum Simpan, "Lihat menu terdampak" menunjukkan menu yang modalnya ikut berubah. Riwayat harga ada di detail baris
  * (tab Bahan baku), bukan di sini; "dipakai di N menu" sengaja tidak ditampilkan.
  * `actions.simpanBahan` (HppApp) menyimpan semuanya sekaligus lalu memunculkan notifikasi menu terdampak.
+ *
+ * `baru` = form "Bahan baru" (tombol Tambah di tab Bahan baku): isian yang sama, tapi satuan/isi/kategori langsung terbuka,
+ * harga boleh dikosongkan (tampil "Belum diisi"), nama kembar ditolak, dan Simpan memanggil `actions.buatBahan`.
  */
-export default function BahanSheet({ model, bahanId, actions, onClose, awalUbah = false }) {
-  const b = model.bahan[bahanId]
+export default function BahanSheet({ model, bahanId, actions, onClose, awalUbah = false, baru = false }) {
+  const b = baru ? bahanKosong(model) : model.bahan[bahanId]
   const [nama, setNama] = useState(() => b?.nama ?? '')
   const [nilai, setNilai] = useState(() => (b && b.harga !== null ? String(b.harga) : ''))
   const [satuan, setSatuan] = useState(() => b?.satuan ?? '')
   const [unit, setUnit] = useState(() => b?.unit ?? '')
   const [isi, setIsi] = useState(() => (b ? String(b.isi) : ''))
   const [kat, setKat] = useState(() => b?.kategoriId ?? null)
-  const [ubah, setUbah] = useState(awalUbah)
+  const [ubah, setUbah] = useState(awalUbah || baru)
   const [menyimpan, setMenyimpan] = useState(false)
   const [lihat, setLihat] = useState(false)
 
   const harga = parseAngka(nilai)
   const isiBaru = parseAngka(isi)
-  const valid = !!b && nama.trim() !== '' && harga !== null && isiBaru !== null && isiBaru > 0 && satuan.trim() !== '' && unit.trim() !== ''
-  const berubah = valid && (nama.trim() !== b.nama || harga !== b.harga || satuan.trim() !== b.satuan || isiBaru !== b.isi || unit !== b.unit || kat !== b.kategoriId)
+  const hargaOk = baru ? (nilai.trim() === '' || harga !== null) : harga !== null   // bahan baru boleh tanpa harga dulu
+  const kembar = baru && namaSudahDipakai(model.bahanList.map((x) => x.nama), nama)
+  const valid = !!b && nama.trim() !== '' && !kembar && hargaOk && isiBaru !== null && isiBaru > 0 && satuan.trim() !== '' && unit.trim() !== ''
+  const berubah = valid && (baru || nama.trim() !== b.nama || harga !== b.harga || satuan.trim() !== b.satuan || isiBaru !== b.isi || unit !== b.unit || kat !== b.kategoriId)
   const dampak = useMemo(
-    () => (valid ? dampakUbah(model, bahanId, { harga, isi: isiBaru }) : { rows: [], ganti: 0 }),
-    [model, bahanId, valid, harga, isiBaru],
+    () => (valid && !baru ? dampakUbah(model, bahanId, { harga, isi: isiBaru }) : { rows: [], ganti: 0 }),
+    [model, bahanId, baru, valid, harga, isiBaru],
   )
   if (!b) return null
 
   const lama = b.harga === null ? null : b.harga / b.isi
-  const baru = valid ? harga / isiBaru : null
-  const bahanDipakai = unit !== b.unit && (menusUsingBahan(model, bahanId).length > 0 || Object.values(model.resep).some((r) => r.items.some((it) => it.bahanId === bahanId)))
+  const hitungBaru = valid && harga !== null ? harga / isiBaru : null
+  const bahanDipakai = !baru && unit !== b.unit && (menusUsingBahan(model, bahanId).length > 0 || Object.values(model.resep).some((r) => r.items.some((it) => it.bahanId === bahanId)))
   const pilihSatuan = (s) => {
     setSatuan(s)
     const bawaan = isiBawaan(s, unit)
@@ -49,12 +61,14 @@ export default function BahanSheet({ model, bahanId, actions, onClose, awalUbah 
 
   return (
     <>
-      <Sheet title="Update harga" onClose={onClose}>
+      <Sheet title={baru ? 'Bahan baru' : 'Update harga'} onClose={onClose}>
         {(tutup) => {
           const simpan = async () => {
             if (!berubah || menyimpan) return
             setMenyimpan(true)
-            const ok = await actions.simpanBahan(b.id, { nama: nama.trim(), harga, satuan: satuan.trim(), isi: isiBaru, kategoriId: kat, unit })
+            const ok = baru
+              ? await actions.buatBahan({ nama: nama.trim(), harga, satuan: satuan.trim(), isi: isiBaru, unit, kategoriId: kat })
+              : await actions.simpanBahan(b.id, { nama: nama.trim(), harga, satuan: satuan.trim(), isi: isiBaru, kategoriId: kat, unit })
             setMenyimpan(false)
             if (ok) tutup()
           }
@@ -62,9 +76,10 @@ export default function BahanSheet({ model, bahanId, actions, onClose, awalUbah 
             <>
               <FieldLabel>Nama</FieldLabel>
               <TextInput value={nama} onChange={setNama} ariaLabel="Nama bahan" />
+              {kembar && <p role="alert" className="mt-1 text-xs font-semibold text-red-600">Nama itu sudah dipakai bahan lain.</p>}
 
-              <FieldLabel>Harga per {satuan.trim() || b.satuan}</FieldLabel>
-              <Stepper value={nilai} onChange={setNilai} step={500} awalan="Rp" ariaLabel="Harga baru" />
+              <FieldLabel>Harga per {satuan.trim() || b.satuan}{baru ? ' (boleh dikosongkan dulu)' : ''}</FieldLabel>
+              <Stepper value={nilai} onChange={setNilai} step={500} awalan="Rp" ariaLabel={baru ? 'Harga' : 'Harga baru'} />
 
               {ubah ? (
                 <div className="hpp-reveal mt-3 rounded-2xl border border-slate-200 bg-white p-3">
@@ -95,18 +110,20 @@ export default function BahanSheet({ model, bahanId, actions, onClose, awalUbah 
               )}
 
               <Pratinjau>
-                {valid
+                {valid && hitungBaru !== null
                   ? (
                     <>
-                      {rupiah(harga)}/{satuan.trim()} ÷ {angka(isiBaru)} {unit} = <b className="text-slate-900">{rupiahUnit(baru)}</b>/{unit}{' '}
-                      {lama !== null && lama > 0 && Math.abs(baru / lama - 1) > 0.0005 && (
+                      {rupiah(harga)}/{satuan.trim()} ÷ {angka(isiBaru)} {unit} = <b className="text-slate-900">{rupiahUnit(hitungBaru)}</b>/{unit}{' '}
+                      {lama !== null && lama > 0 && Math.abs(hitungBaru / lama - 1) > 0.0005 && (
                         <>
-                          <DeltaPersen nilai={(baru / lama - 1) * 100} /> <span className="text-xs text-slate-400">dari {rupiahUnit(lama)}</span>
+                          <DeltaPersen nilai={(hitungBaru / lama - 1) * 100} /> <span className="text-xs text-slate-400">dari {rupiahUnit(lama)}</span>
                         </>
                       )}
                     </>
                   )
-                  : <span className="text-slate-400">Isi nama, harga, dan isi per satuan dengan benar.</span>}
+                  : valid
+                    ? <span className="text-slate-500">Harga dikosongkan: bahan tampil "Belum diisi" sampai harganya diisi lewat Update harga.</span>
+                    : <span className="text-slate-400">Isi nama{baru ? '' : ', harga,'} dan isi per satuan dengan benar.</span>}
                 {berubah && dampak.rows.length > 0 && <TombolDampak n={dampak.rows.length} onClick={() => setLihat(true)} />}
               </Pratinjau>
 

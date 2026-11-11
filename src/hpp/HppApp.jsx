@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Settings } from 'lucide-react'
+import { Plus, Settings } from 'lucide-react'
 import LoginScreen from './LoginScreen'
 import MenuTab from './MenuTab'
 import BahanTab from './BahanTab'
@@ -66,6 +66,9 @@ export default function HppApp() {
   )
 }
 
+/** Nama jenis item untuk label tombol Tambah di tiap tab. */
+const LABEL_TAMBAH = { bahan: 'bahan baku', resep: 'resep', menu: 'menu' }
+
 function Pesan({ judul, children, aksi }) {
   return (
     <div className="flex min-h-full items-center justify-center p-6">
@@ -81,7 +84,7 @@ function Pesan({ judul, children, aksi }) {
 function Cangkang({ db, email, onKeluar, akar }) {
   const { model, status, galat, pesan, actions: aksiDasar, raw } = useHpp(db)
   const [tab, setTab] = useState(() => tabFromPath(window.location.pathname))
-  const [lembar, setLembar] = useState(null)   // { t: 'menu' | 'resep' | 'bahan' | 'set' | 'dampak', id } ('dampak' membawa judul dan rows)
+  const [lembar, setLembar] = useState(null)   // { t: 'menu' | 'resep' | 'bahan' | 'set' | 'dampak', id } ('dampak' membawa judul dan rows); 'bahan-baru' | 'resep-baru' | 'menu-baru' = form tambah, tanpa id
   const [snack, setSnack] = useState(null)     // { pesan, judul, rows } notifikasi setelah data tersimpan
   const [q, setQ] = useState('')               // kata cari bilah atas, dipakai tab yang sedang tampil
   const tutupSnack = useCallback(() => setSnack(null), [])
@@ -116,6 +119,22 @@ function Cangkang({ db, email, onKeluar, akar }) {
     async simpanMenu(menuId, v) {
       const ok = await aksiDasar.simpanMenu(menuId, v)
       if (ok) setSnack({ pesan: 'Tersimpan', judul: '', rows: [] })
+      return ok
+    },
+    /** Tambah bahan / resep / menu baru (tombol Tambah di bilah atas). Notifikasi menyebut nama yang ditambahkan. */
+    async buatBahan(v) {
+      const ok = await aksiDasar.buatBahan(v)
+      if (ok) setSnack({ pesan: `Bahan "${v.nama}" ditambahkan`, judul: '', rows: [] })
+      return ok
+    },
+    async buatResep(v) {
+      const ok = await aksiDasar.buatResep(v)
+      if (ok) setSnack({ pesan: `Resep "${v.nama}" ditambahkan`, judul: '', rows: [] })
+      return ok
+    },
+    async buatMenu(v) {
+      const ok = await aksiDasar.buatMenu(v)
+      if (ok) setSnack({ pesan: `Menu "${v.nama}" ditambahkan`, judul: '', rows: [] })
       return ok
     },
   }
@@ -190,7 +209,14 @@ function Cangkang({ db, email, onKeluar, akar }) {
               </button>
             ))}
           </nav>
-          <SearchBox value={q} onChange={setQ} placeholder="Cari bahan, saos, menu…" className="mb-1.5" />
+          <div className="mb-1.5 flex items-stretch gap-2">
+            <SearchBox value={q} onChange={setQ} placeholder="Cari bahan, saos, menu…" className="min-w-0 flex-1" />
+            {/* Tambah item baru di tab yang sedang tampil (Bahan baku / Resep / Menu) */}
+            <button type="button" onClick={() => setLembar({ t: `${tab}-baru` })} aria-label={`Tambah ${LABEL_TAMBAH[tab]}`}
+              className="flex flex-none items-center gap-1 rounded-2xl bg-gradient-to-r from-accent-600 to-accent-500 px-3.5 text-sm font-bold text-white shadow-md shadow-accent-500/25 active:scale-95">
+              <Plus size={16} aria-hidden="true" />Tambah
+            </button>
+          </div>
         </div>
 
         {tab === 'bahan' && <BahanTab model={model} q={q} onOpen={(id) => setLembar({ t: 'bahan', id })} />}
@@ -201,6 +227,9 @@ function Cangkang({ db, email, onKeluar, akar }) {
       {lembar?.t === 'menu' && <MenuSheet model={model} menuId={lembar.id} actions={actions} onClose={tutup} />}
       {lembar?.t === 'resep' && <ResepSheet model={model} resepId={lembar.id} actions={actions} onClose={tutup} />}
       {lembar?.t === 'bahan' && <BahanSheet model={model} bahanId={lembar.id} actions={actions} onClose={tutup} />}
+      {lembar?.t === 'bahan-baru' && <BahanSheet model={model} baru actions={actions} onClose={tutup} />}
+      {lembar?.t === 'resep-baru' && <ResepSheet model={model} baru actions={actions} onClose={tutup} />}
+      {lembar?.t === 'menu-baru' && <MenuSheet model={model} baru actions={actions} onClose={tutup} />}
       {lembar?.t === 'dampak' && <DampakSheet model={model} judul={lembar.judul} rows={lembar.rows} onClose={tutup} />}
       {lembar?.t === 'set' && <SettingsSheet model={model} actions={actions} email={email} onKeluar={onKeluar} onClose={tutup} />}
 

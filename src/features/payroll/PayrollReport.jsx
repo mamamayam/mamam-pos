@@ -13,6 +13,9 @@ import { detailSubRows } from './additionDetail';
  *  - Rincian Harian: tabel Keterangan | Pemasukan (+) | Pengeluaran (-), dikelompokkan per tanggal beserta jam kerja.
  *    Potongan bisa diubah (membuka form Potongan Catat Cepat) atau dihapus; Tambahan hanya dihapus.
  * Data berasal dari buildPayrollReport (payrollReport.js).
+ *
+ * `readOnly` = tampilan karyawan (Gaji Saya, MyPayroll): susunan SAMA dengan owner, tapi tanpa tombol ubah/hapus/Bagikan,
+ * dan bagian saldo bernama "Sisa Saldo" (+ = toko berutang / belum diambil, - = hutang ke toko).
  */
 
 const COLS = 'grid grid-cols-[1fr_5.25rem_5.25rem] gap-1.5';
@@ -46,7 +49,7 @@ const Row = ({ k, v, dim }) => (
 export default function PayrollReport({
   report, isLocked, formatRupiah, dayFlags, notice,
   onEditDay, onEditDeduction, onDeleteItem,
-  canEditOpening, openingForm, onOpeningChange, onSaveOpening, busy, onShare,
+  canEditOpening, openingForm, onOpeningChange, onSaveOpening, busy, onShare, readOnly = false,
   initialOpen = {},   // bagian yang terbuka sejak awal (default semua tertutup; dipakai tes)
 }) {
   const [open, setOpen] = useState({ pend: false, cut: false, sal: false, hari: false, ...initialOpen });
@@ -79,7 +82,7 @@ export default function PayrollReport({
         </Section>
 
         {report.withOpening && (
-          <Section title="Saldo Awal Bulan" value={openingValue} valueClass={opening.kind === 'toko' ? 'text-emerald-600' : opening.kind === 'karyawan' ? 'text-red-500' : ''}
+          <Section title={readOnly ? 'Sisa Saldo' : 'Saldo Awal Bulan'} value={openingValue} valueClass={opening.kind === 'toko' ? 'text-emerald-600' : opening.kind === 'karyawan' ? 'text-red-500' : ''}
             open={open.sal} onToggle={() => toggle('sal')} testId="sec-saldo">
             {canEditOpening ? (
               <div className="space-y-2.5 pt-1">
@@ -90,7 +93,7 @@ export default function PayrollReport({
                 </div>
               </div>
             ) : (
-              <div className="text-sm"><Row k={opening.kind === 'toko' ? 'Toko berutang' : opening.kind === 'karyawan' ? 'Karyawan berutang' : 'Tidak ada saldo awal'} v={opening.kind ? formatRupiah(opening.amount) : formatRupiah(0)} dim={!opening.kind} /></div>
+              <div className="text-sm"><Row k={opening.kind === 'toko' ? (readOnly ? 'Toko berutang (belum diambil)' : 'Toko berutang') : opening.kind === 'karyawan' ? (readOnly ? 'Hutang ke toko' : 'Karyawan berutang') : (readOnly ? 'Tidak ada saldo' : 'Tidak ada saldo awal')} v={opening.kind ? formatRupiah(opening.amount) : formatRupiah(0)} dim={!opening.kind} /></div>
             )}
           </Section>
         )}
@@ -112,7 +115,7 @@ export default function PayrollReport({
                       {flags.edited && <EditedMark size="sm" label="Diedit owner" data-testid="day-diedit" />}
                       {d.row?.effectiveFromBolong && <span className="text-amber-600">bolong dianggap pulang</span>}
                       {d.row && <Badge size="sm" variant={STATUS_VARIANT[d.row.status]}>{STATUS_LABEL[d.row.status]}</Badge>}
-                      {d.row && !isLocked && (
+                      {d.row && !isLocked && !readOnly && (
                         <button type="button" aria-label={`Edit absen ${fmtDay(d.date)}`} data-testid="edit-day" onClick={() => onEditDay(d.date)} className="ml-auto p-1 text-slate-400 hover:text-accent-600"><Pencil className="w-3.5 h-3.5" /></button>
                       )}
                     </div>
@@ -130,10 +133,10 @@ export default function PayrollReport({
                                   <span>{l.label}</span>
                                 </button>
                               ) : l.label}
-                              {l.item && !isLocked && l.item.kind === 'potongan' && (
+                              {l.item && !isLocked && !readOnly && l.item.kind === 'potongan' && (
                                 <button type="button" aria-label="Ubah potongan" data-testid="edit-potongan" onClick={() => onEditDeduction(l.item)} className="ml-1 p-0.5 align-middle text-slate-400 hover:text-accent-600"><Pencil className="w-3 h-3" /></button>
                               )}
-                              {l.item && !isLocked && (
+                              {l.item && !isLocked && !readOnly && (
                                 <button type="button" aria-label="Hapus" onClick={() => onDeleteItem(l.item.kind, l.item)} className="p-0.5 align-middle text-slate-400 hover:text-red-500"><Trash2 className="w-3 h-3" /></button>
                               )}
                             </span>
@@ -155,13 +158,13 @@ export default function PayrollReport({
               })}
             </div>
           )}
-          {isLocked && (
+          {isLocked && !readOnly && (
             <p className="text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-3 mt-2 flex items-center gap-1.5"><Lock className="w-3.5 h-3.5 shrink-0" /> Periode ditutup, jadi tambahan dan potongan tidak bisa diubah.</p>
           )}
         </Section>
       </div>
 
-      <Button variant="secondary" size="full" icon={<Share2 className="w-4 h-4" />} onClick={onShare} data-testid="share-pdf">Bagikan PDF</Button>
+      {!readOnly && <Button variant="secondary" size="full" icon={<Share2 className="w-4 h-4" />} onClick={onShare} data-testid="share-pdf">Bagikan PDF</Button>}
     </div>
   );
 }

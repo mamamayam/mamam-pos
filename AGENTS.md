@@ -160,6 +160,7 @@ Rincian: `docs/versioning.md`. Versi tampil di menu Lainnya dan layar login (`sr
 
 **Laporan Gaji** (`src/features/payroll/PayrollReport.jsx`; periode **Mingguan dan Bulanan** memakai tampilan yang SAMA, tanpa tab Ringkas/Detail): Gaji Bersih di atas, lalu bagian yang dibuka satu per satu:
 **Total Pendapatan**, **Pengurangan** (Kasbon, Potongan), **Saldo Awal Bulan** (khusus bulanan), dan **Rincian Harian**. Judul bagian hanya nama + nilai (tanpa teks abu-abu rincian).
+- **Gaji Saya (staf, `MyPayroll.jsx`) memakai komponen yang SAMA** (`PayrollReport` dengan `readOnly`; permintaan pemilik 13 Nov 2026): Gaji Bersih, Total Pendapatan, Pengurangan, **Sisa Saldo** (hanya bulanan, = saldo awal bulan bertanda: `+` toko berutang / belum diambil, `-` hutang ke toko), Rincian Harian; tanpa tombol ubah/hapus/Bagikan PDF. Jangan membuat susunan terpisah untuk staf; ubah `PayrollReport`.
 - **Rincian Harian** = tabel *Keterangan | Pemasukan (+) | Pengeluaran (-)* per tanggal, dengan jam masuk s/d pulang (dibaca dari log absensi; periode tertutup tidak membaca absensi, jadi jam tidak tampil).
   Tiap hari hadir: Upah Jam Kerja, Uang Lembur, Bonus Full Time; Kasbon/Potongan/Tambahan tampil di tanggalnya (Potongan: ubah/hapus; Tambahan: hapus).
   **Lembur ditutup PER HARI** (keputusan pemilik): blok = floor(menit lembur hari itu / 30), sisa menit hari itu hangus dan tidak dibawa ke hari lain (`overtimeBlocks` per hari di `payrollEngine.js`; Rincian Harian menampilkan blok hari itu).

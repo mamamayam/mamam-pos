@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, Lock, LockKeyhole, UserRound, ArrowLeft, RefreshCw } from 'lucide-react';
-import { Card, Button, Badge, EmptyState, PillTabs } from '../../components/ui';
+import { Card, Button, EmptyState, PillTabs } from '../../components/ui';
 import { useAppContext } from '../../context/AppContext';
 import { usePayrollData } from '../../hook/usePayrollData';
 import { useAppSettings } from '../../hook/useAppSettings';
@@ -9,6 +9,8 @@ import PinPad from '../../auth/PinPad';
 import { EMPLOYEE_ATTEMPT_RULES, readAttempts, recordAttempt, isLocked, secondsLeft, attemptsLeft } from '../../auth/authLogic';
 import { weekPeriodForDate, shiftWeek, monthPeriod, formatIsoDate } from './payrollEngine';
 import { toLocalDateString } from '../../utils/formatters';
+import PayrollReport from './PayrollReport';
+import { buildPayrollReport, buildClocks, daysInPeriod } from './payrollReport';
 
 /**
  * MyPayroll — Penggajian untuk STAF. Karyawan memilih namanya, memasukkan PIN,
@@ -23,12 +25,8 @@ const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt
 const MON_FULL = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const fmtDay = (iso) => `${Number(iso.slice(8, 10))} ${MON[Number(iso.slice(5, 7)) - 1]}`;
 const fmtDayYear = (iso) => `${fmtDay(iso)} ${iso.slice(0, 4)}`;
-const fmtHM = (min) => `${Math.floor(min / 60)}j ${String(min % 60).padStart(2, '0')}m`;
 const fmtLock = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 const shiftMonth = (key, delta) => formatIsoDate(new Date(Date.UTC(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1 + delta, 1))).slice(0, 7);
-
-const STATUS_LABEL = { hadir: 'Hadir', libur: 'Libur', belumAbsen: 'Belum absen', belumPulang: 'Belum pulang', perluKlarifikasi: 'Perlu klarifikasi' };
-const STATUS_VARIANT = { hadir: 'success', libur: 'neutral', belumAbsen: 'neutral', belumPulang: 'warning', perluKlarifikasi: 'danger' };
 
 const ATTEMPTS_KEY = 'mamam-pos-emp-attempts';
 const readMap = () => { try { return JSON.parse(window.localStorage.getItem(ATTEMPTS_KEY)) || {}; } catch { return {}; } };
@@ -143,7 +141,7 @@ function MySalary({ employee, minutes, onLock }) {
   const [anchor, setAnchor] = useState(today);
   const [month, setMonth] = useState(today.slice(0, 7));
   const period = useMemo(() => (mode === 'minggu' ? weekPeriodForDate(anchor) : monthPeriod(month)), [mode, anchor, month]);
-  const { loading, error, status, attendance, results, reload, isLocked: periodClosed } = usePayrollData({ period });
+  const { loading, error, status, attendance, results, prepared, reload, isLocked: periodClosed } = usePayrollData({ period });
 
   // Kunci lagi otomatis kalau tidak disentuh selama `minutes` menit.
   const lastTouch = useRef(Date.now());
@@ -197,50 +195,26 @@ function MySalary({ employee, minutes, onLock }) {
         {ready && !mine && <EmptyState icon={<UserRound className="w-12 h-12" />} title="Tidak ada data gaji untuk periode ini." />}
 
         {ready && mine && (() => {
-          const p = mine.payroll, a = p.attendance;
+          const report = buildPayrollReport(mine.payroll, {
+            formatRupiah, withOpening: !!period.monthKey, periodDays: daysInPeriod(period),
+            clocks: buildClocks(prepared?.logs || [], employee.id),
+          });
           return (
             <>
               {periodClosed && <p className="text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-3 flex items-center gap-1.5"><Lock className="w-3.5 h-3.5 shrink-0" /> Periode ini sudah ditutup owner, angkanya final.</p>}
               {!periodClosed && <p className="text-xs text-slate-400">Periode berjalan: angka bisa berubah sampai owner menutup periode.</p>}
 
-              <Card className="space-y-1.5 text-sm" data-testid="my-ringkasan">
-                <Row k={`Upah (${fmtHM(a.totalWorkedMinutes)} / ${a.hadirDays} hari kerja)`} v={a.wagePay} f={formatRupiah} />
-                <Row k={`Lembur (${a.overtimeBlocks30Min} blok)`} v={a.overtimePay} f={formatRupiah} />
-                <Row k={`Bonus Full Time (${a.fullTimeDays} hari)`} v={a.fullTimeBonusPay} f={formatRupiah} />
-                <Row k="Tambahan" v={p.additionsTotal} f={formatRupiah} />
-                <Row k="Potongan" v={-p.deductionsTotal} f={formatRupiah} />
-                {period.monthKey && p.openingBalance !== 0 && <Row k={p.openingBalance < 0 ? 'Sisa bulan lalu (kurang bayar)' : 'Hutang bulan lalu'} v={-p.openingBalance} f={formatRupiah} />}
-                <div className="flex justify-between font-bold text-base pt-2 border-t border-slate-200 dark:border-slate-700"><span>Gaji Bersih</span><span data-testid="my-net" className={p.netPay < 0 ? 'text-red-500' : 'text-accent-600 dark:text-accent-400'}>{formatRupiah(p.netPay)}</span></div>
+              {/* Susunan SAMA dengan layar owner (PayrollReport): Gaji Bersih, Total Pendapatan, Pengurangan, Sisa Saldo (bulanan), Rincian Harian. */}
+              <Card className="text-sm" data-testid="my-ringkasan">
+                <PayrollReport
+                  readOnly report={report} isLocked={periodClosed} formatRupiah={formatRupiah}
+                  dayFlags={() => ({ auto: false, edited: false })}
+                  canEditOpening={false} openingForm={{ kind: null, amount: '' }}
+                />
               </Card>
 
               {mine.needsClarification.length > 0 && (
                 <p className="text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 rounded-xl p-3">{mine.needsClarification.length} hari belum dibayar karena absennya perlu diklarifikasi owner ({mine.needsClarification.map((d) => fmtDay(d.date)).join(', ')}).</p>
-              )}
-
-              <Card className="space-y-2">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Rincian Harian</p>
-                {a.dayRows.length === 0 ? <p className="text-xs text-slate-400">Tidak ada absensi pada periode ini.</p> : (
-                  <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {a.dayRows.map((d) => (
-                      <div key={d.date} className="py-2 flex justify-between items-center gap-2 text-xs" data-testid="my-day-row">
-                        <div className="min-w-0"><span className="font-bold text-slate-700 dark:text-slate-200">{fmtDay(d.date)}</span> <Badge size="sm" variant={STATUS_VARIANT[d.status]}>{STATUS_LABEL[d.status]}</Badge></div>
-                        {d.status === 'hadir' && <div className="text-right text-slate-500 dark:text-slate-400 shrink-0">{fmtHM(d.workedMinutes)}{d.overtimeMinutes > 0 && ` · lembur ${d.overtimeMinutes}m`}{d.bolongMinutes > 0 && ` · bolong ${d.bolongMinutes}m`}{d.fullTimeBonus && ' · FT'}</div>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Card>
-
-              {(p.additions.length > 0 || p.deductions.length > 0) && (
-                <Card className="space-y-2">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Tambahan &amp; Potongan</p>
-                  {[...p.additions.map((x) => ['tambahan', x]), ...p.deductions.map((x) => ['potongan', x])].map(([kind, it]) => (
-                    <div key={kind + it.id} className="flex justify-between items-center gap-2 bg-slate-50 dark:bg-slate-950 rounded-xl p-2.5 text-xs">
-                      <div className="min-w-0"><Badge size="sm" variant={kind === 'tambahan' ? 'success' : 'danger'}>{it.category}</Badge> <span className="font-semibold">{it.label}</span> <span className="text-slate-400">{fmtDay(it.date)}</span></div>
-                      <span className={`font-bold shrink-0 ${kind === 'tambahan' ? 'text-emerald-600' : 'text-red-500'}`}>{kind === 'tambahan' ? '+' : '-'}{formatRupiah(it.amount)}</span>
-                    </div>
-                  ))}
-                </Card>
               )}
             </>
           );
@@ -248,8 +222,4 @@ function MySalary({ employee, minutes, onLock }) {
       </div>
     </div>
   );
-}
-
-function Row({ k, v, f }) {
-  return <div className="flex justify-between gap-3"><span className="text-slate-500 dark:text-slate-400">{k}</span><span className="font-bold text-slate-800 dark:text-slate-100 shrink-0">{f(v)}</span></div>;
 }

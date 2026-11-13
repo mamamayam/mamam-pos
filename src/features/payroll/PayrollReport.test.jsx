@@ -85,3 +85,30 @@ describe('PayrollReport (render awal)', () => {
     expect(html).toContain('Periode ditutup');
   });
 });
+
+describe('PayrollReport readOnly (Gaji Saya, tampilan karyawan)', () => {
+  const ro = (o = {}) => render({ readOnly: true, canEditOpening: false, onShare: undefined, ...o });
+  it('susunan sama dengan owner: Gaji Bersih, Total Pendapatan, Pengurangan, Sisa Saldo (bulanan), Rincian Harian', () => {
+    const html = ro();
+    for (const t of ['Gaji Bersih', 'Total Pendapatan', 'Pengurangan', 'Sisa Saldo', 'Rincian Harian']) expect(html).toContain(t);
+    expect(html).not.toContain('Saldo Awal Bulan');
+  });
+  it('mingguan: tanpa bagian saldo', () => {
+    expect(ro({ withOpening: false })).not.toContain('Sisa Saldo');
+  });
+  it('saldo bertanda: toko berutang +, karyawan berutang -', () => {
+    expect(ro({ p: payroll({ openingBalance: -50000, netPay: 165000 }) })).toContain('+Rp 50.000');
+    expect(ro({ p: payroll({ openingBalance: 30000, netPay: 85000 }) })).toContain('-Rp 30.000');
+    expect(ro({ initialOpen: { sal: true }, p: payroll({ openingBalance: -50000, netPay: 165000 }) })).toContain('Toko berutang (belum diambil)');
+    expect(ro({ initialOpen: { sal: true }, p: payroll({ openingBalance: 30000, netPay: 85000 }) })).toContain('Hutang ke toko');
+  });
+  it('tanpa tombol ubah, hapus, dan Bagikan PDF', () => {
+    const html = ro({ initialOpen: { hari: true } });
+    expect(html).not.toContain('Bagikan PDF');
+    expect(html).not.toContain('data-testid="edit-day"');
+    expect(html).not.toContain('aria-label="Hapus"');
+    expect(html).not.toContain('Ubah potongan');
+    expect(render({ initialOpen: { hari: true } })).toContain('aria-label="Hapus"');   // owner tetap punya
+  });
+});
+

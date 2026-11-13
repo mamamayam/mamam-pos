@@ -25,6 +25,7 @@ export function useDeviceStatus(enabled) {
       if (error || !data) {
         // Server tidak terjangkau: HP yang tadinya terdaftar tetap boleh jalan, selebihnya terkunci.
         const cached = getCachedStatus(id);
+        if (cached === STATUS.OK) setDeviceFeature(true);   // tabel `devices` pernah terbukti ada: tetap kirim device_id
         setState({ status: cached === STATUS.OK ? STATUS.OK : STATUS.FAILED, name: '' });
         return;
       }

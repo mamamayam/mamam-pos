@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isUuid, deviceCode, readOrCreateId, readCachedStatus, newUuid } from './deviceId';
+import { isUuid, deviceCode, readOrCreateId, readCachedStatus, cachedFeatureOn, newUuid } from './deviceId';
 
 const memStore = (init = {}) => {
   const m = { ...init };
@@ -38,5 +38,21 @@ describe('deviceId', () => {
     expect(readCachedStatus(st, 'x1')).toBe('terdaftar');
     expect(readCachedStatus(st, 'x2')).toBeNull();
     expect(readCachedStatus(memStore({ 'mamam-pos-device-status': '{rusak' }), 'x1')).toBeNull();
+  });
+});
+
+describe('cachedFeatureOn: fitur perangkat menyala dari status tersimpan', () => {
+  const ID = '6d375dcd-135e-44c7-bf5b-00cedb677f64';
+  const simpan = (obj) => ({ getItem: (k) => (k in obj ? obj[k] : null) });
+
+  it('status tersimpan untuk ID yang sama = menyala (device_id dikirim walau pemeriksaan belum selesai)', () => {
+    const st = simpan({ 'mamam-pos-device-id': ID, 'mamam-pos-device-status': JSON.stringify({ id: ID, status: 'terdaftar' }) });
+    expect(cachedFeatureOn(st)).toBe(true);
+  });
+  it('belum pernah diperiksa, ID beda (data browser dihapus), atau isi rusak = mati', () => {
+    expect(cachedFeatureOn(simpan({}))).toBe(false);
+    expect(cachedFeatureOn(simpan({ 'mamam-pos-device-id': ID, 'mamam-pos-device-status': JSON.stringify({ id: newUuid(), status: 'terdaftar' }) }))).toBe(false);
+    expect(cachedFeatureOn(simpan({ 'mamam-pos-device-id': ID, 'mamam-pos-device-status': '{rusak' }))).toBe(false);
+    expect(cachedFeatureOn(null)).toBe(false);
   });
 });

@@ -54,7 +54,19 @@ export const getCachedStatus = (id) => readCachedStatus(safeStorage(), id);
 
 // Kolom device_id baru dikirim setelah dipastikan tabel `devices` ada (migrasi 011 sudah dijalankan);
 // sebelum itu, kolom yang belum ada akan membuat simpan transaksi gagal.
-let featureOn = false;
+/**
+ * Fitur dianggap sudah menyala kalau HP ini pernah berhasil memeriksa tabel `devices` (status tersimpan di localStorage untuk ID yang sama).
+ * Tanpa ini, `featureOn` baru true setelah pemeriksaan pertama selesai: catatan yang dikirim sebelum itu (app baru dibuka) atau saat
+ * pemeriksaan gagal (sinyal putus-nyambung) tidak membawa device_id, lalu DITOLAK server kalau "Kunci di server" aktif.
+ */
+export function cachedFeatureOn(storage) {
+  try {
+    const v = JSON.parse(storage?.getItem(STATUS_KEY) || 'null');
+    return Boolean(v && isUuid(v.id) && v.id === storage.getItem(ID_KEY));
+  } catch { return false; }
+}
+
+let featureOn = cachedFeatureOn(safeStorage());
 export const setDeviceFeature = (on) => { featureOn = Boolean(on); };
 export const deviceFeatureOn = () => featureOn;
 /** Sisipkan ke payload insert transactions / expenses. */

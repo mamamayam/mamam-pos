@@ -15,7 +15,7 @@ import { detailSubRows } from './additionDetail';
  * Data berasal dari buildPayrollReport (payrollReport.js).
  *
  * BULANAN dengan `onOpenDays` (dipakai PayrollView dan MyPayroll) memakai susunan ringkasan seperti slip PDF
- * (permintaan pemilik 13 Nov 2026): PENDAPATAN, Total Pendapatan, POTONGAN, Total Potongan, Saldo Awal Bulan (bisa dibuka),
+ * (permintaan pemilik 13 Nov 2026): PENDAPATAN, Total Pendapatan, POTONGAN, Total Potongan, saldo awal ikut di PENDAPATAN / POTONGAN (tanpa baris sendiri; owner punya tautan "Ubah Saldo Awal"),
  * lalu GAJI BERSIH di PALING BAWAH. Rincian harian TIDAK dibuka di tempat: tombol "Rincian Harian" memanggil `onOpenDays`
  * dan induk membuka DailyDetailSheet (tabel gaya PDF + kolom Bersih per hari). Tanpa `onOpenDays` (mingguan) susunan lama
  * di bawah ini tetap dipakai.
@@ -53,11 +53,13 @@ const Row = ({ k, v, dim }) => (
 );
 
 // Bagian Saldo Awal Bulan (bulanan): owner mengisi JENIS + nominal; periode tertutup / karyawan hanya melihat.
-function SaldoSection({ report, readOnly, formatRupiah, open, onToggle, canEditOpening, openingForm, onOpeningChange, onSaveOpening, busy }) {
+// `editorOnly` (ringkasan bulanan): tanpa angka di judul, hanya tautan "Ubah Saldo Awal", karena nilainya sudah tampil di
+// PENDAPATAN (Sisa Bulan Lalu) atau POTONGAN (Hutang Bulan Lalu); menampilkannya lagi membuat rancu.
+function SaldoSection({ report, readOnly, formatRupiah, open, onToggle, canEditOpening, openingForm, onOpeningChange, onSaveOpening, busy, editorOnly = false }) {
   const { opening } = report;
   const openingValue = opening.kind ? `${opening.kind === 'toko' ? '+' : '-'}${formatRupiah(opening.amount)}` : formatRupiah(0);
   return (
-    <Section title={readOnly ? 'Sisa Saldo' : 'Saldo Awal Bulan'} value={openingValue} valueClass={opening.kind === 'toko' ? 'text-emerald-600' : opening.kind === 'karyawan' ? 'text-red-500' : ''}
+    <Section title={editorOnly ? 'Ubah Saldo Awal' : readOnly ? 'Sisa Saldo' : 'Saldo Awal Bulan'} value={editorOnly ? '' : openingValue} valueClass={editorOnly ? '' : opening.kind === 'toko' ? 'text-emerald-600' : opening.kind === 'karyawan' ? 'text-red-500' : ''}
       open={open} onToggle={onToggle} testId="sec-saldo">
       {canEditOpening ? (
         <div className="space-y-2.5 pt-1">
@@ -117,8 +119,10 @@ function MonthlySummary({
       </SummaryBlock>
       <TotalRow label="Total Potongan" value={formatRupiah(-report.totalDeductions)} testId="total-potongan" />
 
-      <SaldoSection report={report} readOnly={readOnly} formatRupiah={formatRupiah} open={open.sal} onToggle={() => toggle('sal')}
-        canEditOpening={canEditOpening} openingForm={openingForm} onOpeningChange={onOpeningChange} onSaveOpening={onSaveOpening} busy={busy} />
+      {canEditOpening && !readOnly && (
+        <SaldoSection editorOnly report={report} readOnly={readOnly} formatRupiah={formatRupiah} open={open.sal} onToggle={() => toggle('sal')}
+          canEditOpening={canEditOpening} openingForm={openingForm} onOpeningChange={onOpeningChange} onSaveOpening={onSaveOpening} busy={busy} />
+      )}
 
       <div className="flex justify-between items-baseline gap-3 border-t-2 border-slate-800 dark:border-slate-200 pt-3 !mt-2" data-testid="gaji-bersih">
         <span className="font-bold text-base text-slate-800 dark:text-slate-100 tracking-wide">GAJI BERSIH</span>

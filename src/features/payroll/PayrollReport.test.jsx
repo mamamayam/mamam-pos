@@ -146,21 +146,28 @@ describe('PayrollReport bulanan: ringkasan gaya slip PDF (onOpenDays)', () => {
     for (const t of ['data-testid="day-row"', 'Pemasukan (+)', 'data-testid="edit-day"', 'sec-harian']) expect(html).not.toContain(t);
   });
 
-  it('Pendapatan dan Potongan terbuka dari awal, Saldo Awal Bulan tertutup tapi ada', () => {
-    const html = monthly();
-    expect(html.match(/aria-expanded="true"/g)).toHaveLength(2);
-    expect(html.match(/aria-expanded="false"/g)).toHaveLength(1);
-    expect(html).toContain('Saldo Awal Bulan');
-    expect(monthly({ initialOpen: { sal: true } })).not.toContain('+ Plus');   // initialOpen milik susunan lama; saldo tetap tertutup di ringkasan
+  it('saldo awal TIDAK tampil dua kali: hanya di Pendapatan/Potongan; owner dapat tautan Ubah Saldo Awal tanpa angka', () => {
+    const html = monthly({ p: payroll({ openingBalance: 30000, netPay: 85000 }) });
+    expect(html.match(/aria-expanded="true"/g)).toHaveLength(2);       // Pendapatan dan Potongan
+    expect(html.match(/aria-expanded="false"/g)).toHaveLength(1);      // Ubah Saldo Awal (tertutup)
+    expect(html).toContain('Ubah Saldo Awal');
+    expect(html).not.toContain('Saldo Awal Bulan');
+    expect(html.match(/Hutang Bulan Lalu/g)).toHaveLength(1);
+    expect(html).not.toContain('-Rp 30.000');                           // angka saldo hanya sebagai baris Potongan (Rp -30.000 / sejenis), bukan di judul bagian
+    expect(monthly({ initialOpen: { sal: true } })).not.toContain('+ Plus');
   });
 
-  it('owner: tombol Bagikan PDF; karyawan (readOnly): hanya Rincian Harian, bagian bernama Sisa Saldo', () => {
+  it('periode tertutup (owner tak bisa mengubah) dan karyawan: tanpa bagian saldo sama sekali', () => {
+    for (const html of [monthly({ canEditOpening: false }), monthly({ readOnly: true, canEditOpening: false })]) {
+      for (const t of ['Ubah Saldo Awal', 'Saldo Awal Bulan', 'Sisa Saldo', 'sec-saldo']) expect(html).not.toContain(t);
+    }
+  });
+
+  it('owner: tombol Bagikan PDF; karyawan (readOnly): hanya Rincian Harian', () => {
     expect(monthly()).toContain('Bagikan PDF');
     const ro = monthly({ readOnly: true, canEditOpening: false });
     expect(ro).not.toContain('Bagikan PDF');
     expect(ro).toContain('data-testid="open-days"');
-    expect(ro).toContain('Sisa Saldo');
-    expect(ro).not.toContain('Saldo Awal Bulan');
   });
 
   it('mingguan (tanpa saldo awal) tetap susunan lama walau onOpenDays diberikan', () => {

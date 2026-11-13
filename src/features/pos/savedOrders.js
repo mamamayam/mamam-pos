@@ -1,5 +1,5 @@
 import { supabase } from '../../lib/supabase';
-import { deviceStamp } from '../../lib/deviceId';
+import { deviceStamp, deviceReady } from '../../lib/deviceId';
 import { computeOrderTotals, displayNumberFromId } from './posMath';
 
 /**
@@ -140,6 +140,7 @@ export async function saveOrder({
     return { id: orderId, display_number: existing.display_number || displayNumberFromId(orderId) };
   }
 
+  await deviceReady();
   const { data: tx, error: txErr } = await supabase.from('transactions').insert({
     display_number: 'TEMP', status: 'open', ...fields, ...deviceStamp(),
   }).select('id').single();

@@ -69,6 +69,28 @@ export function cachedFeatureOn(storage) {
 let featureOn = cachedFeatureOn(safeStorage());
 export const setDeviceFeature = (on) => { featureOn = Boolean(on); };
 export const deviceFeatureOn = () => featureOn;
+
+// Penanda "pemeriksaan perangkat sudah selesai" (berhasil ATAU gagal). Jalur tulis (catat pengeluaran, bayar, simpan pesanan, potongan)
+// menunggu ini sebentar sebelum menyusun payload, supaya device_id tidak terlewat hanya karena pemeriksaan di awal app belum kembali (latensi biasa).
+let deviceChecked = false;
+let waiters = [];
+export const markDeviceChecked = () => { deviceChecked = true; const w = waiters; waiters = []; w.forEach((fn) => fn()); };
+/**
+ * Resolve begitu pemeriksaan perangkat selesai, atau langsung kalau fitur sudah menyala dari status tersimpan, atau setelah `timeoutMs`
+ * (jaringan sangat lambat: lanjut apa adanya, jangan menahan kasir). Tidak pernah menolak.
+ */
+export function deviceReady(timeoutMs = 4000) {
+  if (deviceChecked || featureOn) return Promise.resolve();
+  return new Promise((resolve) => {
+    let t;
+    const selesai = () => { clearTimeout(t); resolve(); };
+    t = setTimeout(() => { waiters = waiters.filter((fn) => fn !== selesai); resolve(); }, timeoutMs);
+    waiters.push(selesai);
+  });
+}
+/** Hanya untuk tes: kembalikan ke keadaan awal. */
+export const resetDeviceReadyForTest = () => { deviceChecked = false; waiters = []; };
+
 /** Sisipkan ke payload insert transactions / expenses. */
 export const deviceStamp = () => (featureOn ? { device_id: getDeviceId() } : {});
 /** Sisipkan ke argumen RPC catat_potongan. */

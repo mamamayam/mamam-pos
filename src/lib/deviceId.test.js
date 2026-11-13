@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { isUuid, deviceCode, readOrCreateId, readCachedStatus, cachedFeatureOn, newUuid } from './deviceId';
+import { describe, it, expect, vi } from 'vitest';
+import { isUuid, deviceCode, readOrCreateId, readCachedStatus, cachedFeatureOn, newUuid, deviceReady, markDeviceChecked, resetDeviceReadyForTest } from './deviceId';
 
 const memStore = (init = {}) => {
   const m = { ...init };
@@ -54,5 +54,35 @@ describe('cachedFeatureOn: fitur perangkat menyala dari status tersimpan', () =>
     expect(cachedFeatureOn(simpan({ 'mamam-pos-device-id': ID, 'mamam-pos-device-status': JSON.stringify({ id: newUuid(), status: 'terdaftar' }) }))).toBe(false);
     expect(cachedFeatureOn(simpan({ 'mamam-pos-device-id': ID, 'mamam-pos-device-status': '{rusak' }))).toBe(false);
     expect(cachedFeatureOn(null)).toBe(false);
+  });
+});
+
+describe('deviceReady: jalur tulis menunggu pemeriksaan perangkat sebentar', () => {
+  it('menunggu sampai pemeriksaan ditandai selesai', async () => {
+    resetDeviceReadyForTest();
+    let selesai = false;
+    const p = deviceReady(5000).then(() => { selesai = true; });
+    await Promise.resolve();
+    expect(selesai).toBe(false);
+    markDeviceChecked();
+    await p;
+    expect(selesai).toBe(true);
+  });
+  it('jaringan terlalu lambat: lanjut setelah batas waktu (tidak menahan kasir selamanya) dan tidak pernah menolak', async () => {
+    resetDeviceReadyForTest();
+    vi.useFakeTimers();
+    try {
+      let selesai = false;
+      deviceReady(4000).then(() => { selesai = true; });
+      await vi.advanceTimersByTimeAsync(3999);
+      expect(selesai).toBe(false);
+      await vi.advanceTimersByTimeAsync(2);
+      expect(selesai).toBe(true);
+    } finally { vi.useRealTimers(); }
+  });
+  it('sudah diperiksa sebelumnya: langsung selesai', async () => {
+    markDeviceChecked();
+    await expect(deviceReady(10)).resolves.toBeUndefined();
+    resetDeviceReadyForTest();
   });
 });

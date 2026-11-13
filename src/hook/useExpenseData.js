@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { deviceStamp } from '../lib/deviceId';
+import { deviceStamp, deviceReady } from '../lib/deviceId';
 
 /**
  * useExpenseData — layer data Pengeluaran, ONLINE-FIRST.
@@ -83,6 +83,7 @@ export function useExpenseData({ withExpenses = true } = {}) {
       const { error: e } = await supabase.from('expenses').update(row).eq('id', id);
       if (e) fail(e, 'Gagal menyimpan pengeluaran');
     } else {
+      await deviceReady();
       const { error: e } = await supabase.from('expenses').insert({ ...row, ...deviceStamp() });
       if (e) fail(e, 'Gagal mencatat pengeluaran');
     }

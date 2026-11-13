@@ -1,5 +1,5 @@
 import { supabase } from '../../lib/supabase';
-import { deviceStamp } from '../../lib/deviceId';
+import { deviceStamp, deviceReady } from '../../lib/deviceId';
 import { computeOrderTotals, cashChange, splitStatus, displayNumberFromId } from './posMath';
 import { orderFields, itemRows, assertOrderOpen, replaceItems, ORDER_GONE_MESSAGE } from './savedOrders';
 
@@ -98,6 +98,7 @@ export async function checkout({
     txId = orderId;
     display_number = existing.display_number || displayNumberFromId(orderId);
   } else {
+    await deviceReady();
     const { data: tx, error: txErr } = await supabase.from('transactions').insert({
       display_number: 'TEMP', ...paidFields, ...deviceStamp(),
     }).select('id').single();

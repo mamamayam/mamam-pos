@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { getDeviceId, deviceCode, setDeviceFeature, cacheStatus, getCachedStatus } from '../lib/deviceId';
+import { getDeviceId, deviceCode, setDeviceFeature, cacheStatus, getCachedStatus, markDeviceChecked } from '../lib/deviceId';
 import { STATUS, isMissingTable, needsSeenUpdate } from './deviceLogic';
 
 /**
@@ -35,7 +35,7 @@ export function useDeviceStatus(enabled) {
       if (data.status === STATUS.OK && needsSeenUpdate(data.last_seen_at)) {
         supabase.from('devices').update({ last_seen_at: new Date().toISOString() }).eq('id', id).then(() => {}, () => {});
       }
-    } finally { busy.current = false; }
+    } finally { busy.current = false; markDeviceChecked(); }
   }, [id, code]);
 
   useEffect(() => { if (enabled) check(); }, [enabled, check]);

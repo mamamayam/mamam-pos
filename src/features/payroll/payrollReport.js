@@ -37,6 +37,16 @@ export const itemTitle = (item) => {
   return !label || label === item.category ? String(item.category || '') : `${item.category} (${label})`;
 };
 
+/**
+ * Label baris Pendapatan di ringkasan (layar bulanan dan slip PDF memakai yang sama, supaya teksnya selalu seragam).
+ * Baris lain (Bonus Full Time, Sisa Bulan Lalu) memakai label bawaan dari buildPayrollReport.
+ */
+export const summaryIncomeLabel = (report, row) => ({
+  upah: `Upah Dasar (${fmtHM(report.workedMinutes)})`,
+  lembur: `Uang Lembur (${report.overtimeBlocks} blok)`,
+  tambahan: 'Tambahan (+)',
+}[row.key] || row.label);
+
 /** Jumlah hari di periode (inklusif): bulan = 28..31, minggu = 7. */
 export const daysInPeriod = (period) => Math.round((parseIsoDate(period.end) - parseIsoDate(period.start)) / 86400000) + 1;
 
@@ -170,11 +180,16 @@ export function buildPayrollReport(payroll, { formatRupiah, withOpening = true, 
     for (const it of items) lines.push({ key: `${it.kind}-${it.id}`, label: itemTitle(it), plus: it.kind === 'tambahan' ? it.amount : 0, minus: it.kind === 'potongan' ? it.amount : 0, item: it });
     const c = clocks[date];
     const timeRange = c ? `${c.masuk} s/d ${(row?.effectiveFromBolong ? c.stuck : c.pulang) || '--:--'}` : null;
-    return { date, row, items, lines, timeRange };
+    const plus = lines.reduce((t, l) => t + l.plus, 0);
+    const minus = lines.reduce((t, l) => t + l.minus, 0);
+    return { date, row, items, lines, timeRange, plus, minus, net: plus - minus };
   });
+  // Total semua hari. Saldo awal bulan (Sisa/Hutang Bulan Lalu) BUKAN transaksi harian, jadi tidak ikut:
+  // dayTotals.net = Gaji Bersih tanpa saldo awal.
+  const dayTotals = days.reduce((t, d) => ({ plus: t.plus + d.plus, minus: t.minus + d.minus, net: t.net + d.net }), { plus: 0, minus: 0, net: 0 });
 
   return {
-    income, totalIncome, cuts, totalDeductions, net: payroll.netPay, days,
+    income, totalIncome, cuts, totalDeductions, net: payroll.netPay, days, dayTotals,
     withOpening, opening: { kind: opening < 0 ? 'toko' : opening > 0 ? 'karyawan' : null, amount: Math.abs(opening) },
     periodDays, overtimeRate: a.overtimeRate, overtimeMinutes: a.totalOvertimeMinutes, overtimeBlocks: a.overtimeBlocks30Min,
     hadirDays: a.hadirDays, liburDays: a.liburDays, workedMinutes: a.totalWorkedMinutes,

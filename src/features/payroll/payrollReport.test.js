@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildPayrollReport, itemTitle, isKasbon, fmtDay, fmtHM, daysInPeriod,
-  allocateProportional, allocateBlocks, openingToForm, openingFromForm, buildClocks,
+  allocateProportional, allocateBlocks, openingToForm, openingFromForm, buildClocks, summaryIncomeLabel,
 } from './payrollReport.js';
 import { computePayroll, monthPeriod, weekPeriodForDate } from './payrollEngine.js';
 import { seedEmployees, seedAttendance, seedAdditions, seedDeductions, seedOpeningBalances, PLACEHOLDER_TODAY } from './__fixtures__/hrdSeed.js';
@@ -226,6 +226,11 @@ describe('buildPayrollReport vs engine (data seed, SEMUA karyawan)', () => {
       expect(items.filter((i) => i.kind === 'potongan')).toHaveLength(p.deductions.length);
       expect(items.filter((i) => i.kind === 'tambahan')).toHaveLength(p.additions.length);
       expect(r.periodDays).toBe(30);
+      // Bersih per hari: jumlahnya = Gaji Bersih tanpa saldo awal (saldo awal bukan transaksi harian).
+      const adj = r.opening.kind === 'toko' ? r.opening.amount : r.opening.kind === 'karyawan' ? -r.opening.amount : 0;
+      expect(r.dayTotals.net).toBe(p.netPay - adj);
+      expect(r.dayTotals.net).toBe(r.dayTotals.plus - r.dayTotals.minus);
+      for (const d of r.days) expect(d.net).toBe(d.lines.reduce((t, l) => t + l.plus - l.minus, 0));
     });
   }
   it('seed EMP-1003 (toko berutang Rp 50.000) tampil sebagai Sisa Bulan Lalu di Pendapatan', () => {
@@ -234,5 +239,43 @@ describe('buildPayrollReport vs engine (data seed, SEMUA karyawan)', () => {
     const r = buildPayrollReport(p, { formatRupiah: rp });
     expect(r.opening).toEqual({ kind: 'toko', amount: 50000 });
     expect(r.income.find((i) => i.key === 'saldo').amount).toBe(50000);
+  });
+});
+
+describe('bersih per hari dan label ringkasan', () => {
+  const r = buildPayrollReport(payroll({
+    attendance: attendance({
+      dayRows: [hadir('2026-10-05', 540), { date: '2026-10-09', status: 'libur' }],
+      hadirDays: 1, liburDays: 1, totalWorkedMinutes: 540, wagePay: 135000,
+    }),
+    additions: [{ id: 't', category: 'Bonus', label: 'THR', amount: 50000, date: '2026-10-05' }],
+    deductions: [{ id: 'k', category: 'Kasbon', label: '', amount: 20000, date: '2026-10-08', expenseId: 'x1', employeeId: 'e1' }],
+    additionsTotal: 50000, deductionsTotal: 20000, totalPenghasilan: 185000, netPay: 165000,
+  }), { formatRupiah: rp });
+
+  it('Bersih = pemasukan - pengeluaran hari itu; hari libur 0; hari hanya-potongan negatif', () => {
+    const [d5, d8, d9] = r.days;
+    expect(d5).toMatchObject({ date: '2026-10-05', plus: 185000, minus: 0, net: 185000 });
+    expect(d8).toMatchObject({ date: '2026-10-08', plus: 0, minus: 20000, net: -20000 });
+    expect(d9).toMatchObject({ date: '2026-10-09', plus: 0, minus: 0, net: 0 });
+  });
+
+  it('dayTotals = jumlah semua hari dan sama dengan Gaji Bersih bila saldo awal 0', () => {
+    expect(r.dayTotals).toEqual({ plus: 185000, minus: 20000, net: 165000 });
+    expect(r.dayTotals.net).toBe(r.net);
+  });
+
+  it('saldo awal tidak ikut dayTotals', () => {
+    const withHutang = buildPayrollReport(payroll({ ...{ attendance: attendance({ dayRows: [hadir('2026-10-05', 540)], hadirDays: 1, totalWorkedMinutes: 540, wagePay: 135000 }) }, openingBalance: 30000, totalPenghasilan: 135000, netPay: 105000 }), { formatRupiah: rp });
+    expect(withHutang.net).toBe(105000);
+    expect(withHutang.dayTotals.net).toBe(135000);
+  });
+
+  it('summaryIncomeLabel: sama dengan teks di slip PDF', () => {
+    const rep = { workedMinutes: 13441, overtimeBlocks: 34 };
+    expect(summaryIncomeLabel(rep, { key: 'upah', label: 'x' })).toBe('Upah Dasar (224j 01m)');
+    expect(summaryIncomeLabel(rep, { key: 'lembur', label: 'x' })).toBe('Uang Lembur (34 blok)');
+    expect(summaryIncomeLabel(rep, { key: 'tambahan', label: 'x' })).toBe('Tambahan (+)');
+    expect(summaryIncomeLabel(rep, { key: 'bonus', label: 'Bonus Full Time (19 hari)' })).toBe('Bonus Full Time (19 hari)');
   });
 });

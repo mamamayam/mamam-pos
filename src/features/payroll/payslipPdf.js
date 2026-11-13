@@ -1,4 +1,4 @@
-import { fmtHM } from './payrollReport';
+import { fmtHM, summaryIncomeLabel } from './payrollReport';
 import { fmtTgl, fmtNum, fmtQty } from './additionDetail';
 import { formatRupiah as defaultRupiah } from '../../utils/formatters';
 
@@ -8,7 +8,7 @@ import { formatRupiah as defaultRupiah } from '../../utils/formatters';
  * Uint8Array (dites).
  *
  * Susunan: judul, info karyawan 2 kolom, (opsional) tabel harian Tanggal & Jam | Keterangan | Pemasukan (+) |
- * Pengeluaran (-), lalu ringkasan Pendapatan -> Total Pendapatan -> Potongan -> Total Potongan -> GAJI BERSIH,
+ * Pengeluaran (-) | Bersih (pemasukan - pengeluaran hari itu, plus baris Total harian), lalu ringkasan Pendapatan -> Total Pendapatan -> Potongan -> Total Potongan -> GAJI BERSIH,
  * dan kolom tanda tangan. Angka diambil dari `report` (buildPayrollReport), sama dengan layar.
  *
  * Hanya karakter Latin-1 yang dicetak; karakter lain diganti yang mirip (→ jadi >) atau "?".
@@ -99,11 +99,12 @@ export function buildPayslipPdf({ business = 'Mamam Ayam', employeeName, role, p
   if (withDays) {
     need(60);
     T('Rincian Pemasukan & Pengeluaran Harian', M, y - 9, 10, { bold: true }); y -= 16;
-    const X = [M, M + 100, M + 335, M + 425, RIGHT];
+    const X = [M, M + 84, M + 259, M + 339, M + 425, RIGHT];   // Tanggal & Jam | Keterangan | Pemasukan | Pengeluaran | Bersih
     const header = () => {
       fill(M, y - 16, CW, 16, BAND);
       T('Tanggal & Jam', X[0] + 4, y - 11.5, 8.5, { bold: true }); T('Keterangan', X[1] + 4, y - 11.5, 8.5, { bold: true });
       T('Pemasukan (+)', X[3] - 4, y - 11.5, 8.5, { bold: true, align: 'right' }); T('Pengeluaran (-)', X[4] - 4, y - 11.5, 8.5, { bold: true, align: 'right' });
+      T('Bersih', X[5] - 4, y - 11.5, 8.5, { bold: true, align: 'right' });
       y -= 16;
     };
     header();
@@ -115,19 +116,32 @@ export function buildPayslipPdf({ business = 'Mamam Ayam', employeeName, role, p
       for (let r = 0; r < n; r++) {
         const l = d.lines[r];
         const base = top - (r + 1) * RH + 4.2;
-        if (r === 0) T(d.date, X[0] + 4, base, 8.5);
+        if (r === 0) {
+          T(d.date, X[0] + 4, base, 8.5);
+          T(d.net ? formatRupiah(d.net) : '-', X[5] - 4, base, 8.5, { bold: true, align: 'right', color: d.net < 0 ? RED : d.net ? INK : GRAY });
+        }
         if (r === 1) T(d.timeRange || (d.row ? '--:-- s/d --:--' : ''), X[0] + 4, base, 8, { color: GRAY });
         if (l) {
           T(fit(l.label, 8.5, X[2] - X[1] - 8, false), X[1] + 4, base, 8.5);
           T(money(l.plus), X[3] - 4, base, 8.5, { align: 'right', color: l.plus ? INK : GRAY });
           T(money(l.minus), X[4] - 4, base, 8.5, { align: 'right', color: l.minus ? INK : GRAY });
         }
-        if (r < n - 1) stroke(X[1], top - (r + 1) * RH, X[4], top - (r + 1) * RH, 0.4);
+        if (r < n - 1) stroke(X[1], top - (r + 1) * RH, X[4], top - (r + 1) * RH, 0.4);   // garis antar baris tidak memotong kolom Bersih
       }
       stroke(M, top - h, RIGHT, top - h, 0.6);
       X.forEach((x) => stroke(x, top, x, top - h, 0.6));
       y -= h;
     }
+    // Total semua hari (saldo awal tidak ikut, lihat dayTotals di payrollReport.js)
+    need(RH + 2);
+    fill(M, y - RH, CW, RH, BAND);
+    const tb = y - RH + 4.2, dt = report.dayTotals;
+    T('Total harian', X[1] + 4, tb, 8.5, { bold: true });
+    T(money(dt.plus), X[3] - 4, tb, 8.5, { bold: true, align: 'right' }); T(money(dt.minus), X[4] - 4, tb, 8.5, { bold: true, align: 'right' });
+    T(dt.net ? formatRupiah(dt.net) : '-', X[5] - 4, tb, 8.5, { bold: true, align: 'right', color: dt.net < 0 ? RED : INK });
+    stroke(M, y - RH, RIGHT, y - RH, 0.6);
+    [X[0], X[5]].forEach((x) => stroke(x, y, x, y - RH, 0.6));
+    y -= RH;
     y -= 10;
   }
 
@@ -140,12 +154,8 @@ export function buildPayslipPdf({ business = 'Mamam Ayam', employeeName, role, p
     y -= LINE;
   };
   const sec = (title) => { need(LINE * 2); y -= 4; T(title, M, y - 8, 8, { bold: true, color: GRAY }); y -= LINE - 3; };
-  const incomeLabel = {
-    upah: `Upah Dasar (${fmtHM(report.workedMinutes)})`, lembur: `Uang Lembur (${report.overtimeBlocks} blok)`, tambahan: 'Tambahan (+)',
-  };
-
   sec('PENDAPATAN');
-  report.income.filter((r, i) => r.amount !== 0 || i === 0).forEach((r) => sRow(incomeLabel[r.key] || r.label, formatRupiah(r.amount)));
+  report.income.filter((r, i) => r.amount !== 0 || i === 0).forEach((r) => sRow(summaryIncomeLabel(report, r), formatRupiah(r.amount)));
   sRow('Total Pendapatan', formatRupiah(report.totalIncome), { bold: true, rule: true });
 
   sec('POTONGAN');

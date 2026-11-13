@@ -11,6 +11,7 @@ import { summarizeDay } from '../attendance/dayRules';
 import { useAuth } from '../../auth/AuthContext';
 import MyPayroll from './MyPayroll';
 import PayrollReport from './PayrollReport';
+import DailyDetailSheet from './DailyDetailSheet';
 import PayslipShareSheet from './PayslipShareSheet';
 import QuickAdjustmentSheet from '../home/QuickAdjustmentSheet';
 import { buildPayrollReport, buildClocks, daysInPeriod, openingToForm, openingFromForm, fmtDay, fmtHM } from './payrollReport';
@@ -24,6 +25,7 @@ import { shareOrDownloadFile } from '../../lib/shareFile';
  * Tambahan & Potongan dicatat HANYA lewat Catat Cepat di Beranda (satu tempat, tanpa formulir ganda);
  * mengubah Potongan membuka form Potongan yang sama itu dalam mode ubah (QuickAdjustmentSheet `editing`).
  * Detail gaji (mingguan DAN bulanan) memakai PayrollReport: bagian yang bisa dibuka + slip PDF.
+ * Bulanan: ringkasan gaya slip PDF + tombol "Rincian Harian" yang membuka DailyDetailSheet (sejajar dengan modal detail).
  */
 
 const MON_FULL = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -61,6 +63,7 @@ function OwnerPayroll() {
   const [editDate, setEditDate] = useState(null);   // tanggal yang sedang dikoreksi (karyawan = selected)
   const [editDeduction, setEditDeduction] = useState(null);   // potongan yang sedang diubah (form Potongan Catat Cepat, mode ubah)
   const [shareOpen, setShareOpen] = useState(false);          // pilihan bagikan slip gaji PDF (periode bulanan)
+  const [daysOpen, setDaysOpen] = useState(false);            // sheet Rincian Harian (periode bulanan)
 
   const run = async (fn) => {
     if (busy) return;
@@ -236,7 +239,7 @@ function OwnerPayroll() {
         )}
       </div>
 
-      <Modal isOpen={!!selected} onClose={() => { setSelectedId(null); setShareOpen(false); setEditDeduction(null); }} sheet size="lg" maxHeight title={selected ? selected.employee.name : ''}>
+      <Modal isOpen={!!selected} onClose={() => { setSelectedId(null); setShareOpen(false); setDaysOpen(false); setEditDeduction(null); }} sheet size="lg" maxHeight title={selected ? selected.employee.name : ''}>
         {selected && (
           <div className="p-5 text-sm">
             <PayrollReport
@@ -258,10 +261,20 @@ function OwnerPayroll() {
               onEditDay={setEditDate} onEditDeduction={handleEditDeduction} onDeleteItem={handleDeleteItem}
               canEditOpening={!!period.monthKey && !isLocked} openingForm={openingForm} onOpeningChange={setOpeningForm} onSaveOpening={handleSaveOpening}
               busy={busy} onShare={() => setShareOpen(true)}
+              onOpenDays={period.monthKey ? () => setDaysOpen(true) : undefined}
             />
           </div>
         )}
       </Modal>
+
+      {/* Sejajar dengan modal detail dan DITARUH SEBELUM sheet edit di bawah, supaya sheet edit muncul di atasnya. */}
+      <DailyDetailSheet
+        isOpen={!!selected && daysOpen} onClose={() => setDaysOpen(false)}
+        subtitle={selected ? `${selected.employee.name} · ${label}` : ''}
+        report={selected ? reportOf(selected) : null} isLocked={isLocked}
+        dayFlags={(date) => (selected ? dayFlags(selected.employee.id, date) : {})}
+        onEditDay={setEditDate} onEditDeduction={handleEditDeduction} onDeleteItem={handleDeleteItem}
+      />
 
       {selected && editDate && (
         <AttendanceEditSheet

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildPayslipPdf, textWidth, WIDTHS } from './payslipPdf.js';
 import { buildPayrollReport } from './payrollReport.js';
+import { formatRupiah as idr } from '../../utils/formatters.js';
 
 const rp = (n) => `Rp ${n}`;
 const latin1 = (bytes) => new TextDecoder('latin1').decode(bytes);
@@ -96,6 +97,19 @@ describe('buildPayslipPdf', () => {
       'Upah Jam Kerja (9j 19m)', 'Rp 139.750', 'Uang Lembur (1 blok)', 'Rp 5.000', '2026-10-08', 'Libur', '--:-- s/d --:--']) at(s, `(${t.replace(/[()]/g, '\\$&')})`);
     expect(s).toContain('(Rp 20.000)');    // kasbon 8 Okt di kolom pengeluaran
     at(s, '(Denda \\(Piring pecah\\))');
+  });
+
+  it('rincian harian: kolom Bersih per hari + baris Total harian ', () => {
+    const rep = buildPayrollReport(basePayroll({ openingBalance: 30000 }), { formatRupiah: rp, periodDays: 31, clocks });
+    const s = latin1(buildPayslipPdf({ employeeName: 'Agung Prayoga', periodLabel: 'Oktober 2026', report: rep, withDays: true }));
+    const money = (n) => `(${idr(n).replace(/\u00a0/g, ' ')})`;
+    at(s, '(Bersih)');
+    at(s, '(Total harian)');
+    expect(rep.days.find((d) => d.date === '2026-10-08').net).toBe(-20000);
+    at(s, money(-20000));                        // 8 Okt hanya kasbon: bersih negatif
+    at(s, money(rep.dayTotals.net));              // Total harian
+    expect(rep.dayTotals.net).toBe(rep.dayTotals.plus - rep.dayTotals.minus);   // hubungan dengan Gaji Bersih diuji di payrollReport.test.js (data seed)
+    expect(text({}, { withDays: false })).not.toContain('(Total harian)');
   });
 
   it('karakter khusus di-escape dan teks panjang dipotong, bukan melebar', () => {

@@ -112,3 +112,60 @@ describe('PayrollReport readOnly (Gaji Saya, tampilan karyawan)', () => {
   });
 });
 
+
+describe('PayrollReport bulanan: ringkasan gaya slip PDF (onOpenDays)', () => {
+  const monthly = (o = {}) => render({ onOpenDays: () => {}, ...o });
+  const order = (html, ...parts) => parts.map((t) => { const i = html.indexOf(t); expect(i, `\"${t}\" tidak ada`).toBeGreaterThan(-1); return i; });
+
+  it('urutan: PENDAPATAN, Total Pendapatan, POTONGAN, Total Potongan, GAJI BERSIH paling bawah', () => {
+    const idx = order(monthly(), 'PENDAPATAN', 'Total Pendapatan', 'POTONGAN', 'Total Potongan', 'GAJI BERSIH');
+    expect(idx).toEqual([...idx].sort((a, b) => a - b));
+    expect(monthly()).toContain('data-testid="monthly-summary"');
+  });
+
+  it('baris dan label sama dengan slip PDF; baris Rp 0 disembunyikan (kecuali Upah)', () => {
+    const html = monthly();
+    for (const t of ['Upah Dasar (9j 00m)', 'Rp 135.000', 'Kasbon', 'Rp 115.000', 'Total Potongan']) expect(html).toContain(t);
+    for (const t of ['Uang Lembur', 'Bonus Full Time', 'Tambahan (+)', 'Hutang Bulan Lalu']) expect(html).not.toContain(t);
+    expect(monthly({ p: payroll({ deductions: [], deductionsTotal: 0, netPay: 135000 }) })).toContain('Tidak ada potongan');
+  });
+
+  it('hutang bulan lalu di POTONGAN, sisa bulan lalu di PENDAPATAN', () => {
+    const hutang = monthly({ p: payroll({ openingBalance: 30000, netPay: 85000 }) });
+    const [a, b, c] = order(hutang, 'POTONGAN', 'Hutang Bulan Lalu (Karyawan)', 'Total Potongan');
+    expect(a < b && b < c).toBe(true);
+    const sisa = monthly({ p: payroll({ openingBalance: -50000, netPay: 165000 }) });
+    const [d, e, f] = order(sisa, 'PENDAPATAN', 'Sisa Bulan Lalu (Kurang Bayar)', 'Total Pendapatan');
+    expect(d < e && e < f).toBe(true);
+  });
+
+  it('rincian harian tidak dibuka di tempat: hanya tombol; tabel harian dan edit tidak dirender', () => {
+    const html = monthly({ initialOpen: { hari: true } });
+    expect(html).toContain('data-testid="open-days"');
+    expect(html).toContain('Rincian Harian');
+    for (const t of ['data-testid="day-row"', 'Pemasukan (+)', 'data-testid="edit-day"', 'sec-harian']) expect(html).not.toContain(t);
+  });
+
+  it('Pendapatan dan Potongan terbuka dari awal, Saldo Awal Bulan tertutup tapi ada', () => {
+    const html = monthly();
+    expect(html.match(/aria-expanded="true"/g)).toHaveLength(2);
+    expect(html.match(/aria-expanded="false"/g)).toHaveLength(1);
+    expect(html).toContain('Saldo Awal Bulan');
+    expect(monthly({ initialOpen: { sal: true } })).not.toContain('+ Plus');   // initialOpen milik susunan lama; saldo tetap tertutup di ringkasan
+  });
+
+  it('owner: tombol Bagikan PDF; karyawan (readOnly): hanya Rincian Harian, bagian bernama Sisa Saldo', () => {
+    expect(monthly()).toContain('Bagikan PDF');
+    const ro = monthly({ readOnly: true, canEditOpening: false });
+    expect(ro).not.toContain('Bagikan PDF');
+    expect(ro).toContain('data-testid="open-days"');
+    expect(ro).toContain('Sisa Saldo');
+    expect(ro).not.toContain('Saldo Awal Bulan');
+  });
+
+  it('mingguan (tanpa saldo awal) tetap susunan lama walau onOpenDays diberikan', () => {
+    const html = monthly({ withOpening: false });
+    expect(html).not.toContain('monthly-summary');
+    expect(html).toContain('sec-harian');
+  });
+});

@@ -10,6 +10,7 @@ import { EMPLOYEE_ATTEMPT_RULES, readAttempts, recordAttempt, isLocked, secondsL
 import { weekPeriodForDate, shiftWeek, monthPeriod, formatIsoDate } from './payrollEngine';
 import { toLocalDateString } from '../../utils/formatters';
 import PayrollReport from './PayrollReport';
+import DailyDetailSheet from './DailyDetailSheet';
 import { buildPayrollReport, buildClocks, daysInPeriod } from './payrollReport';
 
 /**
@@ -140,6 +141,7 @@ function MySalary({ employee, minutes, onLock }) {
   const [mode, setMode] = useState('minggu');
   const [anchor, setAnchor] = useState(today);
   const [month, setMonth] = useState(today.slice(0, 7));
+  const [daysOpen, setDaysOpen] = useState(false);   // sheet Rincian Harian (bulanan)
   const period = useMemo(() => (mode === 'minggu' ? weekPeriodForDate(anchor) : monthPeriod(month)), [mode, anchor, month]);
   const { loading, error, status, attendance, results, prepared, reload, isLocked: periodClosed } = usePayrollData({ period });
 
@@ -210,8 +212,11 @@ function MySalary({ employee, minutes, onLock }) {
                   readOnly report={report} isLocked={periodClosed} formatRupiah={formatRupiah}
                   dayFlags={() => ({ auto: false, edited: false })}
                   canEditOpening={false} openingForm={{ kind: null, amount: '' }}
+                  onOpenDays={period.monthKey ? () => setDaysOpen(true) : undefined}
                 />
               </Card>
+              <DailyDetailSheet isOpen={daysOpen && !!period.monthKey} onClose={() => setDaysOpen(false)} readOnly isLocked={periodClosed}
+                subtitle={`${employee.name} · ${label}`} report={report} />
 
               {mine.needsClarification.length > 0 && (
                 <p className="text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 rounded-xl p-3">{mine.needsClarification.length} hari belum dibayar karena absennya perlu diklarifikasi owner ({mine.needsClarification.map((d) => fmtDay(d.date)).join(', ')}).</p>

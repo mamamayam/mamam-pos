@@ -68,6 +68,15 @@ export function useEmployeeData() {
     await reload();
   };
 
+  // Ubah status saja (dropdown di kartu Karyawan): hanya kolom status + tanggal resign, kolom lain tidak disentuh.
+  const setEmployeeStatus = async (id, status, resignDate = '') => {
+    const { error: e } = await supabase.from('employees').update({
+      status, resign_date: status === 'resign' ? (resignDate || null) : null, updated_at: new Date().toISOString(),
+    }).eq('id', id);
+    if (e) fail(e, 'Gagal mengubah status karyawan');
+    await reload();
+  };
+
   const deleteEmployee = async (id) => {
     const { error: e } = await supabase.from('employees').delete().eq('id', id);
     if (e) {
@@ -103,5 +112,5 @@ export function useEmployeeData() {
     return { added: toInsert.length, alreadyThere, skipped };
   };
 
-  return { employees, loading, error, reload, saveEmployee, deleteEmployee, importFromBackup };
+  return { employees, loading, error, reload, saveEmployee, setEmployeeStatus, deleteEmployee, importFromBackup };
 }

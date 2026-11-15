@@ -32,5 +32,15 @@ export const HIDDEN_STATUSES = ['cuti', 'resign'];
 export const isOnDuty = (e) => !HIDDEN_STATUSES.includes(e?.status);
 export const onDutyOnly = (list) => (list || []).filter(isOnDuty);
 
+/**
+ * Isi perubahan status dari dropdown di kartu Karyawan (permintaan pemilik 16 Nov 2026). FUNGSI MURNI (dites).
+ * Resign wajib punya tanggal resign: kalau belum ada, dipakai `today`. Status lain mengosongkan tanggal resign
+ * (sama dengan saveEmployee). Mengembalikan { status, resignDate } (resignDate '' = kosong).
+ */
+export const statusChange = (emp, status, today) => ({
+  status,
+  resignDate: status === 'resign' ? (emp?.resignDate || today) : '',
+});
+
 export const statusInfo = (v) => EMPLOYEE_STATUS_OPTIONS.find(s => s.value === v) || EMPLOYEE_STATUS_OPTIONS[0];
 export const roleInfo = (v) => EMPLOYEE_ROLE_OPTIONS.find(r => r.value === v) || EMPLOYEE_ROLE_OPTIONS[0];

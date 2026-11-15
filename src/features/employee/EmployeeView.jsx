@@ -9,7 +9,7 @@ import { toLocalDateString } from '../../utils/formatters';
 import useDirty from '../../hook/useDirty';
 import { showToast } from '../../lib/toast';
 import {
-  EMPLOYEE_STATUS_OPTIONS, EMPLOYEE_ROLE_OPTIONS, OVERTIME_RATE_PER_30MIN, statusInfo, roleInfo,
+  EMPLOYEE_STATUS_OPTIONS, EMPLOYEE_ROLE_OPTIONS, OVERTIME_RATE_PER_30MIN, statusInfo, roleInfo, statusChange,
 } from './employeeOptions';
 
 /**
@@ -24,12 +24,22 @@ import {
  *    impor masih ada di backupImport.js + useEmployeeData kalau suatu saat dibutuhkan).
  *  - Form Tambah tidak menutup sendiri setelah simpan: toast + form dikosongkan untuk karyawan berikutnya.
  *    Form Edit menutup setelah simpan. Menutup form yang sudah terisi = konfirmasi buang isian.
+ *  - Kartu (permintaan pemilik 16 Nov 2026): kanan atas = dropdown STATUS (langsung tersimpan, toast) + tombol Edit.
+ *    Tombol Hapus TIDAK ada di kartu: ada di form Edit, di bawah tombol Simpan.
  */
 const emptyForm = () => ({
   id: '', externalId: '', name: '', phone: '', address: '',
   hourlyRate: 0, fullTimeBonus: 0, overtimeRate30: OVERTIME_RATE_PER_30MIN,
   startDate: toLocalDateString(), status: 'aktif', resignDate: '', role: 'kasir',
 });
+
+// Dropdown status di kartu: bentuk pil berwarna sama dengan Badge status.
+const STATUS_PILL = {
+  success: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+  info: 'bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400',
+  warning: 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  neutral: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400',
+};
 
 const filterSelectCls = 'flex-1 min-w-0 md:flex-none text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-accent-600 dark:hover:text-accent-400 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 bg-transparent focus:outline-none focus:ring-2 focus:ring-accent-500/30 transition-all duration-300';
 
@@ -38,7 +48,7 @@ export default function EmployeeView() {
   const { can } = useAuth();
   const canManage = can('karyawan.kelola');   // tambah / edit / hapus / impor
   const canWage = can('karyawan.upah');        // melihat upah, bonus, tarif lembur
-  const { employees, loading, error, reload, saveEmployee, deleteEmployee } = useEmployeeData();
+  const { employees, loading, error, reload, saveEmployee, setEmployeeStatus, deleteEmployee } = useEmployeeData();
 
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -69,9 +79,22 @@ export default function EmployeeView() {
     }
   });
 
+  // Ubah status dari dropdown di kartu: langsung tersimpan (hanya status + tanggal resign).
+  const handleStatus = (emp, status) => run(async () => {
+    const { resignDate } = statusChange(emp, status, toLocalDateString());
+    await setEmployeeStatus(emp.id, status, resignDate);
+    showToast(`${emp.name}: ${statusInfo(status).label}`);
+  });
+
+  // Hapus ada di form Edit (di bawah tombol Simpan). Setelah terhapus, form ditutup tanpa konfirmasi "buang isian".
   const handleDelete = (emp) => {
     triggerConfirm(`Yakin ingin menghapus "${emp.name}"? Data hilang permanen, tapi riwayat transaksi, pengeluaran, dan dompet tetap tersimpan dengan nama ini. Karyawan yang masih punya data gaji tidak bisa dihapus (ubah jadi Resign).`, () =>
-      run(async () => { await deleteEmployee(emp.id); }));
+      run(async () => {
+        await deleteEmployee(emp.id);
+        setIsEditing(false);
+        setForm(emptyForm());
+        showToast(`${emp.name} dihapus`);
+      }));
   };
 
   const sorted = useMemo(() => {
@@ -132,21 +155,25 @@ export default function EmployeeView() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">
               {sorted.map(emp => (
                 <Card key={emp.id} padding="lg" className="relative group hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
-                  {canManage && (
-                  <div className="absolute top-4 right-4 flex gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                    <IconButton variant="edit" ghost title="Edit Karyawan" onClick={() => { setForm({ ...emptyForm(), ...emp }); setIsEditing(true); }}><Edit3 className="w-4 h-4" /></IconButton>
-                    <IconButton variant="delete" ghost title="Hapus Karyawan" onClick={() => handleDelete(emp)}><Trash2 className="w-4 h-4" /></IconButton>
-                  </div>
-                  )}
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-accent-500 to-accent-600 dark:from-accent-400 dark:to-accent-600 text-white rounded-2xl shadow-[0_4px_12px_rgba(var(--color-accent-500),0.3)] flex items-center justify-center font-heading font-bold text-xl">{emp.name.charAt(0).toUpperCase()}</div>
-                    <div>
-                      <h4 className="font-heading font-bold text-slate-800 dark:text-slate-100 text-base leading-tight pr-14">{emp.name}</h4>
+                  <div className="flex items-start gap-3 mb-4">
+                    <div className="w-12 h-12 shrink-0 bg-gradient-to-br from-accent-500 to-accent-600 dark:from-accent-400 dark:to-accent-600 text-white rounded-2xl shadow-[0_4px_12px_rgba(var(--color-accent-500),0.3)] flex items-center justify-center font-heading font-bold text-xl">{emp.name.charAt(0).toUpperCase()}</div>
+                    <div className="min-w-0 flex-1 self-center">
+                      <h4 className="font-heading font-bold text-slate-800 dark:text-slate-100 text-base leading-tight">{emp.name}</h4>
                       <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                        <Badge size="sm" variant={statusInfo(emp.status).badgeVariant}>{statusInfo(emp.status).label}</Badge>
+                        {!canManage && <Badge size="sm" variant={statusInfo(emp.status).badgeVariant}>{statusInfo(emp.status).label}</Badge>}
                         <Badge size="sm" variant={roleInfo(emp.role).badgeVariant}>{roleInfo(emp.role).label}</Badge>
                       </div>
                     </div>
+                    {canManage && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Select bare title="Status Karyawan" aria-label={`Status ${emp.name}`} value={emp.status || 'aktif'} disabled={busy}
+                        onChange={e => handleStatus(emp, e.target.value)}
+                        className={`px-2.5 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-all ${STATUS_PILL[statusInfo(emp.status).badgeVariant]}`}>
+                        {EMPLOYEE_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </Select>
+                      <IconButton variant="edit" ghost title="Edit Karyawan" onClick={() => { setForm({ ...emptyForm(), ...emp }); setIsEditing(true); }}><Edit3 className="w-4 h-4" /></IconButton>
+                    </div>
+                    )}
                   </div>
                   {canWage && (
                   <div className="space-y-1.5 border-t border-slate-100 dark:border-slate-800 pt-3 text-sm">
@@ -187,6 +214,9 @@ export default function EmployeeView() {
             <Input type="date" label="Mulai Kerja" variant="muted" value={form.startDate || ''} onChange={e => setForm({ ...form, startDate: e.target.value })} />
           </div>
           <Button variant="primary" size="full" onClick={handleSave} disabled={busy}>{busy ? 'Menyimpan...' : 'Simpan Data Karyawan'}</Button>
+          {form.id && (
+            <Button variant="danger" size="full" icon={<Trash2 className="w-4 h-4" />} onClick={() => handleDelete(form)} disabled={busy} data-testid="hapus-karyawan">Hapus Karyawan</Button>
+          )}
         </div>
       </Modal>
     </div>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isOnDuty, onDutyOnly, HIDDEN_STATUSES } from './employeeOptions';
+import { isOnDuty, onDutyOnly, HIDDEN_STATUSES, statusChange } from './employeeOptions';
 
 describe('cuti dan resign disembunyikan dari pilihan karyawan', () => {
   it('yang disembunyikan: cuti dan resign saja', () => expect(HIDDEN_STATUSES).toEqual(['cuti', 'resign']));
@@ -21,5 +21,15 @@ describe('cuti dan resign disembunyikan dari pilihan karyawan', () => {
   it('status kembali aktif = muncul lagi', () => {
     expect(isOnDuty({ status: 'cuti' })).toBe(false);
     expect(isOnDuty({ status: 'aktif' })).toBe(true);
+  });
+});
+
+describe('statusChange (dropdown status di kartu Karyawan)', () => {
+  it('resign tanpa tanggal resign memakai hari ini; yang sudah punya tanggal dipertahankan', () => {
+    expect(statusChange({ resignDate: '' }, 'resign', '2026-11-16')).toEqual({ status: 'resign', resignDate: '2026-11-16' });
+    expect(statusChange({ resignDate: '2026-10-01' }, 'resign', '2026-11-16')).toEqual({ status: 'resign', resignDate: '2026-10-01' });
+  });
+  it('status lain mengosongkan tanggal resign (kembali aktif = tidak resign lagi)', () => {
+    for (const st of ['aktif', 'freelance', 'cuti']) expect(statusChange({ resignDate: '2026-10-01' }, st, '2026-11-16')).toEqual({ status: st, resignDate: '' });
   });
 });

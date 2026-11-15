@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Edit3, Trash2, Briefcase, ArrowUpDown } from 'lucide-react';
+import { Plus, Edit3, Briefcase, ArrowUpDown } from 'lucide-react';
 import { Card, Button, Input, NominalInput, Select, IconButton, Badge, SortModal, EmptyState, Modal } from '../../components/ui';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../auth/AuthContext';
@@ -215,7 +215,12 @@ export default function EmployeeView() {
           </div>
           <Button variant="primary" size="full" onClick={handleSave} disabled={busy}>{busy ? 'Menyimpan...' : 'Simpan Data Karyawan'}</Button>
           {form.id && (
-            <Button variant="danger" size="full" icon={<Trash2 className="w-4 h-4" />} onClick={() => handleDelete(form)} disabled={busy} data-testid="hapus-karyawan">Hapus Karyawan</Button>
+            <div className="text-center pt-1">
+              <button type="button" onClick={() => handleDelete(form)} disabled={busy} data-testid="hapus-karyawan"
+                className="text-xs font-semibold text-red-500 dark:text-red-400 underline underline-offset-2 active:opacity-60 disabled:opacity-40 transition-opacity">
+                Hapus Karyawan
+              </button>
+            </div>
           )}
         </div>
       </Modal>

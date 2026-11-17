@@ -141,7 +141,7 @@ function MySalary({ employee, minutes, onLock }) {
   const [mode, setMode] = useState('minggu');
   const [anchor, setAnchor] = useState(today);
   const [month, setMonth] = useState(today.slice(0, 7));
-  const [daysOpen, setDaysOpen] = useState(false);   // sheet Rincian Harian (bulanan)
+  const [daysOpen, setDaysOpen] = useState(false);   // sheet Rincian Harian
   const period = useMemo(() => (mode === 'minggu' ? weekPeriodForDate(anchor) : monthPeriod(month)), [mode, anchor, month]);
   const { loading, error, status, attendance, results, prepared, reload, isLocked: periodClosed } = usePayrollData({ period });
 
@@ -206,16 +206,16 @@ function MySalary({ employee, minutes, onLock }) {
               {periodClosed && <p className="text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-3 flex items-center gap-1.5"><Lock className="w-3.5 h-3.5 shrink-0" /> Periode ini sudah ditutup owner, angkanya final.</p>}
               {!periodClosed && <p className="text-xs text-slate-400">Periode berjalan: angka bisa berubah sampai owner menutup periode.</p>}
 
-              {/* Susunan SAMA dengan layar owner (PayrollReport): Gaji Bersih, Total Pendapatan, Pengurangan, Sisa Saldo (bulanan), Rincian Harian. */}
+              {/* Susunan SAMA dengan layar owner (PayrollReport): Gaji Bersih, Total Pendapatan, Pengurangan, Sisa Saldo (bulanan), Rincian Harian. Mingguan dan bulanan memakai susunan yang sama. */}
               <Card className="text-sm" data-testid="my-ringkasan">
                 <PayrollReport
                   readOnly report={report} isLocked={periodClosed} formatRupiah={formatRupiah}
                   dayFlags={() => ({ auto: false, edited: false })}
                   canEditOpening={false} openingForm={{ kind: null, amount: '' }}
-                  onOpenDays={period.monthKey ? () => setDaysOpen(true) : undefined}
+                  onOpenDays={() => setDaysOpen(true)}
                 />
               </Card>
-              <DailyDetailSheet isOpen={daysOpen && !!period.monthKey} onClose={() => setDaysOpen(false)} readOnly isLocked={periodClosed}
+              <DailyDetailSheet isOpen={daysOpen} onClose={() => setDaysOpen(false)} readOnly isLocked={periodClosed}
                 subtitle={`${employee.name} · ${label}`} report={report} />
 
               {mine.needsClarification.length > 0 && (

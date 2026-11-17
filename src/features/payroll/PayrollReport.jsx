@@ -14,11 +14,12 @@ import { detailSubRows } from './additionDetail';
  *    Potongan bisa diubah (membuka form Potongan Catat Cepat) atau dihapus; Tambahan hanya dihapus.
  * Data berasal dari buildPayrollReport (payrollReport.js).
  *
- * BULANAN dengan `onOpenDays` (dipakai PayrollView dan MyPayroll) memakai susunan ringkasan seperti slip PDF
- * (permintaan pemilik 13 Nov 2026): PENDAPATAN, Total Pendapatan, POTONGAN, Total Potongan, saldo awal ikut di PENDAPATAN / POTONGAN (tanpa baris sendiri; owner punya tautan "Ubah Saldo Awal"),
+ * Dengan `onOpenDays` (dipakai PayrollView dan MyPayroll, untuk MINGGUAN dan BULANAN) memakai susunan ringkasan seperti slip PDF
+ * (permintaan pemilik 13 Nov 2026, diperluas ke mingguan 17 Nov 2026): PENDAPATAN, Total Pendapatan, POTONGAN, Total Potongan, saldo awal ikut di PENDAPATAN / POTONGAN
+ * (tanpa baris sendiri; owner punya tautan "Ubah Saldo Awal", hanya di bulanan karena `canEditOpening` false di mingguan),
  * lalu GAJI BERSIH di PALING BAWAH. Rincian harian TIDAK dibuka di tempat: tombol "Rincian Harian" memanggil `onOpenDays`
- * dan induk membuka DailyDetailSheet (tabel gaya PDF + kolom Bersih per hari). Tanpa `onOpenDays` (mingguan) susunan lama
- * di bawah ini tetap dipakai.
+ * dan induk membuka DailyDetailSheet (tabel gaya PDF + kolom Bersih per hari). Tanpa `onOpenDays` susunan lama
+ * di bawah ini yang dipakai (tidak ada pemanggil di app; hanya dipakai tes).
  *
  * `readOnly` = tampilan karyawan (Gaji Saya, MyPayroll): susunan SAMA dengan owner, tapi tanpa tombol ubah/hapus/Bagikan,
  * dan bagian saldo bernama "Sisa Saldo" (+ = toko berutang / belum diambil, - = hutang ke toko).
@@ -152,7 +153,7 @@ export default function PayrollReport({
     ? <span className={`text-right font-medium ${tone}`}>{formatRupiah(n)}</span>
     : <span className="text-right text-slate-300 dark:text-slate-600">-</span>);
 
-  if (report.withOpening && onOpenDays) {
+  if (onOpenDays) {
     return (
       <MonthlySummary report={report} formatRupiah={formatRupiah} readOnly={readOnly} notice={notice} onOpenDays={onOpenDays} onShare={onShare}
         canEditOpening={canEditOpening} openingForm={openingForm} onOpeningChange={onOpeningChange} onSaveOpening={onSaveOpening} busy={busy} />

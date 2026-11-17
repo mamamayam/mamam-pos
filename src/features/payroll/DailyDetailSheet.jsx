@@ -5,7 +5,7 @@ import { fmtDay } from './payrollReport';
 import { detailSubRows, fmtNum } from './additionDetail';
 
 /**
- * DailyDetailSheet — Rincian Harian periode BULANAN, dibuka lewat tombol "Rincian Harian" di PayrollReport.
+ * DailyDetailSheet — Rincian Harian periode MINGGUAN dan BULANAN, dibuka lewat tombol "Rincian Harian" di PayrollReport.
  * Tabelnya sama dengan tabel di slip PDF: Tanggal & Jam | Keterangan | Pemasukan (+) | Pengeluaran (-) | Bersih,
  * ditutup baris "Total harian". Bersih = pemasukan - pengeluaran hari itu (angka dari buildPayrollReport, bukan
  * hitungan baru). Saldo awal bulan bukan transaksi harian, jadi tidak ikut di Bersih/Total harian.
@@ -127,7 +127,7 @@ export default function DailyDetailSheet({
               </div>
             </div>
           )}
-          <p className="px-2 pt-2 text-[10px] text-slate-400">Angka dalam rupiah. Bersih = pemasukan − pengeluaran hari itu. Saldo awal bulan tidak ikut di sini.</p>
+          <p className="px-2 pt-2 text-[10px] text-slate-400">Angka dalam rupiah. Bersih = pemasukan − pengeluaran hari itu.{report.withOpening ? ' Saldo awal bulan tidak ikut di sini.' : ''}</p>
           {isLocked && !readOnly && (
             <p className="text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-3 mt-2 flex items-center gap-1.5"><Lock className="w-3.5 h-3.5 shrink-0" /> Periode ditutup, jadi tambahan dan potongan tidak bisa diubah.</p>
           )}

@@ -170,9 +170,13 @@ describe('PayrollReport bulanan: ringkasan gaya slip PDF (onOpenDays)', () => {
     expect(ro).toContain('data-testid="open-days"');
   });
 
-  it('mingguan (tanpa saldo awal) tetap susunan lama walau onOpenDays diberikan', () => {
-    const html = monthly({ withOpening: false });
-    expect(html).not.toContain('monthly-summary');
-    expect(html).toContain('sec-harian');
+  it('mingguan (tanpa saldo awal) memakai susunan slip yang SAMA dengan bulanan', () => {
+    const html = monthly({ withOpening: false, canEditOpening: false });
+    expect(html).toContain('monthly-summary');
+    const idx = order(html, 'PENDAPATAN', 'Total Pendapatan', 'POTONGAN', 'Total Potongan', 'GAJI BERSIH');
+    expect(idx).toEqual([...idx].sort((a, b) => a - b));
+    expect(html).toContain('data-testid="open-days"');
+    expect(html).toContain('Bagikan PDF');
+    for (const t of ['sec-harian', 'Ubah Saldo Awal', 'Saldo Awal Bulan', 'Hutang Bulan Lalu', 'Sisa Bulan Lalu']) expect(html).not.toContain(t);
   });
 });

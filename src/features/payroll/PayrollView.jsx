@@ -25,7 +25,7 @@ import { shareOrDownloadFile } from '../../lib/shareFile';
  * Tambahan & Potongan dicatat HANYA lewat Catat Cepat di Beranda (satu tempat, tanpa formulir ganda);
  * mengubah Potongan membuka form Potongan yang sama itu dalam mode ubah (QuickAdjustmentSheet `editing`).
  * Detail gaji (mingguan DAN bulanan) memakai PayrollReport: bagian yang bisa dibuka + slip PDF.
- * Bulanan: ringkasan gaya slip PDF + tombol "Rincian Harian" yang membuka DailyDetailSheet (sejajar dengan modal detail).
+ * Mingguan DAN bulanan: ringkasan gaya slip PDF + tombol "Rincian Harian" yang membuka DailyDetailSheet (sejajar dengan modal detail).
  */
 
 const MON_FULL = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -62,8 +62,8 @@ function OwnerPayroll() {
   const [openingForm, setOpeningForm] = useState({ kind: null, amount: '' });   // saldo awal: jenis (toko/karyawan berutang) + nominal positif
   const [editDate, setEditDate] = useState(null);   // tanggal yang sedang dikoreksi (karyawan = selected)
   const [editDeduction, setEditDeduction] = useState(null);   // potongan yang sedang diubah (form Potongan Catat Cepat, mode ubah)
-  const [shareOpen, setShareOpen] = useState(false);          // pilihan bagikan slip gaji PDF (periode bulanan)
-  const [daysOpen, setDaysOpen] = useState(false);            // sheet Rincian Harian (periode bulanan)
+  const [shareOpen, setShareOpen] = useState(false);          // pilihan bagikan slip gaji PDF
+  const [daysOpen, setDaysOpen] = useState(false);            // sheet Rincian Harian
 
   const run = async (fn) => {
     if (busy) return;
@@ -261,7 +261,7 @@ function OwnerPayroll() {
               onEditDay={setEditDate} onEditDeduction={handleEditDeduction} onDeleteItem={handleDeleteItem}
               canEditOpening={!!period.monthKey && !isLocked} openingForm={openingForm} onOpeningChange={setOpeningForm} onSaveOpening={handleSaveOpening}
               busy={busy} onShare={() => setShareOpen(true)}
-              onOpenDays={period.monthKey ? () => setDaysOpen(true) : undefined}
+              onOpenDays={() => setDaysOpen(true)}
             />
           </div>
         )}

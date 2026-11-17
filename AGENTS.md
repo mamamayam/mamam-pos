@@ -14,12 +14,18 @@ Pemilik repo: Mamam. Bahasa kerja: **Indonesia** (teks tampilan, komentar kode, 
 
 ## Cara kerja dengan pemilik (PENTING)
 
-- Pemilik **menerapkan perubahan sendiri**: agent menyerahkan file `.patch` dan perintah `git apply`; pemilik yang commit dan push.
-  Agent biasanya **tidak punya akses push** ke repo ini. Jangan memaksa push; serahkan patch.
-- Sebelum membuat patch, ambil `main` terbaru (`git fetch origin main`, rebase) karena pemilik sering push di sela-sela.
-  Cek patch bisa di-apply bersih ke `origin/main` (`git apply --check`) dan tes + build lolos.
-- Ambil keputusan yang masuk akal sendiri dan sebutkan asumsinya. Untuk perubahan tampilan, tunjukkan preview dulu bila memungkinkan.
-- Setelah `git apply`, pemilik harus `git pull` sebelum push berikutnya, karena Action versi menambah commit di `main` (lihat bawah).
+Alur update (keputusan pemilik 17 Nov 2026; menggantikan alur lama "serahkan `.patch`, pemilik yang apply"). Pemilik memantau dari HP, jadi
+dua langkah verifikasinya: **(1) preview HTML, (2) push ke `main`**. Tanpa branch perantara dan tanpa file patch.
+
+1. **Kerjakan** di clone terbaru: `git fetch origin main` lalu mulai dari `origin/main` (pemilik dan Action versi sering menambah commit di sela-sela). `npm test` dan `npm run build` harus lolos.
+2. **Preview dulu**: untuk setiap update (tampilan MAUPUN logika yang terlihat di layar), langsung munculkan **preview HTML** yang bisa dilihat pemilik di HP (artifact; render komponen yang berubah dengan data contoh yang realistis, sebelum/sesudah bila membantu).
+   Jangan menyuruh pemilik membuka branch atau menjalankan perintah apa pun. Perubahan yang tidak punya tampilan (refactor, tes, dokumen) cukup diringkas satu-dua kalimat, tanpa preview.
+3. **Tunggu persetujuan pemilik** atas preview itu ("oke", "gas", "push", atau permintaan revisi). Revisi = ulangi dari langkah 2.
+4. **Setelah disetujui, push langsung ke `main`** (fast-forward biasa, tanpa force). Pesan commit wajib berawalan Conventional Commit (lihat Versi otomatis). Jangan push ke `main` sebelum langkah 3, dan jangan membuat branch `claude/...` kecuali pemilik memintanya.
+   Setelah push, katakan singkat: hash commit, dan bahwa Action versi akan menambah commit `chore(release)` sehingga pemilik perlu `git pull` sebelum push sendiri berikutnya.
+
+- Ambil keputusan yang masuk akal sendiri dan sebutkan asumsinya.
+- Kalau push ditolak (tidak ada akses, konflik, hook repo menolak), jangan memaksa: bilang apa yang terjadi dan serahkan `.patch` lewat chat sebagai cadangan.
 
 ## Versi otomatis
 
@@ -49,7 +55,7 @@ Rincian: `docs/versioning.md`. Versi tampil di menu Lainnya dan layar login (`sr
   - Belum dipasangi (sengaja): form HPP (`src/hpp`, draft + Simpan/Batal sendiri; `useDirty` POS tidak boleh diimpor ke sana), `PaymentModal` (alur bayar), dan `CategoryModal` (tiap perubahan langsung tersimpan).
 - Setelah mengubah kode: `npm test` dan `npm run build` harus lolos. Tambah/ubah tes untuk logika yang berubah.
 - Patch lama yang sudah di-apply diarsipkan di `patches/`. Itu hanya catatan sejarah (isinya sudah ada di kode, sebagian sudah ditimpa
-  patch berikutnya): jangan di-apply ulang dan jangan dijadikan acuan. Patch baru dari agent cukup diserahkan lewat chat; pemilik bebas
+  patch berikutnya): jangan di-apply ulang dan jangan dijadikan acuan. Patch hanya dibuat sebagai cadangan kalau push gagal (lihat Cara kerja dengan pemilik); pemilik bebas
   menyimpannya di `patches/` atau menghapusnya.
 
 ## Routing POS dan HPP (satu domain)

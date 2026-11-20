@@ -4,6 +4,11 @@ import CategoryModal from '../../components/CategoryModal';
 import CategorySelect from '../../components/CategorySelect';
 import { storeExpenseCategories, defaultExpenseCategory } from './expenseCategories';
 import { isOnDuty } from '../employee/employeeOptions';
+import PricedItemsInput from './PricedItemsInput';
+import Switch from '../stock/Switch';
+import {
+  emptyRow, rowsFromNote, rowsFromItems, pricedRows, filledRows, rowsTotal, isLocked, stripPrices, buildExpenseDetail,
+} from './expenseItems';
 import { useAppContext } from '../../context/AppContext';
 import { toLocalDateString } from '../../utils/formatters';
 import { showToast } from '../../lib/toast';
@@ -16,7 +21,8 @@ import useDirty from '../../hook/useDirty';
  *
  * Props:
  *   isOpen, onClose
- *   editing  — catatan yang diedit ({ id, amount, category, supplier, note, date, paymentMethod, cashHolderEmployeeId }) atau null untuk baru
+ *   editing  — catatan yang diedit ({ id, amount, category, supplier, note, items, date, paymentMethod, cashHolderEmployeeId }) atau null untuk baru
+ *              (`items` = rincian harga per item dari expenses.detail_items, lihat expenseItems.js; tanpa itu saklar "Harga per item" mati)
  *   data     — hasil useExpenseData() (categories, employees, saveExpense, setCategoriesPersist, renameCategory, deleteCategory)
  *   onSaved  — dipanggil setelah berhasil menyimpan (mis. memuat ulang daftar di belakangnya)
  *
@@ -25,12 +31,15 @@ import useDirty from '../../hook/useDirty';
  * Setelah simpan: toast "tersimpan". Catatan BARU tidak menutup form, melainkan mengosongkannya untuk catatan
  * berikutnya (pemilik biasa mencatat banyak sekaligus). Mode ubah menutup form setelah simpan.
  * Menutup form yang sudah terisi (X, Back, tarik ke bawah, ketuk latar) memunculkan konfirmasi (Modal `dirty`).
+ *
+ * Detail disimpan sebagai teks, satu poin per baris (catatan lama satu baris = satu poin). Saklar "Harga per item"
+ * (permintaan pemilik 20 Nov 2026) membuat tiap poin punya kolom harga (NominalInput, keypad dengan kalkulator): selama ada
+ * minimal satu baris berharga, Jumlah terkunci = total harga baris berharga; baris tanpa harga tidak ikut dijumlah. Saklar mati
+ * = form seperti semula (Jumlah manual). Mematikan saklar membuang harga baris tapi mempertahankan totalnya sebagai Jumlah manual.
+ * Aturan hitung dan bentuk simpan ada di expenseItems.js (dites).
  */
 
 const dayOf = (v) => String(v).slice(0, 10);
-// Detail disimpan sebagai teks, satu poin per baris. Catatan lama (satu baris) = satu poin.
-const noteLines = (note) => String(note || '').split(/\r?\n/).map(t => t.trim()).filter(Boolean);
-const toItems = (note) => { const l = noteLines(note); return l.length ? l : ['']; };
 
 export default function ExpenseFormSheet({ isOpen, onClose, editing = null, data, onSaved }) {
   const { triggerAlert, triggerConfirm } = useAppContext();
@@ -40,7 +49,8 @@ export default function ExpenseFormSheet({ isOpen, onClose, editing = null, data
   // null = belum disentuh: tampil kategori bawaan (Belanja). Memilih (termasuk "Pilih kategori" yang kosong) mengisi string.
   const [category, setCategory] = useState(null);
   const [supplier, setSupplier] = useState('');
-  const [detailItems, setDetailItems] = useState(['']);
+  const [rows, setRows] = useState([emptyRow()]);          // poin Detail: [{ t: nama, p: harga (teks digit) }]
+  const [priceMode, setPriceMode] = useState(false);        // saklar "Harga per item"
   const [dateInput, setDateInput] = useState(toLocalDateString());
   const [paymentMethod, setPaymentMethod] = useState('Tunai');
   const [cashHolderId, setCashHolderId] = useState('kasir');
@@ -54,22 +64,39 @@ export default function ExpenseFormSheet({ isOpen, onClose, editing = null, data
       setAmount(String(editing.amount));
       setCategory(editing.category);
       setSupplier(editing.supplier || '');
-      setDetailItems(toItems(editing.note));
+      const fromItems = rowsFromItems(editing.items);
+      setPriceMode(Boolean(fromItems));
+      setRows(fromItems || rowsFromNote(editing.note));
       setDateInput(dayOf(editing.date));
       setPaymentMethod(editing.paymentMethod === 'Non-Tunai' ? 'Non-Tunai' : 'Tunai');
       setCashHolderId(editing.cashHolderEmployeeId || 'kasir');
     } else {
-      setAmount(''); setCategory(null); setSupplier(''); setDetailItems(['']);
+      setAmount(''); setCategory(null); setSupplier(''); setRows([emptyRow()]); setPriceMode(false);
       setDateInput(toLocalDateString()); setPaymentMethod('Tunai'); setCashHolderId('kasir');
     }
   }, [isOpen, editing]);
 
   const categoryOptions = storeExpenseCategories(categories);
   const shownCategory = category ?? (editing ? '' : defaultExpenseCategory(categoryOptions));
-  const { dirty, rebase } = useDirty(isOpen, [amount, category, supplier, detailItems, dateInput, paymentMethod, cashHolderId]);
+  const { dirty, rebase } = useDirty(isOpen, [amount, category, supplier, rows, priceMode, dateInput, paymentMethod, cashHolderId]);
+
+  // Jumlah terkunci (otomatis dari harga item) kalau saklar menyala dan ada minimal satu baris berharga.
+  const locked = isLocked(priceMode, rows);
+  const shownAmount = locked ? String(rowsTotal(rows)) : amount;
+  const pricedCount = pricedRows(rows).length;
+  const filledCount = filledRows(rows).length;
+
+  const togglePriceMode = () => {
+    if (priceMode) {
+      // Mati: harga baris dibuang, tapi total yang tadi terlihat jadi Jumlah manual supaya tidak hilang.
+      if (locked) setAmount(String(rowsTotal(rows)));
+      setRows(stripPrices(rows));
+    }
+    setPriceMode(!priceMode);
+  };
 
   const resetForm = () => {
-    setAmount(''); setCategory(null); setSupplier(''); setDetailItems(['']);
+    setAmount(''); setCategory(null); setSupplier(''); setRows([emptyRow()]); setPriceMode(false);
     setDateInput(toLocalDateString()); setPaymentMethod('Tunai'); setCashHolderId('kasir');
     rebase();
   };
@@ -90,8 +117,10 @@ export default function ExpenseFormSheet({ isOpen, onClose, editing = null, data
 
   const handleSave = () => run(async () => {
     const holder = paymentMethod === 'Tunai' && cashHolderId !== 'kasir' ? couriers.find(c => c.id === cashHolderId) : null;
+    const built = buildExpenseDetail({ priceMode, rows, manualAmount: amount });   // melempar kalau baris berharga tanpa nama
     await saveExpense({
-      id: editing?.id || null, amount, category: shownCategory, note: detailItems.map(t => t.trim()).filter(Boolean).join('\n'),
+      id: editing?.id || null, amount: built.amount, category: shownCategory, note: built.note,
+      items: built.items, hadItems: Boolean(editing?.items?.length),
       supplier: supplier.trim(), date: dateInput, paymentMethod,
       cashHolderEmployeeId: holder?.id || null, cashHolderName: holder?.name || null,
     });
@@ -115,10 +144,34 @@ export default function ExpenseFormSheet({ isOpen, onClose, editing = null, data
 
           <Input label="Nama Toko/Supplier" value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Opsional" />
 
-          <BulletListInput label="Detail" value={detailItems} onChange={setDetailItems} placeholder="Opsional, mis. Ayam 5 kg" />
+          <div>
+            <div className="flex items-center justify-between gap-3 mb-1.5">
+              <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Detail</span>
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                Harga per item
+                <Switch size="sm" on={priceMode} onToggle={togglePriceMode} label="Harga per item" testId="price-mode-switch" />
+              </label>
+            </div>
+            {priceMode ? (
+              <>
+                <PricedItemsInput value={rows} onChange={setRows} />
+                <div className="flex items-center justify-between gap-3 mt-2 text-xs text-slate-500 dark:text-slate-400" data-testid="price-summary">
+                  <span>{filledCount === 0 ? 'Belum ada item' : `${pricedCount} dari ${filledCount} item berharga`}</span>
+                  {pricedCount > 0 && <strong className="text-slate-800 dark:text-slate-100 tabular-nums">{formatRupiah(rowsTotal(rows))}</strong>}
+                </div>
+                <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">Tekan Enter untuk poin baru. Baris tanpa harga tidak ikut dijumlah.</p>
+              </>
+            ) : (
+              <BulletListInput value={rows.map(r => r.t)} onChange={(list) => setRows(list.map(t => ({ t, p: '' })))} placeholder="Opsional, mis. Ayam 5 kg" />
+            )}
+          </div>
 
           <div className="grid grid-cols-2 gap-4 items-start">
-            <NominalInput label="Jumlah" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" />
+            <NominalInput
+              label="Jumlah" value={shownAmount} onChange={e => setAmount(e.target.value)} placeholder="0"
+              readOnly={locked} variant={locked ? 'muted' : 'default'}
+              hint={locked ? 'Otomatis dari harga item' : priceMode ? 'Isi harga item untuk dihitung otomatis' : undefined}
+            />
             <Input type="date" label="Tanggal Transaksi" value={dateInput} onChange={e => setDateInput(e.target.value)} />
           </div>
 

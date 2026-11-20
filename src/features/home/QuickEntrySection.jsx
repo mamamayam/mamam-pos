@@ -73,7 +73,7 @@ export default function QuickEntrySection({ onChanged }) {
   const openEdit = (item) => run(async () => {
     const s = item.source;
     if (item.kind === 'pengeluaran') {
-      setEditExpense({ id: s.id, amount: s.amount, category: s.category, supplier: s.supplier, note: s.note, date: s.date, paymentMethod: s.paymentMethod, cashHolderEmployeeId: s.cashHolderEmployeeId });
+      setEditExpense({ id: s.id, amount: s.amount, category: s.category, supplier: s.supplier, note: s.note, items: s.items, date: s.date, paymentMethod: s.paymentMethod, cashHolderEmployeeId: s.cashHolderEmployeeId });
       setSheet('pengeluaran');
     } else if (item.kind === 'potongan') {
       const paymentMethod = await quick.deductionPayment(s);   // null = potongan lama tanpa pengeluaran terhubung

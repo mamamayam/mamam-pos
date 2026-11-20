@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { deviceStamp, deviceReady } from '../lib/deviceId';
+import { parseItems, itemsColumnMissing, ITEMS_MIGRATION_HINT } from '../features/expense/expenseItems';
 
 /**
  * useExpenseData — layer data Pengeluaran, ONLINE-FIRST.
@@ -51,7 +52,7 @@ export function useExpenseData({ withExpenses = true } = {}) {
     catIdByName.current = Object.fromEntries((cats.data || []).map(c => [c.name, c.id]));
     setCategories((cats.data || []).map(c => c.name));
     setExpenses((exps.data || []).map(e => ({
-      id: e.id, amount: e.amount, category: e.category, note: e.detail, supplier: e.store_or_supplier_name,
+      id: e.id, amount: e.amount, category: e.category, note: e.detail, items: parseItems(e.detail_items), supplier: e.store_or_supplier_name,
       date: e.transaction_date, paymentMethod: e.payment_method,
       cashHolderEmployeeId: e.cash_holder_employee_id, cashHolderName: e.cash_holder_name,
       deviceId: e.device_id, deviceName: e.device_name,
@@ -63,7 +64,9 @@ export function useExpenseData({ withExpenses = true } = {}) {
 
   useEffect(() => { reload(); }, [reload]);
 
-  const saveExpense = async ({ id, amount, category, note, supplier, date, paymentMethod, cashHolderEmployeeId, cashHolderName }) => {
+  // items = rincian harga per item ([{ name, price|null }], lihat expenseItems.js) atau null; hadItems = catatan yang
+  // diubah sebelumnya punya rincian, jadi kalau kini tanpa rincian kolomnya dikosongkan (bukan dibiarkan basi).
+  const saveExpense = async ({ id, amount, category, note, items, hadItems, supplier, date, paymentMethod, cashHolderEmployeeId, cashHolderName }) => {
     const amt = Number(amount);
     if (!amt || amt <= 0) throw new Error('Masukkan nominal pengeluaran yang valid!');
     if (!date) throw new Error('Pilih tanggal pengeluaran!');
@@ -79,13 +82,17 @@ export function useExpenseData({ withExpenses = true } = {}) {
       cash_holder_name: paymentMethod === 'Tunai' ? (cashHolderName || null) : null,
       direction: 'pengeluaran',
     };
+    // Kolom detail_items (migrasi 023) hanya dikirim bila perlu, jadi catatan biasa tetap jalan sebelum migrasi dijalankan.
+    if (items?.length) row.detail_items = items;
+    else if (hadItems) row.detail_items = null;
+    const oops = (e, aksi) => { if (itemsColumnMissing(e)) throw new Error(ITEMS_MIGRATION_HINT); fail(e, aksi); };
     if (id) {
       const { error: e } = await supabase.from('expenses').update(row).eq('id', id);
-      if (e) fail(e, 'Gagal menyimpan pengeluaran');
+      if (e) oops(e, 'Gagal menyimpan pengeluaran');
     } else {
       await deviceReady();
       const { error: e } = await supabase.from('expenses').insert({ ...row, ...deviceStamp() });
-      if (e) fail(e, 'Gagal mencatat pengeluaran');
+      if (e) oops(e, 'Gagal mencatat pengeluaran');
     }
     await reload();
   };

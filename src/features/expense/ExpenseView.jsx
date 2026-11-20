@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { TrendingDown, Pencil, Trash2, Plus, Store, User, Send } from 'lucide-react';
 import { Button, Badge, EmptyState, DetailModal, BulkSelectBar, FilterBar, SummaryPills } from '../../components/ui';
 import ExpenseFormSheet from './ExpenseFormSheet';
+import { detailLines, itemsTotal } from './expenseItems';
 import QuickAdjustmentSheet from '../home/QuickAdjustmentSheet';
 import DeleteRequestSheet from '../history/DeleteRequestSheet';
 import { updateDeduction, fetchDeductionByExpense } from '../../hook/deductionEdit';
@@ -289,7 +290,9 @@ const ExpenseView = () => {
           { label: 'Karyawan', value: detail ? employeeName(detail) : '' },
           { label: 'Pemegang Kas', value: detail?.cashHolderName },
           { label: 'Dicatat dari', value: detail?.deviceName },
-          { label: 'Catatan', value: detail ? noteLines(detail.note).join('\n') : '', type: 'multiline' },
+          detail?.items?.length
+            ? { label: 'Catatan', type: 'items', value: detailLines(detail.note, detail.items), total: itemsTotal(detail.items) }
+            : { label: 'Catatan', value: detail ? noteLines(detail.note).join('\n') : '', type: 'multiline' },
           ...(detailRequest?.status === 'menunggu' ? [{ label: 'Pengajuan hapus', value: `Menunggu keputusan owner (diajukan ${detailRequest.requestedBy})` }] : []),
           ...(detailRequest?.status === 'ditolak' ? [{ label: 'Pengajuan hapus ditolak', value: detailRequest.rejectReason || 'Owner menolak pengajuan hapus ini.' }] : []),
         ] }]}

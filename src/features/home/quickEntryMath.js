@@ -1,5 +1,6 @@
 import { ADDITION_STATUS, normalizeStatus } from '../payroll/additionApproval';
 import { cleanDetail, detailKindForCategory, detailTotal, detailLabel, parseDetail } from '../payroll/additionDetail';
+import { parseItems } from '../expense/expenseItems';
 
 /**
  * quickEntryMath — aturan "Catat Cepat" di Beranda. FUNGSI MURNI (dites).
@@ -156,6 +157,7 @@ export const mapDeductionRow = (r, nameById = {}) => ({
 
 export const mapExpenseRow = (r) => ({
   id: r.id, category: r.category, supplier: r.store_or_supplier_name || '', note: r.detail || '',
+  items: parseItems(r.detail_items),   // rincian harga per item (migrasi 023); null = tanpa rincian
   amount: r.amount, date: dayOf(r.transaction_date), paymentMethod: r.payment_method,
   employeeId: r.employee_id || null, createdAt: r.created_at || '',
   cashHolderEmployeeId: r.cash_holder_employee_id || null, cashHolderName: r.cash_holder_name || null,

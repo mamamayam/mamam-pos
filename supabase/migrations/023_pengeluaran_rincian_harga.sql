@@ -1,0 +1,13 @@
+-- =====================================================================
+-- Migrasi 023 — Rincian harga per item pada Pengeluaran (permintaan pemilik 20 Nov 2026).
+-- Jalankan SEKALI di SQL Editor project C. Aman diulang.
+--
+-- expenses.detail_items (jsonb, boleh kosong):
+--   [ { "name": "Ayam 5 kg", "price": 190000 }, { "name": "Plastik kresek", "price": null } ]
+-- price = harga baris itu (integer rupiah); null = baris tanpa harga. Kalau ada minimal satu harga, expenses.amount
+-- = jumlah harga baris berharga (dihitung di aplikasi). Teks expenses.detail tetap berisi nama item satu per baris,
+-- jadi Riwayat, Laporan, dan pengajuan hapus tidak berubah. Baris lama tanpa rincian tidak berubah sama sekali.
+-- Sebelum migrasi ini dijalankan, aplikasi tetap jalan; hanya menyimpan dengan saklar "Harga per item" yang
+-- memberi petunjuk menjalankannya.
+-- =====================================================================
+alter table expenses add column if not exists detail_items jsonb;

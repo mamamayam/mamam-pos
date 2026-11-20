@@ -224,6 +224,12 @@ describe('data untuk mengubah catatan dari Beranda', () => {
     expect(e).toMatchObject({ cashHolderEmployeeId: 'k1', cashHolderName: 'Andi' });
     expect(mapExpenseRow({ id: 'x2', category: 'Belanja', amount: 1, transaction_date: '2026-10-16' })).toMatchObject({ cashHolderEmployeeId: null });
   });
+  it('mapExpenseRow membawa rincian harga per item (detail_items), null kalau tidak ada', () => {
+    const base = { id: 'x1', category: 'Belanja', amount: 190000, transaction_date: '2026-11-20', created_at: '2026-11-20T01:00:00.000Z' };
+    expect(mapExpenseRow(base).items).toBeNull();
+    expect(mapExpenseRow({ ...base, detail_items: [{ name: 'Ayam 5 kg', price: 190000 }, { name: 'Kresek', price: null }] }).items)
+      .toEqual([{ name: 'Ayam 5 kg', price: 190000 }, { name: 'Kresek', price: null }]);
+  });
   it('tiap item feed membawa baris aslinya (source)', () => {
     const names = { e1: 'Budi' };
     const a = mapAdditionRow({ id: 'a1', employee_id: 'e1', category: 'Bonus', label: 'x', amount: 1000, date: '2026-10-16', created_at: '2026-10-16T03:00:00.000Z' }, names);

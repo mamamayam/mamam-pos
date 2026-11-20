@@ -1517,3 +1517,8 @@ begin
     on conflict (day, item_id) do nothing;
   end loop;
 end $$;
+
+-- ---------------------------------------------------------------------
+-- Migrasi 023: rincian harga per item pada Pengeluaran (expenses.detail_items)
+-- ---------------------------------------------------------------------
+alter table expenses add column if not exists detail_items jsonb;

@@ -55,6 +55,8 @@ export function useQuickEntries({ canApprove, onChanged }) {
 
       const fetchExpenses = async () => {
         const base = (cols) => supabase.from('expenses').select(cols).eq('direction', 'pengeluaran').or(inToday('transaction_date')).order('created_at', { ascending: false });
+        const full = await base(`${EXPENSE_COLUMNS}, employee_id, detail_items`);   // detail_items = migrasi 023 (harga per item)
+        if (!full.error) return full;
         const first = await base(`${EXPENSE_COLUMNS}, employee_id`);
         if (!first.error) return first;
         return base(EXPENSE_COLUMNS);   // migrasi 009 belum ada: semua dianggap pengeluaran toko

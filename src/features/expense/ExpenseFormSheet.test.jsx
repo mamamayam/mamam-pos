@@ -37,6 +37,21 @@ describe('urutan form Pengeluaran', () => {
   });
 });
 
+describe('saklar Harga per item', () => {
+  it('ada di samping label Detail dan mati bawaannya: form tetap seperti semula (tanpa kolom harga)', () => {
+    const html = render([]);
+    expect(html).toContain('Harga per item');
+    expect(html).toMatch(/role="switch"[^>]*aria-checked="false"/);
+    expect(html).not.toContain('data-testid="priced-items"');
+    expect(html).not.toContain('Otomatis dari harga item');
+  });
+  it('urutan tetap: Detail (dengan saklar) sebelum Jumlah', () => {
+    const html = render([]);
+    expect(html.indexOf('Harga per item')).toBeGreaterThan(html.indexOf('Detail'));
+    expect(html.indexOf('Harga per item')).toBeLessThan(html.indexOf('Jumlah'));
+  });
+});
+
 describe('kategori bawaan form Pengeluaran', () => {
   it('catatan baru langsung terisi Belanja (dropdown tetap bisa diganti)', () => {
     const html = render([], ['Gaji', 'Belanja', 'Lainnya']);

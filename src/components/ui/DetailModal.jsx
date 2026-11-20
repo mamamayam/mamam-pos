@@ -33,8 +33,10 @@ import { formatRupiah } from '../../utils/formatters';
  *   afterHighlight       ReactNode — catatan tambahan tepat di bawah kotak TOTAL (opsional)
  *
  * Row: { label, value, type?, variant?, alwaysShow?, fullWidth? }
- *   type: 'text' (default) | 'currency' | 'date' | 'datetime' | 'badge' | 'multiline'
- *   Row otomatis di-skip kalau value null/undefined/'' (atau currency = 0),
+ *   type: 'text' (default) | 'currency' | 'date' | 'datetime' | 'badge' | 'multiline' | 'items'
+ *   'items': value = [{ text, price|null }] (poin dengan harga di kanan, "—" kalau tanpa harga) + opsional `total`
+ *   (> 0 menambah baris "Total item"); dipakai Detail Pengeluaran untuk rincian harga per item.
+ *   Row otomatis di-skip kalau value null/undefined/'' (atau currency = 0, atau items kosong),
  *   kecuali alwaysShow: true.
  *
  * Contoh pakai:
@@ -73,6 +75,7 @@ const isRowVisible = (row) => {
   if (row.alwaysShow) return true;
   if (row.value === null || row.value === undefined || row.value === '') return false;
   if (row.type === 'currency' && Number(row.value) === 0) return false;
+  if (row.type === 'items' && (!Array.isArray(row.value) || row.value.length === 0)) return false;
   return true;
 };
 
@@ -93,6 +96,30 @@ function DetailRow({ row }) {
       <div className="flex justify-between items-center py-2.5 gap-3">
         <span className="text-xs text-slate-500 dark:text-slate-400 shrink-0">{row.label}</span>
         <Badge variant={row.variant || 'neutral'}>{row.value}</Badge>
+      </div>
+    );
+  }
+
+  if (row.type === 'items') {
+    return (
+      <div className="py-2.5">
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{row.label}</p>
+        <ul className="space-y-1" data-testid="detail-items">
+          {row.value.map((it, i) => (
+            <li key={i} className="flex items-baseline justify-between gap-3 text-sm font-bold text-slate-700 dark:text-slate-200">
+              <span className="min-w-0 break-words">• {it.text}</span>
+              <span className={`shrink-0 tabular-nums ${it.price == null ? 'text-slate-300 dark:text-slate-600 font-medium' : ''}`}>
+                {it.price == null ? '—' : formatRupiah(it.price)}
+              </span>
+            </li>
+          ))}
+        </ul>
+        {Number(row.total) > 0 && (
+          <div className="flex items-baseline justify-between gap-3 mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 text-xs">
+            <span className="text-slate-500 dark:text-slate-400">Total item</span>
+            <span className="font-bold text-slate-700 dark:text-slate-200 tabular-nums">{formatRupiah(row.total)}</span>
+          </div>
+        )}
       </div>
     );
   }

@@ -270,7 +270,7 @@ export default function DetailModal({
 
       {/* Footer */}
       {(visibleActions.length > 0 || closeLabel) && (
-        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex gap-2 shrink-0 rounded-b-3xl">
+        <div className={`px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 gap-2 shrink-0 rounded-b-3xl ${visibleActions.length + (closeLabel ? 1 : 0) > 3 ? 'grid grid-cols-2' : 'flex'}`}>
           {visibleActions.map((a, i) => (
             <Button key={i} variant={a.variant || 'secondary'} className="flex-1" icon={a.icon} onClick={a.onClick}>
               {a.label}

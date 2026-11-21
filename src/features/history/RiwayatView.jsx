@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { RefreshCw, Trash2, Receipt, ShoppingBag, Utensils, Truck, Bike, Send, Share2 } from 'lucide-react';
-import { Card, EmptyState, DetailModal, Button, Badge, BulkSelectBar, FilterBar, SummaryPills } from '../../components/ui';
+import { RefreshCw, Trash2, Receipt, ShoppingBag, Utensils, Truck, Bike, Send, Share2, Pencil } from 'lucide-react';
+import { Card, EmptyState, DetailModal, Button, Badge, EditedMark, BulkSelectBar, FilterBar, SummaryPills } from '../../components/ui';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../auth/AuthContext';
 import { useReportData } from '../../hook/useReportData';
@@ -10,6 +10,9 @@ import { dayHeading, groupByDay, sumByDay } from '../../utils/listFilters';
 import { deviceOptionsFromRows } from '../../hook/deviceLogic';
 import { useDeleteRequestIndex } from '../../hook/useDeleteRequests';
 import DeleteRequestSheet from './DeleteRequestSheet';
+import EditTransactionSheet from './EditTransactionSheet';
+import { useEditLog, useEditRequestIndex } from '../../hook/useTransactionEdits';
+import { editAccess, editedIds, logsFor, describeSnapshots, isSplitSale } from './transactionEditMath';
 import { receiptFromSale } from '../pos/receiptModel';
 import { shareReceiptWithAlert } from '../pos/shareReceipt';
 import { filterSales, paymentStats, sortSales, methodOf, splitPartsOf, isTimeSort, SORT_OPTIONS, DEFAULT_SORT } from './riwayatFilter';
@@ -46,6 +49,9 @@ export default function RiwayatView() {
   const canRequest = !canDelete;   // tanpa izin hapus langsung = mengajukan hapus ke owner
   const { index: requests, reload: reloadRequests } = useDeleteRequestIndex();
   const [requestFor, setRequestFor] = useState(null);   // transaksi yang sedang diajukan hapus
+  const isOwner = can('laporan.hapusTransaksi');   // owner = boleh mengubah kapan saja; staf dibatasi 30 menit (lihat transactionEditMath.js)
+  const { index: editRequests, reload: reloadEditRequests } = useEditRequestIndex();
+  const [editFor, setEditFor] = useState(null);   // { sale, mode } transaksi yang sedang diubah / diajukan ubah
 
   const [period, setPeriod] = useState({ mode: 'hari-ini', start: '', end: '' });
   const [typeFilter, setTypeFilter] = useState('semua');
@@ -61,6 +67,8 @@ export default function RiwayatView() {
   const range = useMemo(() => periodRange(period.mode, { start: period.start, end: period.end }), [period]);
   const { sales, loading, error, updatedAt, reload, deleteTransaction, bulkDeleteTransactions } =
     useReportData({ ...range, withExpenses: false });
+  const { logs: editLogs, reload: reloadEditLogs } = useEditLog(range);
+  const edited = useMemo(() => editedIds(editLogs), [editLogs]);
 
   // Tipe order bawaan kasir + tipe lain yang kebetulan ada di data (mis. tipe lama).
   const typeOptions = useMemo(() => {
@@ -118,6 +126,10 @@ export default function RiwayatView() {
   const showHeads = byDay && groups.length > 1;
 
   const detailRequest = detail ? requests.get(detail.id) : null;
+  const detailEditRequest = detail ? editRequests.get(detail.id) : null;
+  const detailLogs = detail && isOwner ? logsFor(editLogs, detail.id) : [];
+  const afterEdit = () => { setDetail(null); reload(); reloadEditLogs(); reloadEditRequests(); };
+  const openEdit = () => setEditFor({ sale: detail, mode: editAccess({ sale: detail, isOwner }) });
 
   const renderRow = (s) => {
     const Icon = TYPE_ICON[s.order_type] || ShoppingBag;
@@ -134,13 +146,17 @@ export default function RiwayatView() {
             <Icon className="w-5 h-5" />
           </span>
           <span className="flex-1 min-w-0">
-            <span className="block font-bold text-sm text-slate-800 dark:text-slate-100 truncate">{s.customer_name || 'Umum'}</span>
+            <span className="flex items-center gap-1.5 min-w-0 font-bold text-sm text-slate-800 dark:text-slate-100">
+              <span className="truncate">{s.customer_name || 'Umum'}</span>
+              {edited.has(s.id) && <EditedMark size="sm" label="Pernah diubah" data-testid="hist-edited" />}
+            </span>
             <span className="block text-xs text-slate-500 dark:text-slate-400 truncate">{saleClock(s)} • #{s.display_number} • {s.order_type}</span>
           </span>
           <span className="flex flex-col items-end gap-1 shrink-0 max-w-[45%]">
             <span className="font-heading font-bold text-sm text-slate-800 dark:text-slate-100 truncate max-w-full">{formatRupiah(s.total)}</span>
             <Badge variant={isOjol ? 'orange' : 'success'}>{methodOf(s)}{isOjol && s.ojol_platform ? ` (${s.ojol_platform})` : ''}</Badge>
             {requests.get(s.id)?.status === 'menunggu' && <Badge variant="warning" dot>Menunggu hapus</Badge>}
+            {editRequests.get(s.id)?.status === 'menunggu' && <Badge variant="warning" dot>Menunggu ubah</Badge>}
           </span>
         </button>
       </div>
@@ -197,7 +213,7 @@ export default function RiwayatView() {
                 )}
                 <div className="flex items-center gap-0.5 shrink-0 text-xs text-slate-400 dark:text-slate-500" title="Terakhir diperbarui">
                   <span data-testid="riwayat-updated">{updatedLabel}</span>
-                  <button onClick={() => { reload(); reloadRequests(); }} aria-label="Perbarui" disabled={loading} className="p-1.5 rounded-full text-accent-600 dark:text-accent-400 active:scale-90 transition-all disabled:opacity-50">
+                  <button onClick={() => { reload(); reloadRequests(); reloadEditLogs(); reloadEditRequests(); }} aria-label="Perbarui" disabled={loading} className="p-1.5 rounded-full text-accent-600 dark:text-accent-400 active:scale-90 transition-all disabled:opacity-50">
                     <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                   </button>
                 </div>
@@ -233,10 +249,13 @@ export default function RiwayatView() {
       <DetailModal
         isOpen={!!detail} onClose={() => setDetail(null)}
         icon={<Receipt className="w-4 h-4 text-accent-500 dark:text-accent-400" />}
-        title={detail && `#${detail.display_number}`}
+        title={detail && (<>#{detail.display_number}{edited.has(detail.id) && <EditedMark label="Pernah diubah" data-testid="detail-edited" />}</>)}
         subtitle={detail && new Date(detail.paid_at || detail.created_at).toLocaleString('id-ID')}
         badges={detail ? [{ label: detail.payment_method === 'Ojol' ? `Ojol (${detail.ojol_platform || ''})` : detail.payment_method, variant: detail.payment_method === 'Ojol' ? 'orange' : 'success' }, { label: detail.order_type, variant: 'neutral' }] : []}
         sections={[{ rows: [{ label: 'Pelanggan', value: detail?.customer_name || 'Umum' }, ...(detail?.ojol_order_number ? [{ label: 'No. Order Ojol', value: detail.ojol_order_number }] : []), ...(detail?.device_name ? [{ label: 'Dicatat dari', value: detail.device_name }] : []),
+          ...(isSplitSale(detail) ? [{ label: 'Catatan ubah', value: 'Split Payment: hanya nama dan tipe pesanan yang bisa diubah.' }] : []),
+          ...(detailEditRequest?.status === 'menunggu' ? [{ label: 'Pengajuan ubah', value: `Menunggu owner · diajukan ${detailEditRequest.requestedBy}: ${detailEditRequest.reason}` }] : []),
+          ...(detailEditRequest?.status === 'ditolak' ? [{ label: 'Pengajuan ubah ditolak', value: detailEditRequest.rejectReason || 'Owner menolak pengajuan ubah ini.' }] : []),
           ...(detailRequest?.status === 'menunggu' ? [{ label: 'Pengajuan hapus', value: `Menunggu owner · diajukan ${detailRequest.requestedBy}: ${detailRequest.reason}` }] : []),
           ...(detailRequest?.status === 'ditolak' ? [{ label: 'Pengajuan hapus ditolak', value: detailRequest.rejectReason || 'Owner menolak pengajuan hapus ini.' }] : [])] }]}
         items={detail?.items?.map(it => ({ name: it.name, note: [it.variant_name, it.note].filter(Boolean).join(' • '), qty: it.qty, price: it.price }))}
@@ -247,7 +266,8 @@ export default function RiwayatView() {
           { label: 'Ongkir', value: detail?.delivery_fee, type: 'currency' },
         ]}
         highlight={{ label: 'Total Tagihan', value: detail?.total }}
-        afterHighlight={(detail?.amount_paid != null || splitPartsOf(detail).length > 0) && (
+        afterHighlight={<>
+        {(detail?.amount_paid != null || splitPartsOf(detail).length > 0) && (
           <div data-testid="riwayat-cash" className="mt-3 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 py-3 space-y-1.5 text-xs">
             {splitPartsOf(detail).map((p, i) => (
               <div key={i} className="flex justify-between gap-3" data-testid="riwayat-split">
@@ -269,13 +289,40 @@ export default function RiwayatView() {
             )}
           </div>
         )}
+        {detailLogs.length > 0 && (
+          <div className="mt-3" data-testid="riwayat-perubahan">
+            <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5 px-1">Riwayat perubahan · {detailLogs.length}</p>
+            <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 divide-y divide-slate-100 dark:divide-slate-800">
+              {detailLogs.map((l) => (
+                <div key={l.id} className="px-4 py-3 text-xs">
+                  <p className="font-bold text-slate-700 dark:text-slate-200">
+                    {l.by || 'Owner'}{l.deviceName ? ` · ${l.deviceName}` : ''}
+                    <span className="font-medium text-slate-400 dark:text-slate-500"> · {new Date(l.createdAt).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · {l.via === 'persetujuan' ? 'lewat persetujuan' : 'langsung'}</span>
+                  </p>
+                  {l.reason && <p className="text-slate-500 dark:text-slate-400 mt-0.5 break-words">Alasan: {l.reason}</p>}
+                  <ul className="mt-1 space-y-0.5">
+                    {describeSnapshots(l.before, l.after, formatRupiah).map((d, i) => (
+                      <li key={i} className="flex justify-between gap-3 text-slate-600 dark:text-slate-300">
+                        <span className="min-w-0 break-words">{d.label}</span>
+                        <span className="shrink-0"><span className="text-slate-400 line-through">{d.from}</span> → <span className="font-bold">{d.to}</span></span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        </>}
         actions={detail ? [
+          ...(detailEditRequest?.status !== 'menunggu' ? [{ label: editAccess({ sale: detail, isOwner }) === 'langsung' ? 'Ubah' : 'Ajukan Ubah', icon: <Pencil className="w-4 h-4" />, onClick: openEdit }] : []),
           { label: 'Bagikan', icon: <Share2 className="w-4 h-4" />, onClick: () => shareReceiptWithAlert(receiptFromSale(detail), { formatRupiah, triggerAlert }) },
           ...(canDelete ? [{ label: 'Hapus Transaksi', icon: <Trash2 className="w-4 h-4" />, variant: 'danger', onClick: () => handleDelete(detail) }]
             : canRequest && detailRequest?.status !== 'menunggu' ? [{ label: 'Ajukan Hapus', icon: <Send className="w-4 h-4" />, variant: 'danger', onClick: () => { setRequestFor(detail); setDetail(null); } }] : []),
         ] : []}
       />
 
+      <EditTransactionSheet isOpen={!!editFor} onClose={() => setEditFor(null)} sale={editFor?.sale} mode={editFor?.mode} isOwner={isOwner} onDone={afterEdit} />
       <DeleteRequestSheet isOpen={!!requestFor} onClose={() => setRequestFor(null)} sale={requestFor} onSubmitted={reloadRequests} />
     </div>
   );

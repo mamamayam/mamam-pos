@@ -3,12 +3,16 @@ import { renderToString } from 'react-dom/server';
 
 // Hook dipalsukan; yang diuji: isi sheet Persetujuan (hapus transaksi, hapus pengeluaran, Tambahan) dan tab awalnya.
 vi.mock('../../context/AppContext', () => ({ useAppContext: () => ({ formatRupiah: (n) => `Rp ${n}`, triggerAlert: () => {}, triggerConfirm: () => {} }) }));
-const state = { del: [], exp: [], add: [], delError: null, expError: null };
+const state = { del: [], exp: [], add: [], edt: [], delError: null, expError: null };
 vi.mock('../../hook/useDeleteRequests', () => ({
   usePendingDeleteRequests: () => ({ list: state.del, error: state.delError, reload: async () => {} }),
   putuskanHapusTransaksi: vi.fn(),
   usePendingExpenseDeleteRequests: () => ({ list: state.exp, error: state.expError, reload: async () => {} }),
   putuskanHapusPengeluaran: vi.fn(),
+}));
+vi.mock('../../hook/useTransactionEdits', () => ({
+  usePendingEditRequests: () => ({ list: state.edt, error: null, reload: async () => {} }),
+  putuskanUbahTransaksi: vi.fn(),
 }));
 vi.mock('../../hook/usePendingAdditions', () => ({
   usePendingAdditions: () => ({ list: state.add, reload: async () => {} }),
@@ -31,9 +35,33 @@ const addReq = { id: 'a1', employeeId: 'e1', employeeName: 'Sari', category: 'Bo
 // React SSR menyisipkan <!-- --> di antara teks yang digabung; dibuang supaya pencocokan teks wajar.
 const render = () => renderToString(<ApprovalSheet isOpen onClose={() => {}} />).replace(/<!-- -->/g, '').replace(/<!-- -->/g, '');
 
-beforeEach(() => { state.del = []; state.exp = []; state.add = []; state.delError = null; state.expError = null; });
+beforeEach(() => { state.del = []; state.exp = []; state.add = []; state.edt = []; state.delError = null; state.expError = null; });
+
+const editReq = {
+  id: 'u1', transactionId: 't9', number: '0077', customer: 'Sari', orderType: 'Takeaway', paymentMethod: 'Tunai', total: 45000, at: '2026-11-20T03:00:00Z',
+  before: { payment_method: 'Tunai', total: 45000, items: [] }, after: { payment_method: 'QRIS', total: 45000, items: [] },
+  reason: 'Salah pilih metode', requestedBy: 'Andi', status: 'menunggu', createdAt: '2026-11-20T04:00:00Z',
+};
 
 describe('ApprovalSheet', () => {
+  it('pengajuan ubah transaksi: badge Ubah, baris perubahan, alasan, tombol Setujui & Ubah; jumlah tab ikut', () => {
+    state.edt = [editReq];
+    const html = render();
+    expect(html).toContain('data-testid="pengajuan-ubah"');
+    expect(html).toContain('#0077');
+    expect(html).toContain('Metode bayar');
+    expect(html).toContain('QRIS');
+    expect(html).toContain('Salah pilih metode');
+    expect(html).toContain('Setujui &amp; Ubah');
+    expect(html).toContain('Transaksi (1)');
+  });
+  it('hapus dan ubah bersama: tab menjumlahkan keduanya', () => {
+    state.del = [delReq]; state.edt = [editReq];
+    const html = render();
+    expect(html).toContain('Transaksi (2)');
+    expect(html).toContain('data-testid="pengajuan-hapus"');
+    expect(html).toContain('data-testid="pengajuan-ubah"');
+  });
   it('tertutup: tidak merender apa pun', () => {
     expect(renderToString(<ApprovalSheet isOpen={false} onClose={() => {}} />)).toBe('');
   });
@@ -104,7 +132,7 @@ describe('ApprovalSheet', () => {
     expect(render()).toContain('data-testid="daftar-hapus-pengeluaran"');
   });
   it('kosong: pesan kosong; migrasi belum jalan: petunjuk tampil', () => {
-    expect(render()).toContain('Tidak ada pengajuan hapus transaksi.');
+    expect(render()).toContain('Tidak ada pengajuan hapus atau ubah transaksi.');
     state.delError = 'Fitur ini butuh migrasi baru';
     expect(render()).toContain('butuh migrasi baru');
     state.delError = null; state.expError = 'butuh migrasi 018';

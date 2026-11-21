@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Check, X, Trash2, Plus, ClipboardCheck, Receipt, Pencil } from 'lucide-react';
-import { Modal, Button, Input, EditedMark, EmptyState, PillTabs } from '../../components/ui';
+import { Modal, Button, Input, EditedMark, EmptyState, PillTabs, Badge } from '../../components/ui';
 import { useAppContext } from '../../context/AppContext';
 import { usePendingDeleteRequests, putuskanHapusTransaksi, usePendingExpenseDeleteRequests, putuskanHapusPengeluaran } from '../../hook/useDeleteRequests';
 import { usePendingAdditions, decideAddition } from '../../hook/usePendingAdditions';
+import { usePendingEditRequests, putuskanUbahTransaksi } from '../../hook/useTransactionEdits';
+import { describeSnapshots } from '../history/transactionEditMath';
 import { saveAdditionEdit } from '../../hook/additionEdit';
 import { notifyApprovalsChanged } from '../../hook/usePendingApprovals';
 import QuickAdjustmentSheet from '../home/QuickAdjustmentSheet';
@@ -13,6 +15,8 @@ import { detailSubRows } from '../payroll/additionDetail';
  * ApprovalSheet — menu slide-up "Persetujuan" (owner). Satu tempat untuk semua yang menunggu keputusan:
  *  - Transaksi       : staf mengajukan hapus dari Riwayat (alasan + nama wajib). Setuju = transaksi dihapus
  *                      PERMANEN oleh database (RPC putuskan_hapus_transaksi); Tolak = transaksi tetap.
+ *                      Pengajuan UBAH transaksi (migrasi 024, staf setelah 30 menit sejak dibayar) tampil di tab yang sama dengan badge "Ubah":
+ *                      Setujui & Ubah = database menerapkan perubahan (RPC putuskan_ubah_transaksi); Tolak = transaksi tetap.
  *  - Pengeluaran     : sama, untuk catatan di layar Pengeluaran (RPC putuskan_hapus_pengeluaran, migrasi 018).
  *                      Pengeluaran karyawan (potongan) yang dihapus ikut menghapus potongan gajinya.
  *  - Tambahan        : pengajuan Tambahan gaji karyawan dari staf (dulu kartu di Beranda). Setuju = masuk hitungan gaji.
@@ -27,6 +31,7 @@ const when = (iso) => (iso ? new Date(iso).toLocaleString('id-ID', { day: '2-dig
 export default function ApprovalSheet({ isOpen, onClose }) {
   const { formatRupiah, triggerAlert, triggerConfirm } = useAppContext();
   const del = usePendingDeleteRequests(isOpen);
+  const edt = usePendingEditRequests(isOpen);
   const exp = usePendingExpenseDeleteRequests(isOpen);
   const add = usePendingAdditions(isOpen);
 
@@ -39,13 +44,13 @@ export default function ApprovalSheet({ isOpen, onClose }) {
   useEffect(() => { if (!isOpen) { setPickedTab(null); setRejectingId(null); setRejectReason(''); setEditAdd(null); } }, [isOpen]);
 
   // Tab awal: yang ada isinya (urutan: transaksi, pengeluaran, tambahan; kalau semua kosong, transaksi).
-  const tab = pickedTab ?? (del.list.length ? 'hapus' : exp.list.length ? 'pengeluaran' : add.list.length ? 'tambahan' : 'hapus');
+  const tab = pickedTab ?? (del.list.length || edt.list.length ? 'hapus' : exp.list.length ? 'pengeluaran' : add.list.length ? 'tambahan' : 'hapus');
 
   const run = async (fn) => {
     if (busy) return;
     setBusy(true);
     try { await fn(); } catch (e) { triggerAlert(e.message || 'Terjadi kesalahan.'); }
-    finally { await Promise.all([del.reload(), exp.reload(), add.reload()]); setRejectingId(null); setRejectReason(''); setBusy(false); }
+    finally { await Promise.all([del.reload(), edt.reload(), exp.reload(), add.reload()]); setRejectingId(null); setRejectReason(''); setBusy(false); }
   };
 
   const startReject = (id) => { setRejectingId(id); setRejectReason(''); };
@@ -56,6 +61,11 @@ export default function ApprovalSheet({ isOpen, onClose }) {
     () => run(() => putuskanHapusTransaksi(r.id, true)),
   );
   const rejectDelete = (r) => run(() => putuskanHapusTransaksi(r.id, false, rejectReason));
+  const approveEdit = (r) => triggerConfirm(
+    `Ubah transaksi #${r.number} sesuai pengajuan? Angka dompet dan laba rugi ikut berubah.`,
+    () => run(() => putuskanUbahTransaksi(r.id, true)),
+  );
+  const rejectEdit = (r) => run(() => putuskanUbahTransaksi(r.id, false, rejectReason));
   const approveExpense = (r) => triggerConfirm(
     `Hapus pengeluaran ${r.category} (${formatRupiah(r.amount)}) PERMANEN?${r.employeeId ? ' Potongan gaji karyawan yang tertaut ikut terhapus.' : ' Angka dompet dan laba rugi ikut berubah.'}`,
     () => run(() => putuskanHapusPengeluaran(r.id, true)),
@@ -86,7 +96,7 @@ export default function ApprovalSheet({ isOpen, onClose }) {
   );
 
   const tabs = [
-    { value: 'hapus', label: `Transaksi${del.list.length ? ` (${del.list.length})` : ''}`, testId: 'tab-persetujuan-hapus' },
+    { value: 'hapus', label: `Transaksi${del.list.length + edt.list.length ? ` (${del.list.length + edt.list.length})` : ''}`, testId: 'tab-persetujuan-hapus' },
     { value: 'pengeluaran', label: `Pengeluaran${exp.list.length ? ` (${exp.list.length})` : ''}`, testId: 'tab-persetujuan-pengeluaran' },
     { value: 'tambahan', label: `Tambahan${add.list.length ? ` (${add.list.length})` : ''}`, testId: 'tab-persetujuan-tambahan' },
   ];
@@ -100,14 +110,50 @@ export default function ApprovalSheet({ isOpen, onClose }) {
         {tab === 'hapus' && (
           <div className="space-y-2" data-testid="daftar-hapus">
             {del.error && <p className="text-xs text-red-500 text-center">{del.error}</p>}
-            {del.list.length === 0 && !del.error && (
-              <EmptyState icon={<ClipboardCheck className="w-10 h-10" />} title="Tidak ada pengajuan hapus transaksi." className="py-8" />
+            {edt.error && <p className="text-xs text-red-500 text-center">{edt.error}</p>}
+            {del.list.length === 0 && edt.list.length === 0 && !del.error && (
+              <EmptyState icon={<ClipboardCheck className="w-10 h-10" />} title="Tidak ada pengajuan hapus atau ubah transaksi." className="py-8" />
             )}
+            {edt.list.map(r => (
+              <div key={r.id} className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-3" data-testid="pengajuan-ubah">
+                <div className="flex justify-between items-start gap-3">
+                  <div className="min-w-0">
+                    <p className="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-1.5 flex-wrap">
+                      <Badge variant="info">Ubah</Badge>#{r.number} <span className="font-medium text-slate-500 dark:text-slate-400">· {r.customer || 'Umum'}</span>
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{[r.orderType, r.paymentMethod, when(r.at)].filter(Boolean).join(' • ')}</p>
+                  </div>
+                  <p className="font-bold text-sm text-slate-800 dark:text-slate-100 shrink-0">{formatRupiah(r.total)}</p>
+                </div>
+                <div className="bg-slate-50 dark:bg-slate-950 rounded-xl px-3 py-2 mt-2.5" data-testid="pengajuan-ubah-perubahan">
+                  <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Yang diubah</p>
+                  <ul className="space-y-0.5">
+                    {describeSnapshots(r.before, r.after, formatRupiah).map((d, i) => (
+                      <li key={i} className="flex justify-between gap-3 text-xs text-slate-700 dark:text-slate-200">
+                        <span className="min-w-0 break-words">{d.label}</span>
+                        <span className="shrink-0 text-right"><span className="text-slate-400 line-through">{d.from}</span> → <span className="font-bold">{d.to}</span></span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="bg-amber-50 dark:bg-amber-500/10 rounded-xl px-3 py-2 mt-2">
+                  <p className="text-xs text-amber-800 dark:text-amber-300 break-words"><span className="font-bold">Alasan:</span> {r.reason}</p>
+                  <p className="text-[11px] text-amber-700/70 dark:text-amber-400/70 mt-0.5">Diajukan {r.requestedBy} · {when(r.createdAt)}</p>
+                </div>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">Kalau disetujui, transaksi diubah dan angka dompet serta laba rugi ikut berubah.</p>
+                {rejectingId === r.id ? rejectBox(() => rejectEdit(r)) : (
+                  <div className="grid grid-cols-2 gap-2 mt-2.5">
+                    <Button variant="secondary" size="sm" disabled={busy} onClick={() => startReject(r.id)} icon={<X className="w-4 h-4" />}>Tolak</Button>
+                    <Button size="sm" disabled={busy} onClick={() => approveEdit(r)} icon={<Pencil className="w-4 h-4" />}>Setujui & Ubah</Button>
+                  </div>
+                )}
+              </div>
+            ))}
             {del.list.map(r => (
               <div key={r.id} className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-3" data-testid="pengajuan-hapus">
                 <div className="flex justify-between items-start gap-3">
                   <div className="min-w-0">
-                    <p className="font-bold text-sm text-slate-800 dark:text-slate-100">#{r.number} <span className="font-medium text-slate-500 dark:text-slate-400">· {r.customer || 'Umum'}</span></p>
+                    <p className="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-1.5 flex-wrap"><Badge variant="danger">Hapus</Badge>#{r.number} <span className="font-medium text-slate-500 dark:text-slate-400">· {r.customer || 'Umum'}</span></p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">{[r.orderType, r.paymentMethod, when(r.at)].filter(Boolean).join(' • ')}</p>
                     {r.items && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 break-words">{r.items}</p>}
                   </div>

@@ -4,7 +4,7 @@ import CategoryModal from '../../components/CategoryModal';
 import CategorySelect from '../../components/CategorySelect';
 import { storeExpenseCategories, defaultExpenseCategory } from './expenseCategories';
 import { isOnDuty } from '../employee/employeeOptions';
-import PricedItemsInput from './PricedItemsInput';
+import PricedItemsInput, { PriceSummary } from './PricedItemsInput';
 import Switch from '../stock/Switch';
 import {
   emptyRow, rowsFromNote, rowsFromItems, pricedRows, filledRows, rowsTotal, isLocked, stripPrices, buildExpenseDetail,
@@ -155,10 +155,7 @@ export default function ExpenseFormSheet({ isOpen, onClose, editing = null, data
             {priceMode ? (
               <>
                 <PricedItemsInput value={rows} onChange={setRows} />
-                <div className="flex items-center justify-between gap-3 mt-2 text-xs text-slate-500 dark:text-slate-400" data-testid="price-summary">
-                  <span>{filledCount === 0 ? 'Belum ada item' : `${pricedCount} dari ${filledCount} item berharga`}</span>
-                  {pricedCount > 0 && <strong className="text-slate-800 dark:text-slate-100 tabular-nums">{formatRupiah(rowsTotal(rows))}</strong>}
-                </div>
+                <PriceSummary filled={filledCount} priced={pricedCount} total={rowsTotal(rows)} />
                 <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">Tekan Enter untuk poin baru. Baris tanpa harga tidak ikut dijumlah.</p>
               </>
             ) : (

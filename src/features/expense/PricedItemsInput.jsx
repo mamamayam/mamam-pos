@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { NominalInput } from '../../components/ui';
 import { emptyRow } from './expenseItems';
+import { formatRupiah } from '../../utils/formatters';
 
 /**
  * PricedItemsInput — daftar poin Detail Pengeluaran yang tiap barisnya boleh diberi harga (mode "Harga per item").
@@ -98,6 +99,16 @@ export default function PricedItemsInput({ value, onChange, placeholder = 'Opsio
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+/** Ringkasan di bawah daftar item: "N dari M item berharga" + jumlah harga. Dipisah supaya bisa dites tanpa keypad. */
+export function PriceSummary({ filled, priced, total }) {
+  return (
+    <div className="flex items-center justify-between gap-3 mt-2 text-xs text-slate-500 dark:text-slate-400" data-testid="price-summary">
+      <span>{filled === 0 ? 'Belum ada item' : `${priced} dari ${filled} item berharga`}</span>
+      {priced > 0 && <strong className="text-slate-800 dark:text-slate-100 tabular-nums">{formatRupiah(total)}</strong>}
     </div>
   );
 }
